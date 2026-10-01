@@ -88,7 +88,7 @@ Appen starter uden data. Forbind til Discogs i appen, eller prøv den med eksemp
 
 - **Kun Command Line Tools, ingen Xcode.** Det er Swift 6.x med macOS 27 SDK, og brugerens Mac kører macOS 27.
   - Brug `@ViewState`, ikke `@State`. Det er et typealias i `App.swift`, fordi `@State`-makroens plugin kun følger med Xcode.
-  - Ingen XCTest og ingen Swift Testing. Brug i stedet **`swift run VinylCoreChecks`**, som havde **305 checks**, alle grønne pr. 1. okt. Grenen `claude/quirky-franklin-9sjx8p` tilføjer ca. 40 checks for kø, cache og backup (skrevet i en cloud-session uden Swift, så de er **ikke kørt endnu**: kør dem på Mac'en, og ret antallet her).
+  - Ingen XCTest og ingen Swift Testing. Brug i stedet **`swift run VinylCoreChecks`**, som havde **305 checks**, alle grønne pr. 1. okt. Grenen `claude/quirky-franklin-9sjx8p` har **375 checks**, grønne på GitHub Actions (macOS 26, Swift 6.3).
     Tilføj checks for ny logik.
   - Store `body`-udtryk kan få compileren til at crashe. Del dem op i små views.
 - **Minimum er macOS 26.** Liquid Glass (`.glassEffect`, `GlassEffectContainer`, `.glassProminent`) bruges direkte uden fallback.
@@ -164,13 +164,20 @@ Sources/VinylCoreChecks/      selvtest (305 checks)
     - Resten ligger under "Vis alle N udgaver".
   - Søgningen rangeres lokalt efter antal ramte søgeord.
   - Én delt Discogs-klient pr. session.
-- **Fælles Discogs-kø og cache** (`DiscogsQueue.swift`, gren `claude/quirky-franklin-9sjx8p`, ikke testet på Mac endnu):
+- **Fælles Discogs-kø og cache** (`DiscogsQueue.swift`, gren `claude/quirky-franklin-9sjx8p`, bygget og testet på GitHub Actions, ikke mod det rigtige Discogs):
   - `DiscogsRateLimiter.shared`: token-bucket med 15 kald i et hug og derefter 45 i minuttet (højst 60/min) for **alle** klienter.
     Søgning, udgaver og ønskeliste går foran priser og Værdi. Fejl 429 og "under 3 kald tilbage" giver pause for alle.
   - `DiscogsResponseCache`: søgninger og `/masters/…` gemmes i hukommelsen i 10 minutter (højst 100 svar), og ens kald,
     der kører samtidig, lægges sammen. Kun "Find nye plader" bruger cachen. Priser, samling og konto hentes altid frisk.
   - Søgningen laver nu **ét kald**. Kun når master-søgningen finder under 10 album, søges der også efter releases.
     Ulempe: ved store søgninger vises releases uden master ikke længere.
+- **Cover Flow** (`CoverFlowView.swift`, `VinylCore/CoverFlow.swift`): knappen "Cover Flow" i en sektions værktøjslinje
+  viser sektionen som på en iPod classic i detaljekolonnen. Midten = det valgte i listen. ← → (også fra listen),
+  trackpad/musehjul (`ScrollWheelCatcher`, ingen momentum), klik på sidecover; klik på midten/↩ = Find i reolen.
+  Ingen spejling. Snapshot `13b-coverflow-alene.png` (ImageRenderer; `cacheDisplay` kan ikke tegne 3D).
+- **GitHub Actions** (`.github/workflows/checks.yml`, runner `macos-26`): bygger, kører VinylCoreChecks (375 grønne
+  pr. 1. okt) og tager demo-snapshots ved hvert push. Billederne ligger som artefakt og på grenen `ci-snapshots`
+  (kan hentes med git fra en cloud-session, hvor artefakter er blokeret).
 - **Daglig sikkerhedskopi** (`Backup.swift`, Indstillinger › Sikkerhedskopi): `VACUUM INTO` til
   iCloud Drive › Vinyl Shelf Finder backup (ellers Dokumenter), én fil pr. dag, de 14 nyeste beholdes.
   Kører ved start og hver time, aldrig i `--demo` eller `--snapshot`. Gendannelse står i README.
@@ -196,7 +203,7 @@ Sources/VinylCoreChecks/      selvtest (305 checks)
    - Skal testes sammen med brugeren på iPhonen: virker `.local` eller kun IP-adressen? Firewall-dialogen
      kan dukke op efter hver build ved ad-hoc-signering. Fortæl det på forhånd. Skiltene skal printes igen.
 2. **Find nye plader, resten:**
-   - kø, cache og ét kald pr. søgning er lavet (se ovenfor), men skal bygges og testes på Mac'en,
+   - kø, cache og ét kald pr. søgning er lavet (se ovenfor); mangler afprøvning mod det rigtige Discogs,
    - Se afsnit 6a.
    - **Ikke testet mod det rigtige discogs.com:** login og betaling i appens WKWebView, og `sell/list?master_id&format`-URL'en.
 3. **Udviklercertifikat**, så nøgleringen ikke spørger efter hver build. Brugeren skal selv oprette det i Nøgleringsadgang.
