@@ -1510,5 +1510,97 @@ do {
           && !DatabaseBackup.isInICloud(folder), "backup: iCloud-mappen genkendes")
 } catch { check(false, "sikkerhedskopi: \(error)") }
 
+// MARK: Cover Flow
+do {
+    typealias G = CoverFlowGeometry
+    // Coverets størrelse
+    check(G.side(width: 100, height: 50) == 80, "cover flow: siden er aldrig under 80")
+    check(G.side(width: 10_000, height: 10_000) == 360, "cover flow: siden er aldrig over 360")
+    check(abs(G.side(width: 500, height: 1000) - 180) < 0.0001, "cover flow: siden begrænses af bredden (36 %)")
+    check(abs(G.side(width: 2000, height: 300) - 240) < 0.0001, "cover flow: siden begrænses af højden (80 %)")
+    var sizesOK = true
+    for w in stride(from: 0.0, through: 3000.0, by: 137.0) {
+        for h in stride(from: 0.0, through: 2000.0, by: 91.0) {
+            let s = G.side(width: w, height: h)
+            if s < 80 || s > 360 { sizesOK = false }
+        }
+    }
+    check(sizesOK, "cover flow: siden ligger altid mellem 80 og 360")
+
+    // Vandret placering
+    let side = 200.0
+    check(G.x(0, side: side) == 0, "cover flow: midtercoveret står i midten")
+    check(abs(G.x(1, side: side) - 0.62 * side) < 0.0001, "cover flow: første sidecover står 0,62 × siden fra midten")
+    var symmetric = true, increasing = true
+    for d in 1...10 {
+        if abs(G.x(-d, side: side) + G.x(d, side: side)) > 0.0001 { symmetric = false }
+        if !(G.x(d + 1, side: side) > G.x(d, side: side)) { increasing = false }
+        if !(G.x(-(d + 1), side: side) < G.x(-d, side: side)) { increasing = false }
+    }
+    check(symmetric, "cover flow: x er symmetrisk om midten")
+    check(increasing, "cover flow: afstanden fra midten vokser med |d|")
+    check(G.x(1, side: side) > 0 && G.x(-1, side: side) < 0, "cover flow: højre er positiv, venstre negativ")
+
+    // Drejning, skala og lag
+    check(G.angle(0) == 0, "cover flow: midtercoveret vender lige frem")
+    check(G.angle(1) == -G.tilt && G.angle(5) == -G.tilt, "cover flow: covers til højre drejes -tilt (yderkanten nærmest)")
+    check(G.angle(-1) == G.tilt && G.angle(-5) == G.tilt, "cover flow: covers til venstre drejes +tilt (yderkanten nærmest)")
+    check(G.scale(0) == 1, "cover flow: midtercoveret har fuld størrelse")
+    check(G.scale(1) < 1 && G.scale(-1) < 1 && G.scale(4) < 1, "cover flow: sidecovers er mindre")
+    var layersOK = true
+    for d in 0...G.visible {
+        if !(G.zIndex(d) > G.zIndex(d + 1)) || !(G.zIndex(-d) > G.zIndex(-(d + 1))) { layersOK = false }
+        if G.zIndex(d) != G.zIndex(-d) { layersOK = false }
+    }
+    check(layersOK, "cover flow: nærmere covers ligger øverst")
+    check(G.zIndex(0) > G.zIndex(1) && G.zIndex(0) > G.zIndex(-1), "cover flow: midtercoveret ligger øverst")
+
+    // Synlige plader
+    check(G.visibleRange(center: 0, count: 0).isEmpty, "cover flow: ingen plader → intet at tegne")
+    check(G.visibleRange(center: 3, count: 0).isEmpty, "cover flow: ingen plader → intet at tegne, uanset midte")
+    check(G.visibleRange(center: 0, count: 100) == 0..<(G.visible + 1), "cover flow: klemmes i starten")
+    check(G.visibleRange(center: 99, count: 100) == (99 - G.visible)..<100, "cover flow: klemmes i slutningen")
+    check(G.visibleRange(center: 50, count: 100) == (50 - G.visible)..<(51 + G.visible), "cover flow: midt i samlingen")
+    check(G.visibleRange(center: 1, count: 3) == 0..<3, "cover flow: lille samling vises helt")
+    check(G.visibleRange(center: -5, count: 10) == G.visibleRange(center: 0, count: 10), "cover flow: negativ midte klemmes til 0")
+    check(G.visibleRange(center: 20, count: 10) == G.visibleRange(center: 9, count: 10), "cover flow: midte efter sidste plade klemmes")
+    check(G.visibleRange(center: 10, count: 10).contains(9), "cover flow: midte == antal klemmes til sidste plade")
+    var rangeOK = true
+    for count in 1...30 {
+        for center in -3...(count + 3) {
+            let r = G.visibleRange(center: center, count: count)
+            let c = min(max(center, 0), count - 1)
+            if r.count > 2 * G.visible + 1 || !r.contains(c) || r.lowerBound < 0 || r.upperBound > count { rangeOK = false }
+        }
+    }
+    check(rangeOK, "cover flow: højst 2×visible+1 plader, altid med midten, aldrig uden for samlingen")
+
+    // Rulning
+    var st = ScrollStepper()
+    let a1 = st.add(10, precise: true), a2 = st.add(10, precise: true), a3 = st.add(10, precise: true)
+    check(a1 == 0 && a2 == 0 && a3 == 1, "rulning: små trackpad-bevægelser lægges sammen (10+10+10 → 1 trin)")
+    let a4 = st.add(26, precise: true)
+    check(a4 == 1, "rulning: resten (2) gemmes til næste trin")
+    st.reset()
+    let n1 = st.add(-10, precise: true), n2 = st.add(-20, precise: true)
+    check(n1 == 0 && n2 == -1, "rulning: negativ retning giver negative trin")
+    st.reset()
+    let big = st.add(100, precise: true)
+    check(big == 3, "rulning: stor bevægelse giver flere trin på én gang")
+    let bigNeg = st.add(-100, precise: true)
+    check(bigNeg == -3, "rulning: stor negativ bevægelse giver flere trin baglæns")
+    st.reset()
+    let w1 = st.add(1, precise: false), w2 = st.add(-1, precise: false), w3 = st.add(3, precise: false)
+    check(w1 == 1 && w2 == -1 && w3 == 3, "rulning: musehjul giver ét trin pr. hak")
+    st.reset()
+    _ = st.add(20, precise: true)
+    st.reset()
+    let afterReset = st.add(20, precise: true)
+    check(afterReset == 0, "rulning: reset() nulstiller resten")
+    st.reset()
+    let d1 = st.add(20, precise: true), d2 = st.add(-20, precise: true), d3 = st.add(20, precise: true)
+    check(d1 == 0 && d2 == 0 && d3 == 0, "rulning: retningsskift ophæver hinanden")
+}
+
 print(failures == 0 ? "✓ Alle \(passes) checks bestået" : "✗ \(failures) fejl, \(passes) bestået")
 exit(failures == 0 ? 0 : 1)

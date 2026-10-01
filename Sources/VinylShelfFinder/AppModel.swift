@@ -78,6 +78,11 @@ final class AppModel {
     /// (vises som dialog i hovedvinduet, se `StatusNoteAlert`).
     var statusNoteRequest: StatusNoteRequest?
 
+    /// Cover Flow i sektionerne (i stedet for plade-detaljen). Huskes mellem gange.
+    var showCoverFlow = UserDefaults.standard.bool(forKey: "cover_flow") {
+        didSet { UserDefaults.standard.set(showCoverFlow, forKey: "cover_flow") }
+    }
+
     /// "Find nye plader" (Discogs' katalog, priser, ønskeliste og køb).
     let findNew = FindNewModel()
 

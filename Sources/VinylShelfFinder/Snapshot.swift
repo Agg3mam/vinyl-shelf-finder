@@ -85,6 +85,13 @@ enum Snapshotter {
         if let loc = model.library.locations.dropFirst().first {
             model.sidebar = .section(loc.id)
             render(MainView().appRoot().environment(model), size: CGSize(width: 1280, height: 820), to: dir.appendingPathComponent("5-section.png"))
+            // Cover Flow midt i sektionen. Indstillingen sættes tilbage bagefter.
+            let savedCoverFlow = model.showCoverFlow
+            let ids = model.library.sections[loc.id] ?? []
+            model.selection = ids.isEmpty ? nil : ids[ids.count / 2]
+            model.showCoverFlow = true
+            render(MainView().appRoot().environment(model), size: CGSize(width: 1280, height: 820), to: dir.appendingPathComponent("13-coverflow.png"))
+            model.showCoverFlow = savedCoverFlow
         }
         model.sidebar = .value
         model.selection = find("Wish You Were Here")

@@ -155,6 +155,11 @@ struct DetailColumn: View {
         } else if case .history = model.sidebar ?? .search {
             ContentUnavailableView("Historik", systemImage: "clock.arrow.circlepath",
                                    description: Text("Flytninger kan fortrydes direkte i listen."))
+        } else if case .section(let id) = model.sidebar ?? .search, model.showCoverFlow,
+                  model.library.location(id) != nil {
+            // Cover Flow: sektionen i reolens rækkefølge. Valget følger listen til venstre.
+            CoverFlowView(locationID: id)
+                .id(id)
         } else if let sel = model.selection, model.library.item(sel) != nil {
             // Ingen `.id(sel)`: detaljen beholder sin identitet ved skift af plade, så
             // SwiftUI kun opdaterer forskellen (hurtigere ↑↓, og farvetonen kan tone over).

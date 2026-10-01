@@ -325,6 +325,9 @@ struct SectionView: View {
                 }
                 .toolbar {
                     ToolbarItem {
+                        CoverFlowToggle()
+                    }
+                    ToolbarItem {
                         Button { model.checkSection = locationID } label: {
                             Label("Kontrollér", systemImage: "checklist")
                                 .labelStyle(.titleAndIcon)
@@ -381,6 +384,16 @@ struct SectionView: View {
         // Når en sektionsgrænse flyttes, glider pladen ud/ind. Skift af sektion giver et
         // nyt view (`.id` i ContentColumn), så der animeres aldrig mellem to sektioner.
         .animation(Motion.rows(reduceMotion), value: items.map(\.id))
+        // Med Cover Flow ved siden af bladrer ← → også, mens listen har fokus.
+        .onKeyPress(.leftArrow) { coverFlowStep(-1, items) }
+        .onKeyPress(.rightArrow) { coverFlowStep(1, items) }
+    }
+
+    private func coverFlowStep(_ delta: Int, _ items: [RecordItem]) -> KeyPress.Result {
+        guard model.showCoverFlow, !items.isEmpty else { return .ignored }
+        let i = items.firstIndex { $0.id == model.selection } ?? 0
+        model.selection = items[min(max(i + delta, 0), items.count - 1)].id
+        return .handled
     }
 
     private func boundaryMenu(_ id: Int64, first: Bool, last: Bool, prev: Location?, next: Location?) -> AnyView? {
@@ -419,5 +432,20 @@ struct BoundaryRow: View {
         }
         .buttonStyle(.plain)
         .selectionDisabled()
+    }
+}
+
+/// Skifter mellem plade-detaljen og Cover Flow i en sektion.
+struct CoverFlowToggle: View {
+    @Environment(AppModel.self) private var model
+
+    var body: some View {
+        @Bindable var model = model
+        Toggle(isOn: $model.showCoverFlow) {
+            Label("Cover Flow", systemImage: "rectangle.stack")
+                .labelStyle(.titleAndIcon)
+        }
+        .toggleStyle(.button)
+        .help(model.showCoverFlow ? "Vis plade-detaljen igen" : "Bladr i sektionen med Cover Flow (← →)")
     }
 }

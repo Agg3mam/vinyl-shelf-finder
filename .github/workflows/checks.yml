@@ -26,3 +26,22 @@ jobs:
         run: swift build
       - name: Checks
         run: swift run VinylCoreChecks
+      # Billeder af demo-appens skærme (offscreen, ingen rigtige data), så designet kan ses uden en Mac.
+      - name: Snapshots (demo)
+        continue-on-error: true
+        run: |
+          H=$(mktemp -d)
+          mkdir -p snapshots
+          CFFIXED_USER_HOME=$H .build/debug/VinylShelfFinder --demo --snapshot "$PWD/snapshots" &
+          p=$!
+          for i in $(seq 1 150); do kill -0 $p 2>/dev/null || break; sleep 1; done
+          kill $p 2>/dev/null || true
+          ls -la snapshots
+      - name: Gem snapshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: snapshots
+          path: snapshots
+          if-no-files-found: warn
+          retention-days: 7
