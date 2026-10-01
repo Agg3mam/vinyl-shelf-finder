@@ -4,8 +4,12 @@ name: Byg og checks
 # uden brugerens egen Mac. Rører aldrig nøglering, Discogs eller rigtige data.
 on:
   push:
-    branches-ignore: [design-retning-*]
+    branches-ignore: [design-retning-*, ci-snapshots]
   workflow_dispatch:
+
+# contents: write er kun til at lægge snapshots på grenen ci-snapshots (se sidste trin).
+permissions:
+  contents: write
 
 jobs:
   checks:
@@ -45,3 +49,17 @@ jobs:
           path: snapshots
           if-no-files-found: warn
           retention-days: 7
+      # Billederne lægges også på grenen ci-snapshots (overskrives hver gang), så de kan
+      # hentes med git, hvor artefakter ikke kan hentes (fx fra en cloud-session).
+      - name: Læg snapshots på grenen ci-snapshots
+        if: always()
+        continue-on-error: true
+        run: |
+          [ -d snapshots ] && [ -n "$(ls snapshots)" ] || exit 0
+          cd snapshots
+          git init -q -b ci-snapshots
+          git config user.name "github-actions[bot]"
+          git config user.email "41898099+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -q -m "Snapshots fra ${GITHUB_REF_NAME} @ ${GITHUB_SHA::7}"
+          git push -q -f "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" ci-snapshots
