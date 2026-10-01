@@ -978,6 +978,9 @@ func blocking<T>(_ op: @escaping @Sendable () async throws -> T) -> Result<T, Er
     sem.wait()
     return box.value!
 }
+/// Checks må ikke vente på den rigtige grænse (45 kald/min); denne kø er praktisk talt ubegrænset.
+let fastLimiter = DiscogsRateLimiter(capacity: 100_000, perMinute: 6_000_000)
+
 func errorText<T>(_ r: Result<T, Error>) -> String? {
     if case .failure(let e) = r { return e.localizedDescription }
     return nil
@@ -1123,7 +1126,7 @@ do {
     // Ende-til-ende mod et falsk netværk (ingen rigtige kald)
     let cfg = URLSessionConfiguration.ephemeral
     cfg.protocolClasses = [StubDiscogs.self]
-    let stub = DiscogsClient(token: fakeToken, session: URLSession(configuration: cfg))
+    let stub = DiscogsClient(token: fakeToken, session: URLSession(configuration: cfg), limiter: fastLimiter)
     StubDiscogs.routes = [
         "PUT /users/holger/wants/249504": (201, #"{"id":249504,"rating":0}"#),
         "PUT /users/holger/wants/1": (404, #"{"message":"Release not found."}"#),
@@ -1152,7 +1155,7 @@ do {
     StubDiscogs.seen = []
     let none = blocking { try await stub.searchAlbums("   ") }
     check((try? none.get().albums.isEmpty) == true && StubDiscogs.seen.isEmpty, "tom søgning → intet kald")
-    check(errorText(blocking { try await DiscogsClient(token: "", session: URLSession(configuration: cfg)).searchAlbums("abba") }) == DiscogsError.missingToken.localizedDescription,
+    check(errorText(blocking { try await DiscogsClient(token: "", session: URLSession(configuration: cfg), limiter: fastLimiter).searchAlbums("abba") }) == DiscogsError.missingToken.localizedDescription,
           "søgning uden token → missingToken")
 
     let master = DiscogsAlbum(id: 10362, isMaster: true, title: "The Dark Side Of The Moon", artist: "Pink Floyd", year: 1973, thumbURL: nil, coverURL: nil, formats: [], inCollection: false, inWantlist: false)
@@ -1217,7 +1220,7 @@ do {
 
     let cfg = URLSessionConfiguration.ephemeral
     cfg.protocolClasses = [StubDiscogs.self]
-    let stub = DiscogsClient(token: "TEST-ikke-rigtig", session: URLSession(configuration: cfg))
+    let stub = DiscogsClient(token: "TEST-ikke-rigtig", session: URLSession(configuration: cfg), limiter: fastLimiter)
     StubDiscogs.routes = [
         "GET /marketplace/stats/6496": (200, fxStats6496DKK),
         "GET /releases/6496": (200, #"{"id":6496,"lowest_price":3.36,"num_for_sale":36,"community":{"have":900,"want":40}}"#),
@@ -1327,7 +1330,7 @@ do {
     // Ende-til-ende mod falsk netværk
     let cfg = URLSessionConfiguration.ephemeral
     cfg.protocolClasses = [StubDiscogs.self]
-    let stub = DiscogsClient(token: "TEST-token", session: URLSession(configuration: cfg))
+    let stub = DiscogsClient(token: "TEST-token", session: URLSession(configuration: cfg), limiter: fastLimiter)
     StubDiscogs.routes = [
         "GET /masters/10362": (200, fxMaster10362),
         "GET /users/holger": (200, #"{"username":"holger","curr_abbr":"EUR"}"#),
@@ -1342,6 +1345,170 @@ do {
     let master = DiscogsAlbum(id: 10362, isMaster: true, title: "", artist: "", year: nil, thumbURL: nil, coverURL: nil, formats: [], inCollection: false, inWantlist: false)
     check((try? blocking { try await stub.versions(of: master) }.get().total) == 1542, "versions: samlet antal udgaver fra pagination.items")
 }
+
+// MARK: Fælles kø (rate limit) og cache for Discogs
+final class FakeClock: @unchecked Sendable {
+    private let lock = NSLock()
+    private var t: TimeInterval = 1000
+    var now: TimeInterval { lock.lock(); defer { lock.unlock() }; return t }
+    func advance(_ s: TimeInterval) { lock.lock(); t += s; lock.unlock() }
+}
+final class CallCounter: @unchecked Sendable {
+    private let lock = NSLock()
+    private var n = 0
+    var value: Int { lock.lock(); defer { lock.unlock() }; return n }
+    func bump() { lock.lock(); n += 1; lock.unlock() }
+}
+do {
+    // Token-bucket: 15 kald i et hug, derefter 45 i minuttet (højst 60 i ét minut).
+    var b = TokenBucket(capacity: 15, perMinute: 45, now: 0)
+    var taken = 0
+    while b.take(now: 0) == 0 { taken += 1 }
+    check(taken == 15, "token-bucket: 15 kald i et hug (\(taken))")
+    let wait = b.take(now: 0)
+    check(abs(wait - 60.0 / 45) < 0.001, "token-bucket: derefter ét kald pr. 1,33 s (\(wait))")
+    check(b.take(now: 1.4) == 0 && b.take(now: 1.4) > 0, "token-bucket: efter ventetiden må ét kald sendes")
+    var perMinute = 0
+    var t = 0.0
+    var fresh = TokenBucket(capacity: 15, perMinute: 45, now: 0)
+    while t < 60 { if fresh.take(now: t) == 0 { perMinute += 1 } else { t += 0.01 } }
+    check(perMinute <= 60, "token-bucket: højst 60 kald i det første minut (\(perMinute))")
+    var p = TokenBucket(capacity: 15, perMinute: 45, now: 0)
+    p.pause(3, now: 10)
+    check(abs(p.take(now: 11) - 2) < 0.001, "pause: ingen kald i 3 sekunder")
+    check(p.take(now: 13) > 0, "pause: spanden starter tom efter pausen")
+    check(p.take(now: 13 + 1.4) == 0, "pause: derefter normalt tempo")
+
+    let fastQueue = blocking { () -> Bool in
+        let q = DiscogsRateLimiter(capacity: 3, perMinute: 60_000)
+        for _ in 0..<10 { try await q.acquire(.interactive) }
+        return true
+    }
+    check((try? fastQueue.get()) == true, "køen slipper kald igennem")
+    let cancelled = blocking { () -> Bool in
+        let q = DiscogsRateLimiter(capacity: 1, perMinute: 1)
+        try await q.acquire(.background)
+        let waiting = Task { try await q.acquire(.background) }
+        waiting.cancel()
+        do { try await waiting.value; return false } catch { return error is CancellationError }
+    }
+    check((try? cancelled.get()) == true, "en annulleret ventende opgave kaster CancellationError")
+
+    // Cache: samme nøgle hentes kun én gang, også når to kald kører samtidig.
+    let clock = FakeClock()
+    let cache = DiscogsResponseCache(maxEntries: 2, maxAge: 600, clock: { clock.now })
+    let calls = CallCounter()
+    let load: @Sendable () async throws -> Data = {
+        calls.bump()
+        try await Task.sleep(nanoseconds: 50_000_000)
+        return Data("svar".utf8)
+    }
+    let together = blocking { () -> [Data] in
+        async let a = cache.data(for: "a", load: load)
+        async let b = cache.data(for: "a", load: load)
+        return try await [a, b]
+    }
+    check((try? together.get()) == [Data("svar".utf8), Data("svar".utf8)] && calls.value == 1, "cache: to samtidige ens kald → ét kald (\(calls.value))")
+    _ = blocking { try await cache.data(for: "a", load: load) }
+    check(calls.value == 1, "cache: gentaget kald tages fra cachen")
+    clock.advance(601)
+    _ = blocking { try await cache.data(for: "a", load: load) }
+    check(calls.value == 2, "cache: efter 10 minutter hentes svaret igen")
+    _ = blocking { try await cache.data(for: "b", load: load) }
+    _ = blocking { try await cache.data(for: "a", load: load) }   // a er nu senest brugt
+    _ = blocking { try await cache.data(for: "c", load: load) }   // b smides ud
+    let size = blocking { await cache.count }
+    check((try? size.get()) == 2, "cache: højst maxEntries svar")
+    let before = calls.value
+    _ = blocking { try await cache.data(for: "a", load: load) }
+    check(calls.value == before, "cache: det senest brugte svar bliver liggende")
+    _ = blocking { try await cache.data(for: "b", load: load) }
+    check(calls.value == before + 1, "cache: det ældst brugte svar er smidt ud")
+    let failing = blocking { try await cache.data(for: "fejl", load: { calls.bump(); throw DiscogsError.offline }) }
+    let afterFail = calls.value
+    _ = blocking { try await cache.data(for: "fejl", load: { calls.bump(); throw DiscogsError.offline }) }
+    check(errorText(failing) != nil && calls.value == afterFail + 1, "cache: fejl gemmes ikke")
+
+    // Søgning: mange masters → ét kald; få masters → også releases (album uden master).
+    let manyMasters = #"{"pagination":{"page":1,"pages":2,"items":60},"results":[{"id":10362,"type":"master","title":"Pink Floyd - The Dark Side Of The Moon","year":"1973"},{"id":1,"type":"release","title":"X - Y"}]}"#
+    let only = try DiscogsClient.mastersOnly(Data(manyMasters.utf8))
+    check(only?.albums.map(\.id) == [10362] && only?.hasMore == true, "mastersOnly: nok masters → kun masters")
+    let few = try DiscogsClient.mastersOnly(Data(#"{"pagination":{"page":1,"pages":1,"items":3},"results":[]}"#.utf8))
+    check(few == nil, "mastersOnly: få masters → søg også releases")
+
+    let cfg = URLSessionConfiguration.ephemeral
+    cfg.protocolClasses = [StubDiscogs.self]
+    StubDiscogs.routes = [
+        "GET /database/search?type=master": (200, manyMasters),
+        "GET /database/search?type=release": (200, #"{"pagination":{"page":1,"pages":1,"items":0},"results":[]}"#),
+        "GET /masters/10362/versions": (200, fxVersionsP1),
+        "GET /marketplace/stats/6496": (200, fxStats6496DKK),
+    ]
+    let plain = DiscogsClient(token: "TEST-token", session: URLSession(configuration: cfg), limiter: fastLimiter)
+    StubDiscogs.seen = []
+    let one = blocking { try await plain.searchAlbums("pink floyd") }
+    check((try? one.get().albums.map(\.id)) == [10362] && StubDiscogs.seen.count == 1, "searchAlbums: mange masters → kun ét kald (\(StubDiscogs.seen.count))")
+
+    let cached = DiscogsClient(token: "TEST-token", session: URLSession(configuration: cfg), limiter: fastLimiter,
+                               cache: DiscogsResponseCache())
+    let master = DiscogsAlbum(id: 10362, isMaster: true, title: "", artist: "", year: nil, thumbURL: nil, coverURL: nil, formats: [], inCollection: false, inWantlist: false)
+    StubDiscogs.seen = []
+    _ = blocking { try await cached.searchAlbums("pink floyd") }
+    _ = blocking { try await cached.searchAlbums("pink floyd") }
+    _ = blocking { try await cached.versions(of: master) }
+    _ = blocking { try await cached.versions(of: master) }
+    check(StubDiscogs.seen.count == 2, "cache: samme søgning og samme udgaver hentes kun én gang (\(StubDiscogs.seen.count) kald)")
+    _ = blocking { try await cached.searchAlbums("pink floyd", format: "Vinyl") }
+    check(StubDiscogs.seen.count == 3, "cache: et andet format er en ny søgning")
+    StubDiscogs.seen = []
+    _ = blocking { try await cached.marketInfo(releaseID: 6496, currency: "DKK") }
+    _ = blocking { try await cached.marketInfo(releaseID: 6496, currency: "DKK") }
+    check(StubDiscogs.seen.count == 2, "cache: priser hentes altid frisk")
+} catch { check(false, "kø og cache: \(error)") }
+
+// MARK: Sikkerhedskopi af databasen
+do {
+    let cal = Calendar.current
+    let day = cal.date(from: DateComponents(year: 2026, month: 10, day: 1, hour: 14))!
+    check(DatabaseBackup.fileName(for: day) == "vinyl-2026-10-01.sqlite", "backup: filnavn med dato")
+    check(DatabaseBackup.date(fromFileName: "vinyl-2026-10-01.sqlite").map { cal.isDate($0, inSameDayAs: day) } == true, "backup: dato læses fra filnavnet")
+    check(DatabaseBackup.date(fromFileName: "vinyl.sqlite") == nil && DatabaseBackup.date(fromFileName: "noter-2026-10-01.sqlite") == nil
+          && DatabaseBackup.date(fromFileName: "vinyl-2026-10-01.sqlite-wal") == nil, "backup: andre filer genkendes ikke")
+    check(DatabaseBackup.isDue(latest: nil, now: day), "backup: ingen kopi → tag en")
+    check(!DatabaseBackup.isDue(latest: day.addingTimeInterval(-3600), now: day), "backup: allerede taget i dag → ikke igen")
+    check(DatabaseBackup.isDue(latest: day.addingTimeInterval(-24 * 3600), now: day), "backup: sidste kopi er fra i går → tag en")
+
+    let names = (1...20).map { String(format: "vinyl-2026-09-%02d.sqlite", $0) } + ["vinyl.sqlite", "egne noter.txt"]
+    let delete = DatabaseBackup.namesToDelete(names.shuffled(), keep: 14)
+    check(Set(delete) == Set((1...6).map { String(format: "vinyl-2026-09-%02d.sqlite", $0) }), "backup: de 6 ældste af 20 slettes: \(delete.sorted())")
+    check(DatabaseBackup.namesToDelete(names, keep: 30).isEmpty, "backup: færre end keep → intet slettes")
+
+    // Ende-til-ende: kopi af en rigtig database, oprydning, og kopien kan åbnes.
+    let dir = FileManager.default.temporaryDirectory.appendingPathComponent("backup-check-\(UUID().uuidString)", isDirectory: true)
+    defer { try? FileManager.default.removeItem(at: dir) }
+    let folder = dir.appendingPathComponent("Vinyl Shelf Finder's backup", isDirectory: true)   // mellemrum og apostrof
+    try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+    let src = try ShelfStore(path: dir.appendingPathComponent("kilde.sqlite").path)
+    _ = try src.applyCollection([item(1, 101, "ABBA", "Arrival"), item(2, 102, "Queen", "Jazz")])
+    for d in 1...3 {
+        try Data().write(to: folder.appendingPathComponent(String(format: "vinyl-2026-09-%02d.sqlite", d)))
+    }
+    try Data("mine".utf8).write(to: folder.appendingPathComponent("noter.txt"))
+    let made = try DatabaseBackup.run(store: src, to: folder, now: day, keep: 2)
+    let copy = try ShelfStore(path: made.path).loadLibrary()
+    check(copy.copies.count == 2 && copy.releases.count == 2, "backup: kopien kan åbnes og indeholder pladerne")
+    let left = Set(try FileManager.default.contentsOfDirectory(atPath: folder.path))
+    check(left == ["vinyl-2026-10-01.sqlite", "vinyl-2026-09-03.sqlite", "noter.txt", "vinyl-2026-10-01.sqlite-wal", "vinyl-2026-10-01.sqlite-shm"]
+          || left == ["vinyl-2026-10-01.sqlite", "vinyl-2026-09-03.sqlite", "noter.txt"],
+          "backup: de 2 nyeste kopier beholdes, andre filer røres ikke: \(left.sorted())")
+    check(DatabaseBackup.latest(in: folder).map { cal.isDate($0, inSameDayAs: day) } == true, "backup: nyeste kopi findes ud fra filnavnet")
+    _ = try src.applyCollection([item(1, 101, "ABBA", "Arrival"), item(2, 102, "Queen", "Jazz"), item(3, 103, "Bowie", "Low")])
+    let again = try DatabaseBackup.run(store: src, to: folder, now: day, keep: 2)
+    let newer = try ShelfStore(path: again.path).loadLibrary()
+    check(newer.copies.count == 3, "backup: en ny kopi samme dag erstatter dagens kopi")
+    check(DatabaseBackup.isInICloud(URL(fileURLWithPath: "/Users/x/Library/Mobile Documents/com~apple~CloudDocs/Vinyl Shelf Finder backup"))
+          && !DatabaseBackup.isInICloud(folder), "backup: iCloud-mappen genkendes")
+} catch { check(false, "sikkerhedskopi: \(error)") }
 
 print(failures == 0 ? "✓ Alle \(passes) checks bestået" : "✗ \(failures) fejl, \(passes) bestået")
 exit(failures == 0 ? 0 : 1)

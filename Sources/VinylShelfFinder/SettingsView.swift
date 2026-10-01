@@ -7,6 +7,7 @@ struct SettingsView: View {
             AccountSettings().tabItem { Label("Discogs", systemImage: "person.crop.circle") }
             SortSettings().tabItem { Label("Sortering", systemImage: "textformat.abc") }
             ShelfSettings().tabItem { Label("Reol", systemImage: "books.vertical") }
+            BackupSettings().tabItem { Label("Sikkerhedskopi", systemImage: "clock.arrow.circlepath") }
         }
         .padding(Spacing.l)
     }
@@ -179,6 +180,33 @@ struct ShelfSettings: View {
                 Button("Opdel samlingen forfra…", role: .destructive) { model.forceOnboarding = true }
             } footer: {
                 Text("Åbner opdelingen igen. Intet ændres, før du bekræfter “Opret reol”.")
+            }
+        }
+        .formStyle(.grouped)
+    }
+}
+
+struct BackupSettings: View {
+    @Environment(AppModel.self) private var model
+
+    var body: some View {
+        Form {
+            Section {
+                LabeledContent("Seneste kopi", value: model.lastBackup?.danskDato ?? "Ingen endnu")
+                LabeledContent("Gemmes i", value: DatabaseBackup.isInICloud(model.backupFolder)
+                               ? "iCloud Drive › Vinyl Shelf Finder backup"
+                               : "Dokumenter › Vinyl Shelf Finder backup")
+                if let error = model.backupError {
+                    Label(error, systemImage: "exclamationmark.triangle")
+                        .foregroundStyle(.secondary)
+                }
+                HStack {
+                    Button("Tag en kopi nu") { model.backupNow() }
+                        .disabled(model.isDemo)
+                    Button("Vis i Finder") { model.showBackupsInFinder() }
+                }
+            } footer: {
+                Text("Appen gemmer selv en kopi af reolen, placeringer, historik og lyttelog én gang om dagen og beholder de seneste \(DatabaseBackup.keep). Se README.md for, hvordan en kopi gendannes.")
             }
         }
         .formStyle(.grouped)

@@ -38,12 +38,19 @@ public enum DiscogsError: LocalizedError {
 public struct DiscogsClient: Sendable {
     private let token: String
     private let session: URLSession
+    /// Fælles kø for alle klienter i appen (Discogs' grænse gælder hele kontoen).
+    private let limiter: DiscogsRateLimiter
+    /// Cache til søgninger og udgaver (`nil` = ingen cache).
+    private let cache: DiscogsResponseCache?
     public static let userAgent = "VinylShelfFinder/1.0 +https://github.com/local/vinyl-shelf-finder"
     private let base = URL(string: "https://api.discogs.com")!
 
-    public init(token: String, session: URLSession = .shared) {
+    public init(token: String, session: URLSession = .shared,
+                limiter: DiscogsRateLimiter = .shared, cache: DiscogsResponseCache? = nil) {
         self.token = token
         self.session = session
+        self.limiter = limiter
+        self.cache = cache
     }
 
     /// Om der overhovedet er et token (uden at afsløre det).
@@ -63,8 +70,20 @@ public struct DiscogsClient: Sendable {
         return req
     }
 
-    func get(_ path: String, query: [URLQueryItem] = []) async throws -> Data {
-        try await perform(makeRequest(path: path, query: query))
+    /// GET. Søgninger og udgaver (`isCacheable`) tages fra cachen, hvis klienten har en.
+    func get(_ path: String, query: [URLQueryItem] = [],
+             priority: DiscogsRateLimiter.Priority = .background) async throws -> Data {
+        let req = makeRequest(path: path, query: query)
+        guard let cache, Self.isCacheable(path), let key = req.url?.absoluteString else {
+            return try await perform(req, priority: priority)
+        }
+        return try await cache.data(for: key) { try await self.perform(req, priority: priority) }
+    }
+
+    /// Søgninger og albums udgaver ændrer sig sjældent og må gemmes i cachen.
+    /// Priser, samlingen og kontoen hentes altid frisk.
+    static func isCacheable(_ path: String) -> Bool {
+        path.hasPrefix("/database/search") || path.hasPrefix("/masters/")
     }
 
     /// Sender en forespørgsel med en anden metode (fx PUT) med samme rate limit og fejlhåndtering som `get`.
@@ -72,24 +91,24 @@ public struct DiscogsClient: Sendable {
         try await perform(makeRequest(method: method, path: path, query: query))
     }
 
-    /// Fælles afsendelse: rate limit, genforsøg ved 429 og danske fejl.
-    func perform(_ req: URLRequest) async throws -> Data {
+    /// Fælles afsendelse: fælles kø (rate limit), genforsøg ved 429 og danske fejl.
+    func perform(_ req: URLRequest, priority: DiscogsRateLimiter.Priority = .interactive) async throws -> Data {
         for attempt in 0..<5 {
+            try await limiter.acquire(priority)
             let (data, response): (Data, URLResponse)
             do { (data, response) = try await session.data(for: req) }
             catch let e as URLError where e.code != .cancelled { throw DiscogsError.offline }
             guard let http = response as? HTTPURLResponse else { throw DiscogsError.http(-1) }
             switch http.statusCode {
             case 200..<300:
-                // Vær venlig ved Discogs' rate limit (60/min).
-                if let rem = http.value(forHTTPHeaderField: "X-Discogs-Ratelimit-Remaining").flatMap(Int.init), rem < 3 {
-                    try await Task.sleep(nanoseconds: 3_000_000_000)
-                }
+                // Næsten ingen kald tilbage i minuttet → kort pause for alle kald i appen.
+                await limiter.observe(remaining: http.value(forHTTPHeaderField: "X-Discogs-Ratelimit-Remaining").flatMap(Int.init))
                 return data
             case 401, 403:
                 throw DiscogsError.unauthorized
             case 429:
-                try await Task.sleep(nanoseconds: UInt64(5 + attempt * 5) * 1_000_000_000)
+                // Køen holder pause; næste forsøg venter i `acquire`.
+                await limiter.backOff(seconds: TimeInterval(5 + attempt * 5))
             default:
                 throw DiscogsError.http(http.statusCode)
             }
@@ -100,7 +119,7 @@ public struct DiscogsClient: Sendable {
     /// Returnerer brugernavnet for tokenet.
     public func identity() async throws -> String {
         struct Identity: Decodable { let username: String }
-        let data = try await get("/oauth/identity")
+        let data = try await get("/oauth/identity", priority: .interactive)
         do { return try JSONDecoder().decode(Identity.self, from: data).username }
         catch { throw DiscogsError.decoding("dine kontooplysninger") }
     }

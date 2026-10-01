@@ -1,6 +1,6 @@
 # Handoff: Vinyl Shelf Finder (hele projektet)
 
-**Opdateret:** 1. oktober 2026, aften.
+**Opdateret:** 1. oktober 2026, aften (sent: fælles Discogs-kø, cache og daglig backup).
 
 **Dette er den eneste handoff-fil.** Den indeholder alt, en ny Claude-session skal vide for at
 arbejde videre på projektet, uanset hvad opgaven er. Giv den videre som den første besked,
@@ -88,7 +88,7 @@ Appen starter uden data. Forbind til Discogs i appen, eller prøv den med eksemp
 
 - **Kun Command Line Tools, ingen Xcode.** Det er Swift 6.x med macOS 27 SDK, og brugerens Mac kører macOS 27.
   - Brug `@ViewState`, ikke `@State`. Det er et typealias i `App.swift`, fordi `@State`-makroens plugin kun følger med Xcode.
-  - Ingen XCTest og ingen Swift Testing. Brug i stedet **`swift run VinylCoreChecks`**, som har **305 checks**, alle grønne pr. 1. okt.
+  - Ingen XCTest og ingen Swift Testing. Brug i stedet **`swift run VinylCoreChecks`**, som havde **305 checks**, alle grønne pr. 1. okt. Grenen `claude/quirky-franklin-9sjx8p` tilføjer ca. 40 checks for kø, cache og backup (skrevet i en cloud-session uden Swift, så de er **ikke kørt endnu**: kør dem på Mac'en, og ret antallet her).
     Tilføj checks for ny logik.
   - Store `body`-udtryk kan få compileren til at crashe. Del dem op i små views.
 - **Minimum er macOS 26.** Liquid Glass (`.glassEffect`, `GlassEffectContainer`, `.glassProminent`) bruges direkte uden fallback.
@@ -164,6 +164,16 @@ Sources/VinylCoreChecks/      selvtest (305 checks)
     - Resten ligger under "Vis alle N udgaver".
   - Søgningen rangeres lokalt efter antal ramte søgeord.
   - Én delt Discogs-klient pr. session.
+- **Fælles Discogs-kø og cache** (`DiscogsQueue.swift`, gren `claude/quirky-franklin-9sjx8p`, ikke testet på Mac endnu):
+  - `DiscogsRateLimiter.shared`: token-bucket med 15 kald i et hug og derefter 45 i minuttet (højst 60/min) for **alle** klienter.
+    Søgning, udgaver og ønskeliste går foran priser og Værdi. Fejl 429 og "under 3 kald tilbage" giver pause for alle.
+  - `DiscogsResponseCache`: søgninger og `/masters/…` gemmes i hukommelsen i 10 minutter (højst 100 svar), og ens kald,
+    der kører samtidig, lægges sammen. Kun "Find nye plader" bruger cachen. Priser, samling og konto hentes altid frisk.
+  - Søgningen laver nu **ét kald**. Kun når master-søgningen finder under 10 album, søges der også efter releases.
+    Ulempe: ved store søgninger vises releases uden master ikke længere.
+- **Daglig sikkerhedskopi** (`Backup.swift`, Indstillinger › Sikkerhedskopi): `VACUUM INTO` til
+  iCloud Drive › Vinyl Shelf Finder backup (ellers Dokumenter), én fil pr. dag, de 14 nyeste beholdes.
+  Kører ved start og hver time, aldrig i `--demo` eller `--snapshot`. Gendannelse står i README.
 
 ### Ikke færdigt / næste skridt (spørg brugeren om rækkefølgen)
 
@@ -186,9 +196,7 @@ Sources/VinylCoreChecks/      selvtest (305 checks)
    - Skal testes sammen med brugeren på iPhonen: virker `.local` eller kun IP-adressen? Firewall-dialogen
      kan dukke op efter hver build ved ad-hoc-signering. Fortæl det på forhånd. Skiltene skal printes igen.
 2. **Find nye plader, resten:**
-   - en fælles rate limiter eller kø (Discogs tillader ca. 60 kald i minuttet),
-   - cache af søgninger og udgaver,
-   - søgningen laver stadig 2 kald pr. tastepause.
+   - kø, cache og ét kald pr. søgning er lavet (se ovenfor), men skal bygges og testes på Mac'en,
    - Se afsnit 6a.
    - **Ikke testet mod det rigtige discogs.com:** login og betaling i appens WKWebView, og `sell/list?master_id&format`-URL'en.
 3. **Udviklercertifikat**, så nøgleringen ikke spørger efter hver build. Brugeren skal selv oprette det i Nøgleringsadgang.
@@ -228,8 +236,8 @@ Sources/VinylCoreChecks/      selvtest (305 checks)
 
 | Handling | Kald |
 |---|---|
-| Søgning | 2 (`/database/search` med type=master og type=release) |
-| Vælg album | 1–3 (`/masters/{id}/versions`) + 12 (`/marketplace/stats/{id}`) |
+| Søgning | 1 (`type=master`), 2 hvis under 10 masters (også `type=release`). Gentaget søgning: 0 (cache) |
+| Vælg album | 1–3 (`/masters/{id}/versions`, 0 hvis i cache) + 12 (`/marketplace/stats/{id}`) |
 | "Hent pris" | 1 |
 | ♡ | 1 PUT `/users/{name}/wants/{id}` |
 
@@ -243,15 +251,12 @@ Sources/VinylCoreChecks/      selvtest (305 checks)
 - `main_release` på en master har ofte 0 til salg.
 - Discogs' egen søgning rangerer dårligt ved flere ord. Appen omrangerer derfor lokalt (`rankedForQuery`).
 - Priserne er uden fragt, moms og gebyrer og gælder uanset stand. Discogs' kurv viser derfor et højere beløb.
-- Grænsen er ca. 60 kald i minuttet. `DiscogsClient.perform` venter 3 sekunder, når der er under 3 kald tilbage, og 5–15 sekunder ved fejl 429.
+- Grænsen er ca. 60 kald i minuttet. Alle kald går gennem `DiscogsRateLimiter.shared`, som holder 3 sekunders pause, når der er under 3 kald tilbage, og 5–15 sekunder ved fejl 429.
 - Valuta i appen: standard er DKK. `MarketCurrency.converted` regner kun mellem EUR og DKK (kurs 7,46038).
   Der opfindes aldrig en kurs for andre valutaer.
 
 **Kendte svagheder (ikke rettet):**
-1. **Ingen fælles rate limiter eller kø.** Hvis man klikker hurtigt gennem mange album, kan appen vente pludseligt.
-   - Forslag: en delt `actor` med token-bucket på ca. 50 kald i minuttet, prioritet og sammenlægning af ens kald.
-2. **Ingen cache af søgninger og udgaver** mellem gange. Forslag: en lille LRU-cache med udløbstid.
-3. **2 kald pr. søgning.** Overvej kun type=master, og kun releases, når master-søgningen ikke finder noget.
+1.–3. Kø, cache og 2 kald pr. søgning er rettet (se afsnit 6). Cachen er kun i hukommelsen og tømmes ved genstart.
 4. **Covers fra søgeresultater** lægges i disk-cachen (`~/Library/Caches/VinylShelfFinder/covers`) uden grænse.
 5. **Ikke testet mod det rigtige discogs.com:**
    - login og betaling i appens WKWebView,

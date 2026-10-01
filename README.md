@@ -55,6 +55,8 @@ Sources/
     Search.swift      lokal søgning med stavefejl-tolerance
     Discogs.swift     API-klient (rate limit, pagination)
     Keychain.swift    token i macOS' nøglering
+    Backup.swift      daglig sikkerhedskopi af databasen
+    DiscogsQueue.swift fælles kø (rate limit) og cache til Discogs-kald
   VinylShelfFinder/   SwiftUI-app
   VinylCoreChecks/    selvtest: swift run VinylCoreChecks
 ```
@@ -69,3 +71,23 @@ Vigtige designvalg:
 
 Data: `~/Library/Application Support/VinylShelfFinder/vinyl.sqlite` (demo: `demo.sqlite`).
 Covers caches i `~/Library/Caches/VinylShelfFinder/covers`.
+
+## Sikkerhedskopi
+
+Appen gemmer selv en kopi af databasen én gang om dagen (ved start og derefter hver time, hvis
+der ikke er taget en i dag). Kopierne hedder `vinyl-ÅÅÅÅ-MM-DD.sqlite` og ligger i
+**iCloud Drive › Vinyl Shelf Finder backup**, eller i **Dokumenter** hvis iCloud Drive ikke er slået til.
+De 14 nyeste beholdes. Se Indstillinger › Sikkerhedskopi.
+
+Sådan gendannes en kopi:
+
+1. Afslut appen (⌘Q).
+2. Kør i Terminal (skift datoen ud med den kopi, du vil have tilbage):
+
+```bash
+cd ~/Library/Application\ Support/VinylShelfFinder
+mkdir -p gammel && mv vinyl.sqlite* gammel/
+cp ~/Library/Mobile\ Documents/com~apple~CloudDocs/Vinyl\ Shelf\ Finder\ backup/vinyl-2026-10-01.sqlite vinyl.sqlite
+```
+
+3. Åbn appen igen. Den nuværende database ligger i mappen `gammel`, hvis du fortryder.

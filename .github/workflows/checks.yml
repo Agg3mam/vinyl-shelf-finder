@@ -1,0 +1,28 @@
+name: Byg og checks
+
+# Bygger appen og kører selvtesten på en Mac hos GitHub, så ændringer kan tjekkes
+# uden brugerens egen Mac. Rører aldrig nøglering, Discogs eller rigtige data.
+on:
+  push:
+    branches-ignore: [design-retning-*]
+  workflow_dispatch:
+
+jobs:
+  checks:
+    runs-on: macos-26
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Design-billederne (ca. 350 MB) skal ikke bruges til at bygge.
+          sparse-checkout: |
+            Sources
+            Resources
+      - name: Vis værktøjer
+        run: |
+          sw_vers
+          xcrun swift --version
+      - name: Byg
+        run: swift build
+      - name: Checks
+        run: swift run VinylCoreChecks

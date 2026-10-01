@@ -186,6 +186,9 @@ final class FindNewModel {
     private(set) var wants: [Int: WantState] = [:]
     /// Én delt forbindelse pr. session (tokenet læses kun én gang fra nøgleringen).
     @ObservationIgnored private var cachedClient: DiscogsClient?
+    /// Søgninger og udgaver, der allerede er hentet (10 minutter), så samme søgning eller
+    /// album ikke koster nye kald hos Discogs.
+    @ObservationIgnored private var responseCache = DiscogsResponseCache()
 
     // MARK: - Tilgængelighed
 
@@ -212,13 +215,17 @@ final class FindNewModel {
         guard let app, !app.isDemo, app.hasToken else { throw DiscogsError.missingToken }
         if let cachedClient { return cachedClient }
         guard let token = Keychain.loadToken() else { throw DiscogsError.missingToken }
-        let client = DiscogsClient(token: token)
+        let client = DiscogsClient(token: token, cache: responseCache)
         cachedClient = client
         return client
     }
 
-    /// Kaldes, når tokenet skiftes eller fjernes.
-    func resetClient() { cachedClient = nil }
+    /// Kaldes, når tokenet skiftes eller fjernes. Cachen tømmes også, da søgeresultaterne
+    /// indeholder kontoens egne mærker ("I din samling", "På ønskelisten").
+    func resetClient() {
+        cachedClient = nil
+        responseCache = DiscogsResponseCache()
+    }
 
     /// Ejer jeg denne release? Discogs' eget flag eller den lokale samling.
     func owns(_ version: DiscogsVersion) -> Bool {

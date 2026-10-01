@@ -98,13 +98,16 @@ public struct MasterOffer: Equatable, Sendable {
 extension DiscogsClient {
     static let searchPageSize = 50
     static let versionsPageSize = 100
+    /// Finder master-søgningen mindst så mange album, søges der ikke også efter enkelte udgaver.
+    static let releaseSearchBelow = 10
 
     /// Søger efter album i hele Discogs (alle formater). Masters + releases uden master,
     /// uden dubletter. Kræver token (database/search).
     ///
-    /// Der laves to opslag pr. side (type=master og type=release), så siderne aldrig overlapper.
-    /// Releases med master vises via deres master. Finder master-søgningen intet (fx ved søgning
-    /// på katalognummer eller stregkode), vises de fundne releases i stedet som enkelte udgaver.
+    /// Først søges der kun efter masters (ét kald). Finder den mindst `releaseSearchBelow` album,
+    /// er det nok. Ellers søges der også efter releases (type=release), så album uden master og
+    /// søgninger på katalognummer eller stregkode stadig giver resultater. Releases med master vises
+    /// via deres master; finder master-søgningen intet, vises releases som enkelte udgaver.
     /// `format` (fx "Vinyl", "CD", "Cassette") begrænser søgningen til udgivelser i det format;
     /// `nil` = alle formater.
     public func searchAlbums(_ query: String, page: Int = 1, format: String? = nil) async throws -> (albums: [DiscogsAlbum], hasMore: Bool) {
@@ -116,11 +119,19 @@ extension DiscogsClient {
                       URLQueryItem(name: "per_page", value: String(Self.searchPageSize))]
         if let format, !format.isEmpty { common.append(URLQueryItem(name: "format", value: format)) }
         let masterQuery = common + [URLQueryItem(name: "type", value: "master")]
+        let m = try await get("/database/search", query: masterQuery, priority: .interactive)
+        if let enough = try Self.mastersOnly(m) { return enough }
         let releaseQuery = common + [URLQueryItem(name: "type", value: "release")]
-        async let masters = get("/database/search", query: masterQuery)
-        async let releases = get("/database/search", query: releaseQuery)
-        let (m, r) = try await (masters, releases)
+        let r = try await get("/database/search", query: releaseQuery, priority: .interactive)
         return try Self.combineSearch(masters: m, releases: r)
+    }
+
+    /// Master-søgningen alene, hvis den fandt nok album (se `releaseSearchBelow`); ellers nil.
+    /// Afgørelsen bygger på det samlede antal, så alle sider af samme søgning behandles ens.
+    public static func mastersOnly(_ masters: Data) throws -> (albums: [DiscogsAlbum], hasMore: Bool)? {
+        let m = try decodeSearch(masters)
+        guard m.total >= releaseSearchBelow else { return nil }
+        return (albums(from: m.results.filter { $0.type == "master" }, keepReleasesWithMaster: false), m.hasMore)
     }
 
     /// Udgaver af et album: for en master `/masters/{id}/versions` (Discogs' standardsortering),
@@ -132,11 +143,11 @@ extension DiscogsClient {
             var query = [URLQueryItem(name: "page", value: String(max(1, page))),
                          URLQueryItem(name: "per_page", value: String(Self.versionsPageSize))]
             if let format, !format.isEmpty { query.append(URLQueryItem(name: "format", value: format)) }
-            let data = try await get("/masters/\(album.id)/versions", query: query)
+            let data = try await get("/masters/\(album.id)/versions", query: query, priority: .interactive)
             return try Self.parseVersions(data)
         }
         guard page <= 1 else { return ([], false, 1) }
-        let data = try await get("/releases/\(album.id)")
+        let data = try await get("/releases/\(album.id)", priority: .interactive)
         let version = try Self.parseReleaseVersion(data, inCollection: album.inCollection, inWantlist: album.inWantlist)
         return ([version], false, 1)
     }

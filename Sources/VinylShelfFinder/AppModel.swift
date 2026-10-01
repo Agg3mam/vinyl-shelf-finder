@@ -84,6 +84,12 @@ final class AppModel {
     /// `--demo`: separat database med eksempeldata, ingen Discogs-forbindelse.
     let isDemo = CommandLine.arguments.contains("--demo")
 
+    // Sikkerhedskopi (én gang om dagen, se `DatabaseBackup`)
+    let backupFolder = DatabaseBackup.defaultFolder()
+    private(set) var lastBackup: Date?
+    private(set) var backupError: String?
+    @ObservationIgnored private var backupTask: Task<Void, Never>?
+
     init() {
         do {
             if isDemo {
@@ -118,6 +124,7 @@ final class AppModel {
         collectionValue = store.loadCollectionValue()
         reload()
         findNew.app = self
+        startBackups()
     }
 
     // MARK: - Data
@@ -442,6 +449,45 @@ final class AppModel {
         } catch {
             syncState = .failed(error.localizedDescription)
         }
+    }
+}
+
+// MARK: - Sikkerhedskopi
+
+extension AppModel {
+    /// Tager en kopi ved start, hvis der ikke er taget en i dag, og tjekker igen hver time
+    /// (appen står ofte åben i flere dage). Aldrig i demo- eller snapshot-tilstand.
+    func startBackups() {
+        guard !isDemo, !CommandLine.arguments.contains("--snapshot") else { return }
+        lastBackup = DatabaseBackup.latest(in: backupFolder)
+        backupTask?.cancel()
+        backupTask = Task { [weak self] in
+            while !Task.isCancelled {
+                self?.backupIfDue()
+                try? await Task.sleep(for: .seconds(3600))
+            }
+        }
+    }
+
+    func backupIfDue() {
+        if DatabaseBackup.isDue(latest: lastBackup) { backupNow() }
+    }
+
+    /// "Tag en kopi nu" i Indstillinger (erstatter dagens kopi).
+    func backupNow() {
+        guard !isDemo else { return }
+        do {
+            try DatabaseBackup.run(store: store, to: backupFolder)
+            lastBackup = Date()
+            backupError = nil
+        } catch {
+            backupError = error.localizedDescription
+        }
+    }
+
+    func showBackupsInFinder() {
+        try? FileManager.default.createDirectory(at: backupFolder, withIntermediateDirectories: true)
+        NSWorkspace.shared.open(backupFolder)
     }
 }
 
