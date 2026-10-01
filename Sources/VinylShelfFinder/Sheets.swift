@@ -159,8 +159,8 @@ struct FindBackdrop: View {
                 .transition(.opacity)
             }
         }
-        .animation(Motion.fade(reduceMotion), value: key)
-        .animation(Motion.fade(reduceMotion), value: tone)
+        .animation(Motion.backdrop(reduceMotion), value: key)
+        .animation(Motion.backdrop(reduceMotion), value: tone)
         .clipped()
         .accessibilityHidden(true)
     }

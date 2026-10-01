@@ -49,6 +49,12 @@ enum Motion {
         reduceMotion ? .easeInOut(duration: 0.15) : .smooth(duration: 0.28)
     }
 
+    /// Pladeskærmenes baggrund (farvetone og sløret cover), når pladen skifter: en lang, blød
+    /// overgang, så farven glider i stedet for at blinke. Kortere fade ved reduceret bevægelse.
+    static func backdrop(_ reduceMotion: Bool) -> Animation {
+        reduceMotion ? .easeInOut(duration: 0.2) : .easeInOut(duration: 0.6)
+    }
+
     /// Cover Flow: coverne falder på plads med en let fjedrende bevægelse (som på iPod'en).
     static func coverFlow(_ reduceMotion: Bool) -> Animation? {
         reduceMotion ? nil : .interpolatingSpring(stiffness: 400, damping: 30)
@@ -291,12 +297,15 @@ extension EnvironmentValues {
 /// Børn kan læse tonen via `@Environment(\.coverTone)` (fx til `GlassPanel`).
 struct RecordStage: ViewModifier {
     let release: Release?
-    /// Det indlæste udseende *og* hvilken plade det hører til. Bruges kun, når id'et
-    /// matcher, så et skift af plade aldrig viser den forrige plades cover/farve.
-    @ViewState private var loaded: (id: Int, look: CoverLook)?
+    /// Det udseende, baggrunden viser lige nu. Skiftes pladen, bliver det forrige stående,
+    /// indtil det nye er klar, og toner så over i én bevægelse. (Før sprang farven først til en
+    /// reservefarve og derefter til coverets farve: to skift i stedet for ét.)
+    @ViewState private var shown: CoverLook?
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     func body(content: Content) -> some View {
-        let look = release.flatMap { r in loaded?.id == r.id ? loaded?.look : CoverLook.cached(r.id) }
+        // Første visning (og snapshots): et cover, der allerede er indlæst, vises med det samme.
+        let look = shown ?? release.flatMap { CoverLook.cached($0.id) }
         let tone = look?.tone ?? release.map { CoverTone.fallback(for: $0) } ?? CoverToneKey.defaultValue
         content
             .tint(tone.accent)
@@ -305,9 +314,23 @@ struct RecordStage: ViewModifier {
             // Ingen lys værktøjslinje-flade over den mørke scene (det hvide bånd i toppen).
             .toolbarBackgroundVisibility(.hidden, for: .windowToolbar)
             .task(id: release?.id) {
-                guard let r = release, let l = await CoverLook.load(for: r), !Task.isCancelled else { return }
-                loaded = (r.id, l)
+                guard let r = release else { show(nil); return }
+                if let hit = CoverLook.cached(r.id) { show(hit); return }
+                // Når man bladrer hurtigt (fx Cover Flow), skiftes baggrunden først, når man
+                // holder pause, så den ikke blinker gennem hver plade.
+                try? await Task.sleep(for: .milliseconds(120))
+                guard !Task.isCancelled else { return }
+                let look = await CoverLook.load(for: r)
+                guard !Task.isCancelled else { return }
+                show(look)
             }
+    }
+
+    /// Altid med sin egen animation, også når skiftet af plade sker uden animation
+    /// (fx mens Cover Flow følger fingrene på trackpad'en).
+    private func show(_ look: CoverLook?) {
+        guard look.map({ ObjectIdentifier($0.image) }) != shown.map({ ObjectIdentifier($0.image) }) else { return }
+        withAnimation(Motion.backdrop(reduceMotion)) { shown = look }
     }
 }
 
