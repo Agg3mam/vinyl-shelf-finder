@@ -91,6 +91,9 @@ enum Snapshotter {
             model.selection = ids.isEmpty ? nil : ids[ids.count / 2]
             model.showCoverFlow = true
             render(MainView().appRoot().environment(model), size: CGSize(width: 1280, height: 820), to: dir.appendingPathComponent("13-coverflow.png"))
+            // Cover Flow alene med ImageRenderer: cacheDisplay tegner ikke 3D-drejningerne.
+            renderSwiftUI(CoverFlowView(locationID: loc.id).appRoot().environment(model), size: CGSize(width: 900, height: 620),
+                          to: dir.appendingPathComponent("13b-coverflow-alene.png"))
             model.showCoverFlow = savedCoverFlow
         }
         model.sidebar = .value
