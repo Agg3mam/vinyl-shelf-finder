@@ -1,0 +1,23 @@
+Eget vindue: ["NSWindow vis=true (0.0, 0.0, 1280.0, 820.0)", "TUINSWindow vis=false (0.0, 0.0, 500.0, 500.0)", "SPRoundedWindow vis=false (253.0, 482.0, 312.0, 237.0)"]
+Vindue: 11596
+Covers lagt i isoleret cache: true
+B00 henter: Blue Train format=Vinyl udgaver=17 prissat=false bedst=–
+   andre: –, –, –, –, –, –, –, –, –, –, –, –
+  → B00-henter.png (vindue 11596)
+B01 billigste: Blue Train format=Vinyl udgaver=17 prissat=true bedst=2015 · Europe · Blue Note 0602547… · Vinyl, LP, Album, Reissue, 180g 189.0 DKK
+   andre: 204, 245, 260, 420, 1480, 1890, 1905, 2317, 3455, –, –
+  → B01-billigste.png (vindue 11596)
+  → B02-alle-udgaver.png (vindue 11596)
+BD00 henter: Blue Train format=Vinyl udgaver=17 prissat=false bedst=2015 · Europe · Blue Note 0602547… · Vinyl, LP, Album, Reissue, 180g 189.0 DKK
+   andre: –, 3455, 245, 2317, 1890, –, 1480, 420, 1905, 260, 204
+  → BD00-henter.png (vindue 11596)
+BD01 billigste: Blue Train format=Vinyl udgaver=17 prissat=true bedst=2015 · Europe · Blue Note 0602547… · Vinyl, LP, Album, Reissue, 180g 189.0 DKK
+   andre: 204, 245, 260, 420, 1480, 1890, 1905, 2317, 3455, –, –
+  → BD01-billigste.png (vindue 11596)
+  → BD02-alle-udgaver.png (vindue 11596)
+B03 alle formater: Kind Of Blue format=Alle udgaver=20 prissat=true bedst=1990 · US · Blue Note 4BN 81577 · Cassette, Album 60.0 DKK
+   andre: 89, 189, 245, 420, 1480, 1890, 1905, 2317, 3455, –, –
+  → B03-alle-formater.png (vindue 11596)
+B04 release uden master: Moanin' format=Alle udgaver=1 prissat=true bedst=1959 · US · Blue Note BST 84003 · Vinyl, LP, Album, Reissue 685.0 DKK
+   andre: 
+  → B04-release-uden-master.png (vindue 11596)

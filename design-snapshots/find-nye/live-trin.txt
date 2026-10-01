@@ -1,0 +1,24 @@
+Eget vindue: ["NSWindow vis=true (0.0, 0.0, 1280.0, 820.0)", "TUINSWindow vis=false (0.0, 0.0, 500.0, 500.0)", "SPRoundedWindow vis=false (253.0, 482.0, 312.0, 237.0)"]
+Vindue: 10759
+Covers lagt i isoleret cache: true
+F00 uden forbindelse (demo uden testflag): available=false
+  → F00-demo-uden-forbindelse.png (vindue 10759)
+  → F01-tom-soegning.png (vindue 10759)
+F søgning 'blue' → ["Kind Of Blue", "Blue Train", "Moanin\'"] hasMore=true
+  → F02-resultater.png (vindue 10759)
+   valgt=Blue Train udgaver=5 priser=["Optional(VinylShelfFinder.FindNewModel.PriceState.loaded(VinylCore.MarketInfo(lowestPrice: Optional(66.5), currency: \"EUR\", numForSale: Optional(10), have: Optional(1200), want: Optional(900), fetchedAt: 2026-10-01 14:53:31 +0000)))", "Optional(VinylShelfFinder.FindNewModel.PriceState.loaded(VinylCore.MarketInfo(lowestPrice: Optional(74.0), currency: \"EUR\", numForSale: Optional(11), have: Optional(1200), want: Optional(900), fetchedAt: 2026-10-01 14:53:29 +0000)))", "Optional(VinylShelfFinder.FindNewModel.PriceState.loaded(VinylCore.MarketInfo(lowestPrice: Optional(14.0), currency: \"EUR\", numForSale: Optional(12), have: Optional(1200), want: Optional(900), fetchedAt: 2026-10-01 14:53:30 +0000)))", "Optional(VinylShelfFinder.FindNewModel.PriceState.loaded(VinylCore.MarketInfo(lowestPrice: nil, currency: \"EUR\", numForSale: Optional(0), have: Optional(1200), want: Optional(900), fetchedAt: 2026-10-01 14:53:31 +0000)))", "Optional(VinylShelfFinder.FindNewModel.PriceState.loaded(VinylCore.MarketInfo(lowestPrice: Optional(29.0), currency: \"EUR\", numForSale: Optional(14), have: Optional(1200), want: Optional(900), fetchedAt: 2026-10-01 14:53:32 +0000)))"]
+  → F03-udgaver-med-pris.png (vindue 10759)
+   ønskeliste 663721: Optional(VinylShelfFinder.FindNewModel.WantState.added)
+   vis flere → 5 album, hasMore=false
+  → F04-oenskeliste-og-vis-flere.png (vindue 10759)
+  → F05-discogs-vindue.png (vindue 10782)
+FD søgning 'blue' → ["Kind Of Blue", "Blue Train", "Moanin\'"] hasMore=true
+  → FD02-resultater.png (vindue 10759)
+   valgt=Kind Of Blue udgaver=5 priser=["Optional(VinylShelfFinder.FindNewModel.PriceState.loaded(VinylCore.MarketInfo(lowestPrice: Optional(66.5), currency: \"EUR\", numForSale: Optional(17), have: Optional(1200), want: Optional(900), fetchedAt: 2026-10-01 14:53:46 +0000)))", "Optional(VinylShelfFinder.FindNewModel.PriceState.loaded(VinylCore.MarketInfo(lowestPrice: Optional(74.0), currency: \"EUR\", numForSale: Optional(18), have: Optional(1200), want: Optional(900), fetchedAt: 2026-10-01 14:53:45 +0000)))", "Optional(VinylShelfFinder.FindNewModel.PriceState.loaded(VinylCore.MarketInfo(lowestPrice: Optional(14.0), currency: \"EUR\", numForSale: Optional(19), have: Optional(1200), want: Optional(900), fetchedAt: 2026-10-01 14:53:46 +0000)))", "Optional(VinylShelfFinder.FindNewModel.PriceState.loaded(VinylCore.MarketInfo(lowestPrice: nil, currency: \"EUR\", numForSale: Optional(0), have: Optional(1200), want: Optional(900), fetchedAt: 2026-10-01 14:53:44 +0000)))", "Optional(VinylShelfFinder.FindNewModel.PriceState.loaded(VinylCore.MarketInfo(lowestPrice: Optional(29.0), currency: \"EUR\", numForSale: Optional(4), have: Optional(1200), want: Optional(900), fetchedAt: 2026-10-01 14:53:45 +0000)))"]
+  → FD03-udgaver-med-pris.png (vindue 10759)
+   ønskeliste 54601: Optional(VinylShelfFinder.FindNewModel.WantState.added)
+   vis flere → 5 album, hasMore=false
+  → FD04-oenskeliste-og-vis-flere.png (vindue 10759)
+  → FD05-discogs-vindue.png (vindue 10782)
+F06 fejl: failed("Kunne ikke få forbindelse til Discogs. Tjek, at Mac\'en er på internettet, og prøv igen.")
+  → F06-fejl-offline.png (vindue 10759)

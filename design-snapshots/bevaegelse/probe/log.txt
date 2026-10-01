@@ -1,0 +1,65 @@
+cacheDisplay: frames=15 
+  t=   -1 top=(255, 57, 60) green=(53, 199, 89) blackAt=0
+  t=    1 top=(255, 57, 60) green=(53, 199, 89) blackAt=0
+  t=   55 top=(249, 65, 70) green=(63, 201, 95) blackAt=1
+  t=  103 top=(234, 85, 96) green=(90, 207, 112) blackAt=4
+  t=  151 top=(218, 98, 118) green=(112, 212, 130) blackAt=7
+  t=  203 top=(201, 108, 137) green=(132, 218, 147) blackAt=10
+  t=  251 top=(183, 117, 156) green=(151, 223, 163) blackAt=13
+  t=  303 top=(165, 123, 174) green=(171, 229, 180) blackAt=16
+  t=  353 top=(145, 128, 191) green=(190, 234, 196) blackAt=19
+  t=  403 top=(122, 131, 210) green=(208, 240, 212) blackAt=22
+  t=  453 top=(96, 134, 227) green=(226, 246, 229) blackAt=25
+  t=  503 top=(60, 136, 244) green=(244, 251, 244) blackAt=28
+  t=  553 top=(0, 136, 255) green=(255, 255, 255) blackAt=30
+  t=  603 top=(0, 136, 255) green=(255, 255, 255) blackAt=30
+  t=  653 top=(0, 136, 255) green=(255, 255, 255) blackAt=30
+layerModel: frames=15 
+  t=   -1 top=(255, 56, 60) green=(52, 199, 89) blackAt=0
+  t=    1 top=(255, 56, 60) green=(52, 199, 89) blackAt=0
+  t=   53 top=(245, 72, 79) green=(66, 203, 100) blackAt=2
+  t=  103 top=(229, 89, 103) green=(85, 208, 116) blackAt=5
+  t=  153 top=(213, 102, 124) green=(106, 214, 133) blackAt=8
+  t=  203 top=(196, 111, 143) green=(126, 219, 150) blackAt=11
+  t=  253 top=(178, 119, 162) green=(147, 225, 166) blackAt=14
+  t=  301 top=(159, 125, 180) green=(167, 231, 183) blackAt=17
+  t=  353 top=(138, 129, 198) green=(187, 236, 200) blackAt=20
+  t=  403 top=(114, 133, 215) green=(208, 242, 217) blackAt=23
+  t=  453 top=(86, 135, 232) green=(228, 248, 233) blackAt=26
+  t=  503 top=(41, 136, 249) green=(248, 253, 249) blackAt=29
+  t=  553 top=(0, 136, 255) green=(255, 255, 255) blackAt=30
+  t=  602 top=(0, 136, 255) green=(255, 255, 255) blackAt=30
+  t=  653 top=(0, 136, 255) green=(255, 255, 255) blackAt=30
+layerPresentation: frames=15 
+  t=   -1 top=(255, 56, 60) green=(52, 199, 89) blackAt=0
+  t=    1 top=(255, 56, 60) green=(52, 199, 89) blackAt=0
+  t=   51 top=(250, 65, 70) green=(59, 201, 95) blackAt=1
+  t=  102 top=(234, 84, 96) green=(79, 206, 111) blackAt=4
+  t=  151 top=(218, 98, 117) green=(99, 212, 127) blackAt=7
+  t=  203 top=(201, 108, 137) green=(120, 218, 144) blackAt=10
+  t=  253 top=(184, 116, 156) green=(140, 223, 161) blackAt=13
+  t=  303 top=(165, 123, 174) green=(160, 229, 178) blackAt=16
+  t=  353 top=(145, 128, 192) green=(181, 235, 194) blackAt=19
+  t=  403 top=(123, 132, 209) green=(201, 240, 211) blackAt=22
+  t=  451 top=(96, 134, 226) green=(222, 246, 228) blackAt=25
+  t=  503 top=(60, 136, 244) green=(241, 251, 244) blackAt=28
+  t=  550 top=(0, 136, 255) green=(255, 255, 255) blackAt=30
+  t=  602 top=(0, 136, 255) green=(255, 255, 255) blackAt=30
+  t=  653 top=(0, 136, 255) green=(255, 255, 255) blackAt=30
+windowServer: frames=15 
+  t=   -1 top=(255, 57, 60) green=(53, 199, 89) blackAt=0
+  t=    0 top=(255, 57, 60) green=(53, 199, 89) blackAt=0
+  t=   53 top=(240, 78, 87) green=(80, 205, 106) blackAt=3
+  t=  103 top=(224, 93, 110) green=(103, 210, 123) blackAt=6
+  t=  152 top=(207, 105, 130) green=(125, 216, 141) blackAt=9
+  t=  203 top=(191, 113, 149) green=(145, 222, 157) blackAt=12
+  t=  252 top=(172, 121, 168) green=(165, 227, 174) blackAt=15
+  t=  303 top=(152, 126, 185) green=(183, 232, 190) blackAt=18
+  t=  353 top=(131, 130, 203) green=(201, 238, 207) blackAt=21
+  t=  403 top=(107, 134, 220) green=(218, 244, 222) blackAt=24
+  t=  451 top=(76, 135, 237) green=(237, 249, 238) blackAt=27
+  t=  503 top=(6, 136, 254) green=(254, 255, 254) blackAt=30
+  t=  552 top=(0, 136, 255) green=(255, 255, 255) blackAt=30
+  t=  602 top=(0, 136, 255) green=(255, 255, 255) blackAt=30
+  t=  651 top=(0, 136, 255) green=(255, 255, 255) blackAt=30
+screens=1 occlusion=[8192]

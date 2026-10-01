@@ -1,0 +1,137 @@
+Database: VinylCore.ShelfStore
+00 Start: sidebar=Optional(VinylShelfFinder.SidebarItem.search), selection=–
+  → 00-start.png
+01 Onboarding via forceOnboarding (Indstillinger › Opdel samlingen forfra…)
+  → 01a-onboarding.png
+  → 01b-onboarding-hele.png
+01c Forbind i demo → errorMessage: nil
+02 ⌘K, skriv 'station to', ↑↓, ↩
+  → 02a-cmdK-tom-soegning.png
+   resultater for 'station': ["David Bowie – Station To Station"]
+  → 02b-soeg-station.png
+   resultater for 'bowie': ["David Bowie – Hunky Dory", "David Bowie – Young Americans", "David Bowie – Station To Station", "David Bowie – Low", "David Bowie – \"Heroes\""] valgt=David Bowie – Station To Station
+  → 02c-soeg-bowie.png
+   ↓↓ valgt=David Bowie – "Heroes"
+  → 02d-pil-ned-to-gange.png
+   valgt=David Bowie – Station To Station → ↩ findModeCopy
+  → 02e-station-valgt.png
+  → 02f-find-station.png
+  → 02g-find-station-appkit.png
+   hint: Plade 14 af 15 i sektionen (ca. 93% inde fra venstre).
+   primær: Midt i en blok af 5 David Bowie-plader. Find sektionens højre kant og tæl 2 plader tilbage – målet står lige før Young Americans. / sekundær: Står lige før. / blok: Pladen er nr. 4 af 5 David Bowie-plader i træk.
+03 Søg 'wish you', ⌘L
+  → 03a-wish-valgt.png
+   efter ⌘L: plays=1 selection=Pink Floyd – Wish You Were Here
+  → 03b-efter-spillet.png
+  → 03c-detalje-efter-spillet.png
+  → 03d-lyttelog-2-gange.png
+   fortryd i lyttelog: plays=1 sidebar=Optional(VinylShelfFinder.SidebarItem.plays) selection=Pink Floyd – Wish You Were Here
+  → 03e-lyttelog-efter-fortryd.png
+04 Hvad skal jeg høre?
+  → 04a-listen-start.png
+  → 04b-listen-start-glas.png
+   tryk 1: Pink Floyd – The Wall
+  → 04c-listen-tryk1.png
+   tryk 2: Jimi Hendrix – Electric Ladyland
+  → 04c-listen-tryk2.png
+   tryk 3: Genesis – The Lamb Lies Down On Broadway
+  → 04c-listen-tryk3.png
+  → 04d-listen-pick-glas.png
+   filter Funk / Soul + 80'erne → 0 kandidater, currentPick stadig=Genesis – The Lamb Lies Down On Broadway
+  → 04e-listen-filter-ingen.png
+   tryk med 0 kandidater → currentPick=Genesis – The Lamb Lies Down On Broadway
+   Pop + 2010'erne → Aurora – All My Demons Greeting Me As A Friend (to tryk)
+  → 04f-listen-filter-en.png
+  → 04g-listen-aldrig-spillet.png
+05 Udlånt (Abbey Road) til 'min bror Jens'
+  → 05a-abbey-valgt.png
+  → 05b-abbey-udlaant.png
+  → 05c-detalje-udlaant.png
+  → 05d-find-udlaant.png
+   nabo: The Beatles – Revolver
+  → 05e-find-nabo-til-udlaant.png
+  → 05f-nabo-detalje.png
+  → 05g-ude-af-reolen.png
+  → 05h-sektion-med-udlaant.png
+   Revolver sat til Udlånt via højrekliksmenu (ingen navnedialog)
+  → 05i-ude-af-reolen-to.png
+06 Flyt Wish You Were Here (⇧⌘M)
+  → 06a-flyt-ark.png
+   flyttet til Reol 1 · Sektion A index 15; selection=Pink Floyd – Wish You Were Here
+  → 06b-efter-flyt.png
+  → 06c-historik.png
+   historik: ["moved Pink Floyd – Wish You Were Here flyttet: Reol 2 / A / 7 → Reol 1 / A / 16", "statusChanged The Beatles – Revolver: 👤 Udlånt", "statusChanged The Beatles – Abbey Road: 👤 Udlånt (min bror Jens)", "layoutCreated Reolstruktur oprettet: 3 sektioner, 43 plader", "addedFromDiscogs Ny i Discogs: Åge Aleksandersen – Levva Livet", "addedFromDiscogs Ny i Discogs: Aurora – All My Demons Greeting Me As A Friend"]
+   fortryd → står nu i Reol 2 · Sektion A, err=nil
+  → 06d-historik-efter-fortryd.png
+   historik efter fortryd: ["moved Pink Floyd – Wish You Were Here flyttet: Reol 1 / A / 16 → Reol 2 / A / 7", "moved Pink Floyd – Wish You Were Here flyttet: Reol 2 / A / 7 → Reol 1 / A / 16", "statusChanged The Beatles – Revolver: 👤 Udlånt", "statusChanged The Beatles – Abbey Road: 👤 Udlånt (min bror Jens)"]
+  → 06e-nye-plader.png
+  → 06f-ny-plade-detalje.png
+  → 06g-flyt-ark-uplaceret.png
+07 Kontroller sektion 1A med ↩ / S / M / mellemrum / ←
+  → 07a-kontrol-start.png
+   ↩ rigtigt: håndteret=true
+   ↩ rigtigt: håndteret=true
+   S andet sted: håndteret=true
+  → 07b-kontrol-efter-3.png
+   M mangler: håndteret=true
+   mellemrum ved ikke: håndteret=true
+   ← tilbage: håndteret=true
+  → 07c-kontrol-efter-tilbage.png
+  → 07d-kontrol-opsummering.png
+08 Gennemse sidepanelet
+   Reol 1 · Sektion A: selection=Gasolin' – Gas 5
+  → 08a-sektion-1-1A.png
+   Reol 1 · Sektion B: selection=Gasolin' – Gas 5
+  → 08a-sektion-2-1B.png
+   Reol 2 · Sektion A: selection=Gasolin' – Gas 5
+  → 08a-sektion-3-2A.png
+  → 08b-nye-plader.png
+  → 08c-ude-af-reolen.png
+  → 08d-fjernet-fra-discogs.png
+  → 08e-vaerdi.png
+  → 08f-historik.png
+  → 08g-lyttelog.png
+09 Indstillinger
+  → 09a-indstillinger.png
+  → 09b-discogs.png
+  → 09c-sortering.png
+  → 09d-reol.png
+10 Søgninger
+   'xyzzy' → 0: [] valgt=–
+  → 10a-xyzzy.png
+   'pink floid' → 6: ["Pink Floyd – Meddle", "Pink Floyd – The Dark Side Of The Moon", "Pink Floyd – The Dark Side Of The Moon", "Pink Floyd – Wish You Were Here", "Pink Floyd – Animals"] valgt=Pink Floyd – Meddle
+  → 10b-pink-floid.png
+   'æøå' → 0: [] valgt=Pink Floyd – Meddle
+  → 10c-aeoeaa.png
+   'vaersgo' → 1: ["Kim Larsen – Værsgo"] valgt=Kim Larsen – Værsgo
+  → 10d-vaersgo.png
+   'kim larsen værsgo' → 1: ["Kim Larsen – Værsgo"] valgt=Kim Larsen – Værsgo
+  → 10e-kim-larsen.png
+   'age aleksandersen' → 1: ["Åge Aleksandersen – Levva Livet"] valgt=Åge Aleksandersen – Levva Livet
+  → 10f-age.png
+   'dark side' → 2: ["Pink Floyd – The Dark Side Of The Moon", "Pink Floyd – The Dark Side Of The Moon"] valgt=Pink Floyd – The Dark Side Of The Moon
+  → 10g-dark-side.png
+   'shvl804' → 1: ["Pink Floyd – The Dark Side Of The Moon"] valgt=Pink Floyd – The Dark Side Of The Moon
+  → 10h-katalog.png
+   'acdc' → 1: ["AC/DC – Highway To Hell"] valgt=AC/DC – Highway To Hell
+  → 10i-acdc.png
+   'heroes' → 1: ["David Bowie – \"Heroes\""] valgt=David Bowie – "Heroes"
+  → 10j-heroes.png
+   'the beatles' → 2: ["The Beatles – Abbey Road", "The Beatles – Revolver"] valgt=The Beatles – Abbey Road
+  → 10k-the-beatles.png
+   'bowe' → 5: ["David Bowie – Hunky Dory", "David Bowie – Young Americans", "David Bowie – Station To Station", "David Bowie – Low", "David Bowie – \"Heroes\""] valgt=David Bowie – Hunky Dory
+  → 10l-bowe.png
+   esc: selection=David Bowie – Hunky Dory
+  → 10m-ryddet.png
+11 Mørk tilstand
+  → 11a-moerk-soeg.png
+  → 11b-moerk-sektion.png
+  → 11c-moerk-lyttelog.png
+  → 11d-moerk-vaerdi.png
+  → 11e-moerk-historik.png
+  → 11f-moerk-listen.png
+  → 11g-moerk-ude.png
+  → 11h-moerk-flyt.png
+  → 11i-moerk-kontrol.png
+  → 11j-moerk-sortering.png
+  → 11k-moerk-onboarding.png

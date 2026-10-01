@@ -1,0 +1,42 @@
+Eget vindue: ["NSWindow vis=true (0.0, 0.0, 1280.0, 820.0)", "TUINSWindow vis=false (0.0, 0.0, 500.0, 500.0)", "SPRoundedWindow vis=false (253.0, 482.0, 312.0, 237.0)"]
+Vindue: 11269
+Covers lagt i isoleret cache: true
+H00 uden forbindelse (demo uden testflag): available=false
+H01 albumkort: Blue Train format=Alle tilbud=Optional(VinylShelfFinder.FindNewModel.Loadable<VinylShelfFinder.AlbumOffer>.loaded(VinylShelfFinder.AlbumOffer(market: VinylCore.MarketInfo(lowestPrice: Optional(108.18), currency: "DKK", numForSale: Optional(32), have: nil, want: nil, fetchedAt: 2026-10-01 15:27:48 +0000), mainRelease: Optional(663721), allFormats: true)))
+   se tilbud → https://www.discogs.com/sell/list?master_id=66372
+   ♡ → release 663721 (1959 · US · Columbia CL 1355 · Vinyl, LP, Album, Mono)
+   udgaver=5/5 åben=false udfoldet=nil pris=–
+  → H01-albumkort.png (vindue 11269)
+H02 udgaver + én udfoldet: Blue Train format=Alle tilbud=Optional(VinylShelfFinder.FindNewModel.Loadable<VinylShelfFinder.AlbumOffer>.loaded(VinylShelfFinder.AlbumOffer(market: VinylCore.MarketInfo(lowestPrice: Optional(108.18), currency: "DKK", numForSale: Optional(32), have: nil, want: nil, fetchedAt: 2026-10-01 15:27:48 +0000), mainRelease: Optional(663721), allFormats: true)))
+   se tilbud → https://www.discogs.com/sell/list?master_id=66372
+   ♡ → release 663721 (1959 · US · Columbia CL 1355 · Vinyl, LP, Album, Mono)
+   udgaver=5/5 åben=true udfoldet=Optional(663722) pris=Optional(VinylShelfFinder.FindNewModel.Loadable<VinylCore.MarketInfo>.loaded(VinylCore.MarketInfo(lowestPrice: Optional(74.0), currency: "DKK", numForSale: Optional(11), have: Optional(1200), want: Optional(900), fetchedAt: 2026-10-01 15:27:51 +0000)))
+  → H02-udgave-foldet-ud.png (vindue 11269)
+H03 format=Vinyl: Blue Train format=Vinyl tilbud=Optional(VinylShelfFinder.FindNewModel.Loadable<VinylShelfFinder.AlbumOffer>.loaded(VinylShelfFinder.AlbumOffer(market: VinylCore.MarketInfo(lowestPrice: Optional(108.18), currency: "DKK", numForSale: Optional(32), have: nil, want: nil, fetchedAt: 2026-10-01 15:27:48 +0000), mainRelease: Optional(663721), allFormats: true)))
+   se tilbud → https://www.discogs.com/sell/list?master_id=66372&format=Vinyl
+   ♡ → release 663721 (1959 · US · Columbia CL 1355 · Vinyl, LP, Album, Mono)
+   udgaver=4/4 åben=false udfoldet=nil pris=–
+  → H03-format-vinyl.png (vindue 11269)
+  → H04-format-vinyl-udgaver.png (vindue 11269)
+HD01 albumkort: Kind Of Blue format=Alle tilbud=Optional(VinylShelfFinder.FindNewModel.Loadable<VinylShelfFinder.AlbumOffer>.loaded(VinylShelfFinder.AlbumOffer(market: VinylCore.MarketInfo(lowestPrice: Optional(70.87), currency: "DKK", numForSale: Optional(40), have: nil, want: nil, fetchedAt: 2026-10-01 15:28:00 +0000), mainRelease: Optional(54601), allFormats: true)))
+   se tilbud → https://www.discogs.com/sell/list?master_id=5460
+   ♡ → release 54601 (1959 · US · Columbia CL 1355 · Vinyl, LP, Album, Mono)
+   udgaver=5/5 åben=false udfoldet=nil pris=–
+  → HD01-albumkort.png (vindue 11269)
+HD02 udgaver + én udfoldet: Kind Of Blue format=Alle tilbud=Optional(VinylShelfFinder.FindNewModel.Loadable<VinylShelfFinder.AlbumOffer>.loaded(VinylShelfFinder.AlbumOffer(market: VinylCore.MarketInfo(lowestPrice: Optional(70.87), currency: "DKK", numForSale: Optional(40), have: nil, want: nil, fetchedAt: 2026-10-01 15:28:00 +0000), mainRelease: Optional(54601), allFormats: true)))
+   se tilbud → https://www.discogs.com/sell/list?master_id=5460
+   ♡ → release 54601 (1959 · US · Columbia CL 1355 · Vinyl, LP, Album, Mono)
+   udgaver=5/5 åben=true udfoldet=Optional(54602) pris=Optional(VinylShelfFinder.FindNewModel.Loadable<VinylCore.MarketInfo>.loaded(VinylCore.MarketInfo(lowestPrice: Optional(74.0), currency: "DKK", numForSale: Optional(18), have: Optional(1200), want: Optional(900), fetchedAt: 2026-10-01 15:28:03 +0000)))
+  → HD02-udgave-foldet-ud.png (vindue 11269)
+   ♡ albumkort: Optional(VinylShelfFinder.FindNewModel.WantState.added)
+HD03 format=Vinyl: Kind Of Blue format=Vinyl tilbud=Optional(VinylShelfFinder.FindNewModel.Loadable<VinylShelfFinder.AlbumOffer>.loaded(VinylShelfFinder.AlbumOffer(market: VinylCore.MarketInfo(lowestPrice: Optional(70.87), currency: "DKK", numForSale: Optional(40), have: nil, want: nil, fetchedAt: 2026-10-01 15:28:00 +0000), mainRelease: Optional(54601), allFormats: true)))
+   se tilbud → https://www.discogs.com/sell/list?master_id=5460&format=Vinyl
+   ♡ → release 54601 (1959 · US · Columbia CL 1355 · Vinyl, LP, Album, Mono)
+   udgaver=4/4 åben=false udfoldet=nil pris=–
+  → HD03-format-vinyl.png (vindue 11269)
+  → HD04-format-vinyl-udgaver.png (vindue 11269)
+H05 release uden master: Moanin' format=Alle tilbud=Optional(VinylShelfFinder.FindNewModel.Loadable<VinylShelfFinder.AlbumOffer>.loaded(VinylShelfFinder.AlbumOffer(market: VinylCore.MarketInfo(lowestPrice: Optional(14.0), currency: "DKK", numForSale: Optional(13), have: Optional(1200), want: Optional(900), fetchedAt: 2026-10-01 15:28:11 +0000), mainRelease: Optional(2213937), allFormats: false)))
+   se tilbud → https://www.discogs.com/sell/release/2213937
+   ♡ → release 2213937 (1959 · US · Blue Note BST 84003 · Vinyl, LP, Album, Reissue)
+   udgaver=1/1 åben=false udfoldet=nil pris=–
+  → H05-release-uden-master.png (vindue 11269)

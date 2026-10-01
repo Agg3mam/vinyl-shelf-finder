@@ -1,0 +1,41 @@
+Eget vindue: ["NSWindow vis=true (0.0, 0.0, 1280.0, 820.0)", "TUINSWindow vis=false (0.0, 0.0, 500.0, 500.0)", "SPRoundedWindow vis=false (253.0, 482.0, 312.0, 237.0)"]
+Vindue: 10290
+== Lys tilstand ==
+Før: 15 i reolen · 1 Arrival | 2 Highway To Hell | 3 Toys In The Attic | 4 Hunting High And Low | 5 Call Me | 6 All My Demons Greeting Me As A Friend | 7 Abbey Road | 8 Revolver | 9 Bringing It All Back Home | 10 John Wesley Harding | 11 "Heroes" | 12 Hunky Dory | 13 Low | 14 Station To Station | 15 Young Americans
+  → V01-sektion-foer.png (vindue 10290)
+Efter På væggen: status=På væggen noteDialog=false
+  14 i reolen · 1 Arrival | 2 Highway To Hell | 3 Toys In The Attic | 4 Hunting High And Low | 5 Call Me | 6 All My Demons Greeting Me As A Friend | – Abbey Road (På væggen) | 7 Revolver | 8 Bringing It All Back Home | 9 John Wesley Harding | 10 "Heroes" | 11 Hunky Dory | 12 Low | 13 Station To Station | 14 Young Americans
+  naboer: plads 7 af 15
+  → V02-sektion-paa-vaeggen.png (vindue 10290)
+  → V03-find-paa-vaeggen.png (vindue 10303)
+  → V03b-kontrol-uden-vaeg.png (vindue 10304)
+  → V04-ude-af-reolen.png (vindue 10290)
+På plads valgt: returnCopy=6 status=På væggen
+  guide: Plads 7 af 15 fra venstre · Sæt den lige til højre for Aurora – All My Demons Greeting Me As A Friend. Det er en anden kunstner, så den er let at få øje på. · Sæt den lige til venstre for Revolver.
+  → V05-saet-tilbage-guide.png (vindue 10305)
+Esc håndteret=true → returnCopy=nil status=På væggen
+↩ håndteret=true → returnCopy=nil status=På plads
+Efter Sat på plads: 15 i reolen · 1 Arrival | 2 Highway To Hell | 3 Toys In The Attic | 4 Hunting High And Low | 5 Call Me | 6 All My Demons Greeting Me As A Friend | 7 Abbey Road | 8 Revolver | 9 Bringing It All Back Home | 10 John Wesley Harding | 11 "Heroes" | 12 Hunky Dory | 13 Low | 14 Station To Station | 15 Young Americans
+  → V06-sektion-tilbage.png (vindue 10290)
+  → V07-historik.png (vindue 10290)
+== Mørk tilstand ==
+Før: 15 i reolen · 1 Arrival | 2 Highway To Hell | 3 Toys In The Attic | 4 Hunting High And Low | 5 Call Me | 6 All My Demons Greeting Me As A Friend | 7 Abbey Road | 8 Revolver | 9 Bringing It All Back Home | 10 John Wesley Harding | 11 "Heroes" | 12 Hunky Dory | 13 Low | 14 Station To Station | 15 Young Americans
+  → VD01-sektion-foer.png (vindue 10290)
+Efter På væggen: status=På væggen noteDialog=false
+  14 i reolen · 1 Arrival | 2 Highway To Hell | 3 Toys In The Attic | 4 Hunting High And Low | 5 Call Me | 6 All My Demons Greeting Me As A Friend | – Abbey Road (På væggen) | 7 Revolver | 8 Bringing It All Back Home | 9 John Wesley Harding | 10 "Heroes" | 11 Hunky Dory | 12 Low | 13 Station To Station | 14 Young Americans
+  naboer: plads 7 af 15
+  → VD02-sektion-paa-vaeggen.png (vindue 10290)
+  → VD03-find-paa-vaeggen.png (vindue 10309)
+  → VD04-ude-af-reolen.png (vindue 10290)
+På plads valgt: returnCopy=6 status=På væggen
+  guide: Plads 7 af 15 fra venstre · Sæt den lige til højre for Aurora – All My Demons Greeting Me As A Friend. Det er en anden kunstner, så den er let at få øje på. · Sæt den lige til venstre for Revolver.
+  → VD05-saet-tilbage-guide.png (vindue 10310)
+Esc håndteret=true → returnCopy=nil status=På væggen
+↩ håndteret=true → returnCopy=nil status=På plads
+Efter Sat på plads: 15 i reolen · 1 Arrival | 2 Highway To Hell | 3 Toys In The Attic | 4 Hunting High And Low | 5 Call Me | 6 All My Demons Greeting Me As A Friend | 7 Abbey Road | 8 Revolver | 9 Bringing It All Back Home | 10 John Wesley Harding | 11 "Heroes" | 12 Hunky Dory | 13 Low | 14 Station To Station | 15 Young Americans
+  → VD06-sektion-tilbage.png (vindue 10290)
+  → VD07-historik.png (vindue 10290)
+Uplaceret + udlånt → På plads: moveCopy=16 returnCopy=nil status=På plads
+  → V09-uplaceret-paa-plads-flyt.png (vindue 10314)
+  → V08-detalje-paa-vaeggen.png (vindue 10290)
+  → VD08-detalje-paa-vaeggen.png (vindue 10290)
