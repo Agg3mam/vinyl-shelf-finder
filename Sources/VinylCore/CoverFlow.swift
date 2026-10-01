@@ -1,45 +1,72 @@
 import Foundation
 
 /// Placering af covers i Cover Flow (som på en iPod classic). Ren matematik, så den kan tjekkes.
-/// `d` er afstanden fra midten i antal plader: 0 = coveret i midten, -1 = lige til venstre osv.
+/// `o` er afstanden fra midten i antal plader: 0 = coveret i midten, -1 = lige til venstre osv.
+/// `o` må gerne være et kommatal (under en trackpad-bevægelse glider coverne mellem pladserne).
+/// Tallene ligger mellem to åbne genskabelser af iPod'ens Cover Flow (iPlayr og ipod-classic-js).
 public enum CoverFlowGeometry {
     /// Så mange covers vises på hver side af midten.
     public static let visible = 6
     /// Hvor skråt sidecoverne står (grader om den lodrette akse).
-    public static let tilt = 60.0
+    public static let tilt = 65.0
+    /// Perspektiv til `rotation3DEffect` (svagt, så sidecoverne ikke forvrænges).
+    public static let perspective = 0.4
+    /// Sidecovers' størrelse i forhold til midtercoveret.
+    public static let sideScale = 0.9
+    /// Spejlingen under coveret: højde (andel af coveret) og synlighed ved kanten.
+    public static let reflectionHeight = 0.28
+    public static let reflectionOpacity = 0.25
     /// Afstand fra midten til første sidecover og mellem de næste (i forhold til coverets side).
     static let firstGap = 0.62
-    static let stackGap = 0.2
+    static let stackGap = 0.25
 
-    /// Coverets side ud fra den plads, der er (stort, men aldrig over 360 pt).
+    /// Coverets side ud fra den plads, der er. Der skal være plads til spejlingen under coveret,
+    /// og det bliver aldrig over 360 pt.
     public static func side(width: Double, height: Double) -> Double {
-        max(80, min(height * 0.8, width * 0.36, 360))
+        max(80, min(height * 0.62, width * 0.36, 360))
     }
 
+    private static func clamped(_ o: Double) -> Double { min(max(o, -1), 1) }
+
     /// Vandret forskydning fra midten.
-    public static func x(_ d: Int, side: Double) -> Double {
-        guard d != 0 else { return 0 }
-        let sign: Double = d > 0 ? 1 : -1
-        return sign * (side * firstGap + Double(abs(d) - 1) * side * stackGap)
+    public static func x(_ o: Double, side: Double) -> Double {
+        let c = clamped(o)
+        return side * (firstGap * c + stackGap * (o - c))
     }
 
     /// Drejning: midten vender lige frem; siderne vender ind mod midten, så deres yderkant er
     /// nærmest (som væggene i en gang). Med SwiftUI's `rotation3DEffect` om y-aksen flytter en
     /// positiv vinkel højre kant væk, derfor negativ vinkel til højre for midten.
-    public static func angle(_ d: Int) -> Double {
-        d == 0 ? 0 : (d > 0 ? -tilt : tilt)
-    }
+    public static func angle(_ o: Double) -> Double { -tilt * clamped(o) }
 
-    public static func scale(_ d: Int) -> Double { d == 0 ? 1 : 0.86 }
+    public static func scale(_ o: Double) -> Double { 1 - (1 - sideScale) * abs(clamped(o)) }
 
     /// Covers tættest på midten ligger øverst.
-    public static func zIndex(_ d: Int) -> Double { Double(-abs(d)) }
+    public static func zIndex(_ o: Double) -> Double { -abs(o) }
+
+    public static func x(_ d: Int, side: Double) -> Double { x(Double(d), side: side) }
+    public static func angle(_ d: Int) -> Double { angle(Double(d)) }
+    public static func scale(_ d: Int) -> Double { scale(Double(d)) }
+    public static func zIndex(_ d: Int) -> Double { zIndex(Double(d)) }
 
     /// De plader (indeks), der skal tegnes omkring `center`.
     public static func visibleRange(center: Int, count: Int) -> Range<Int> {
         guard count > 0 else { return 0..<0 }
         let c = min(max(center, 0), count - 1)
         return max(0, c - visible)..<min(count, c + visible + 1)
+    }
+
+    /// Glid under en trackpad- eller musebevægelse. `shift` er, hvor langt rækken er skubbet
+    /// (i plader, positiv = mod næste plade). Når den passerer en halv plade, skifter midten,
+    /// og `shift` rykkes tilsvarende, så intet hopper. I enderne kan man kun skubbe lidt (gummibånd).
+    public static func glide(center: Int, shift: Double, count: Int) -> (center: Int, shift: Double) {
+        guard count > 0 else { return (0, 0) }
+        var c = min(max(center, 0), count - 1), s = shift
+        while s > 0.5 && c < count - 1 { s -= 1; c += 1 }
+        while s < -0.5 && c > 0 { s += 1; c -= 1 }
+        if c == 0 { s = max(s, -0.3) }
+        if c == count - 1 { s = min(s, 0.3) }
+        return (c, s)
     }
 }
 

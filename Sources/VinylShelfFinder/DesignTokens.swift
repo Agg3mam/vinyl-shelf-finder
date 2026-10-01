@@ -49,6 +49,11 @@ enum Motion {
         reduceMotion ? .easeInOut(duration: 0.15) : .smooth(duration: 0.28)
     }
 
+    /// Cover Flow: coverne falder på plads med en let fjedrende bevægelse (som på iPod'en).
+    static func coverFlow(_ reduceMotion: Bool) -> Animation? {
+        reduceMotion ? nil : .interpolatingSpring(stiffness: 400, damping: 30)
+    }
+
     /// Rækker, der kommer og går. Ingen animation med Reduce Motion: listen skifter bare.
     static func rows(_ reduceMotion: Bool) -> Animation? {
         reduceMotion ? nil : .smooth(duration: 0.22)

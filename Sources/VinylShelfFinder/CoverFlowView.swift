@@ -5,7 +5,8 @@ import VinylCore
 /// Cover Flow som på en iPod classic: sektionens plader i reolens rækkefølge.
 /// Vises i detaljekolonnen, når Cover Flow er slået til i en sektion. Midterpladen er
 /// altid den valgte plade, så listen til venstre og Cover Flow følger hinanden.
-/// Styres med ← →, trackpad/musehjul, klik på et sidecover og ↩ (Find i reolen).
+/// Styres med ← →, trackpad (coverne følger fingrene), musehjul, træk med musen, klik på et
+/// sidecover og ↩ eller klik på midten (Find i reolen).
 struct CoverFlowView: View {
     @Environment(AppModel.self) private var model
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -13,6 +14,10 @@ struct CoverFlowView: View {
     /// false i snapshots: ImageRenderer kan ikke tegne AppKit-views og viser et advarselsskilt i stedet.
     var catchesScroll = true
     @FocusState private var focused: Bool
+    /// Hvor langt rækken er skubbet under en trackpad- eller musebevægelse (i plader).
+    @ViewState private var shift = 0.0
+    @ViewState private var lastDrag: CGFloat = 0
+    @ViewState private var stripWidth: CGFloat = 0
 
     var body: some View {
         let items = model.library.items(in: locationID)
@@ -24,18 +29,36 @@ struct CoverFlowView: View {
         let onShelf = model.library.onShelfCount(in: locationID)
         VStack(spacing: Spacing.l) {
             Spacer(minLength: 0)
-            CoverFlowStrip(items: items, center: center, isAway: { model.isAway($0) }) { i in
+            CoverFlowStrip(items: items, center: center, shift: shift, isAway: { model.isAway($0) }) { i in
                 if i == center { model.findModeCopy = items[i].id } else { select(i, in: items) }
             }
-            .frame(maxHeight: 440)
-            .animation(Motion.move(reduceMotion), value: center)
+            .frame(maxHeight: 460)
+            .animation(Motion.coverFlow(reduceMotion), value: center)
+            .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { stripWidth = $0 }
+            .simultaneousGesture(DragGesture(minimumDistance: 6)
+                .onChanged { v in
+                    let delta = v.translation.width - lastDrag
+                    lastDrag = v.translation.width
+                    // Rækken følger musen: ét cover pr. stak-afstand.
+                    pan(-Double(delta) / dragPointsPerCover, center: center, items: items)
+                }
+                .onEnded { _ in
+                    lastDrag = 0
+                    settle()
+                })
             CoverFlowCaption(item: current, number: current.flatMap { numbers[$0.id] }, onShelf: onShelf)
+                .animation(Motion.fade(reduceMotion), value: current?.id)
             Spacer(minLength: 0)
         }
         .padding(Spacing.l)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background {
-            if catchesScroll { ScrollWheelCatcher { step($0, from: center, in: items) } }
+            if catchesScroll {
+                ScrollWheelCatcher(
+                    onSteps: { step($0, from: center, in: items) },
+                    onPan: { pan($0 / Self.trackpadPointsPerCover, center: center, items: items) },
+                    onPanEnded: { settle() })
+            }
         }
         .recordStage(current?.release)
         // Fokus kun ved klik, så ↑↓ i listen til venstre stadig virker efter skift af sektion.
@@ -58,6 +81,15 @@ struct CoverFlowView: View {
         .accessibilityLabel("Cover Flow")
     }
 
+    /// Trackpad: så mange punkters fingerbevægelse flytter én plade.
+    static let trackpadPointsPerCover = 36.0
+
+    /// Træk med musen: ét cover pr. afstand mellem de stablede sidecovers.
+    private var dragPointsPerCover: Double {
+        let side = CoverFlowGeometry.side(width: Double(stripWidth), height: 460)
+        return max(24, side * 0.25)
+    }
+
     private func select(_ i: Int, in items: [RecordItem]) {
         guard items.indices.contains(i) else { return }
         model.selection = items[i].id
@@ -67,12 +99,32 @@ struct CoverFlowView: View {
         guard !items.isEmpty else { return }
         select(min(max(center + delta, 0), items.count - 1), in: items)
     }
+
+    /// Skubber rækken under fingrene/musen. Passerer den en halv plade, skifter midten, uden
+    /// animation, så coverne bliver, hvor de er (rækken flytter sig kun med bevægelsen).
+    private func pan(_ plates: Double, center: Int, items: [RecordItem]) {
+        guard !items.isEmpty else { return }
+        let g = CoverFlowGeometry.glide(center: center, shift: shift + plates, count: items.count)
+        var t = Transaction()
+        t.disablesAnimations = true
+        withTransaction(t) {
+            shift = g.shift
+            if g.center != center { model.selection = items[g.center].id }
+        }
+    }
+
+    /// Fingrene er løftet: coverne falder på plads med en fjeder.
+    private func settle() {
+        guard shift != 0 else { return }
+        withAnimation(Motion.coverFlow(reduceMotion)) { shift = 0 }
+    }
 }
 
 /// Selve rækken af covers.
 private struct CoverFlowStrip: View {
     let items: [RecordItem]
     let center: Int
+    let shift: Double
     let isAway: (Int64) -> Bool
     let onSelect: (Int) -> Void
 
@@ -83,16 +135,19 @@ private struct CoverFlowStrip: View {
             ZStack {
                 // Identitet efter plade (ikke indeks), så et cover aldrig skifter plade undervejs.
                 ForEach(Array(zip(range, items[range])), id: \.1.id) { i, item in
+                    let o = Double(i - center) - shift
                     Button { onSelect(i) } label: {
-                        CoverFlowCover(item: item, d: i - center, side: side, away: isAway(item.id))
+                        CoverFlowCover(item: item, o: o, side: side, away: isAway(item.id))
                     }
                     .buttonStyle(.plain)
-                    .zIndex(CoverFlowGeometry.zIndex(i - center))
+                    .zIndex(CoverFlowGeometry.zIndex(o))
                     .transition(.opacity)
                     .accessibilityLabel(item.fullName)
                     .accessibilityHint(i == center ? "Find i reolen" : "Vis pladen i midten")
                 }
             }
+            // Coveret står lidt over midten, så spejlingen har plads nedenunder.
+            .offset(y: -side * CoverFlowGeometry.reflectionHeight / 2)
             .frame(width: geo.size.width, height: geo.size.height)
         }
         .clipped()
@@ -101,18 +156,34 @@ private struct CoverFlowStrip: View {
 
 private struct CoverFlowCover: View {
     let item: RecordItem
-    let d: Int
+    let o: Double
     let side: Double
     let away: Bool
 
     var body: some View {
+        let reflection = side * CoverFlowGeometry.reflectionHeight
         CoverView(release: item.release, size: side)
             .modifier(CoverShadow())
+            // Spejlingen hører til coveret, så den drejer og flytter sig med det.
+            .overlay(alignment: .bottom) {
+                CoverView(release: item.release, size: side)
+                    .scaleEffect(x: 1, y: -1)
+                    .frame(width: side, height: reflection, alignment: .top)
+                    .clipped()
+                    .mask {
+                        LinearGradient(colors: [.black.opacity(CoverFlowGeometry.reflectionOpacity), .clear],
+                                       startPoint: .top, endPoint: .bottom)
+                    }
+                    .offset(y: reflection + 1)
+                    .allowsHitTesting(false)
+                    .accessibilityHidden(true)
+            }
             // Plader ude af reolen er nedtonede, som i sektionslisten.
             .opacity(away ? 0.45 : 1)
-            .rotation3DEffect(.degrees(CoverFlowGeometry.angle(d)), axis: (x: 0, y: 1, z: 0), perspective: 0.5)
-            .scaleEffect(CoverFlowGeometry.scale(d))
-            .offset(x: CoverFlowGeometry.x(d, side: side))
+            .rotation3DEffect(.degrees(CoverFlowGeometry.angle(o)), axis: (x: 0, y: 1, z: 0),
+                              perspective: CoverFlowGeometry.perspective)
+            .scaleEffect(CoverFlowGeometry.scale(o))
+            .offset(x: CoverFlowGeometry.x(o, side: side))
     }
 }
 
@@ -159,16 +230,27 @@ private struct CoverFlowCaption: View {
 /// Fanger trackpad- og musehjulsbevægelser over Cover Flow og laver dem om til trin.
 /// Viewet tager ikke imod klik (`hitTest` → nil), så klik går videre til covers og knapper.
 private struct ScrollWheelCatcher: NSViewRepresentable {
+    /// Musehjul: hele trin.
     let onSteps: (Int) -> Void
+    /// Trackpad: glidende bevægelse i punkter (positiv = mod næste plade).
+    let onPan: (Double) -> Void
+    /// Trackpad: fingrene er løftet.
+    let onPanEnded: () -> Void
 
     func makeNSView(context: Context) -> CatcherView {
         let view = CatcherView()
-        view.onSteps = onSteps
+        update(view)
         return view
     }
 
     func updateNSView(_ view: CatcherView, context: Context) {
+        update(view)
+    }
+
+    private func update(_ view: CatcherView) {
         view.onSteps = onSteps
+        view.onPan = onPan
+        view.onPanEnded = onPanEnded
     }
 
     static func dismantleNSView(_ view: CatcherView, coordinator: ()) {
@@ -177,6 +259,8 @@ private struct ScrollWheelCatcher: NSViewRepresentable {
 
     final class CatcherView: NSView {
         var onSteps: ((Int) -> Void)?
+        var onPan: ((Double) -> Void)?
+        var onPanEnded: (() -> Void)?
         private var monitor: Any?
         private var stepper = ScrollStepper()
 
@@ -201,14 +285,18 @@ private struct ScrollWheelCatcher: NSViewRepresentable {
         private func handle(_ event: NSEvent) -> Bool {
             guard event.window === window, !isHiddenOrHasHiddenAncestor,
                   bounds.contains(convert(event.locationInWindow, from: nil)) else { return false }
-            // Efter at fingrene er løftet: ingen flere trin (ellers suser et hurtigt svirp gennem hele sektionen).
+            // Efter at fingrene er løftet: ingen glid (ellers suser et hurtigt svirp gennem hele sektionen).
             if event.momentumPhase != [] { return true }
-            if event.phase == .began { stepper.reset() }
             let dx = Double(event.scrollingDeltaX), dy = Double(event.scrollingDeltaY)
             // Fingrene mod venstre (eller hjulet ned) → næste plade til højre.
             let delta = abs(dx) >= abs(dy) ? -dx : -dy
-            let steps = stepper.add(delta, precise: event.hasPreciseScrollingDeltas)
-            if steps != 0 { onSteps?(steps) }
+            guard event.hasPreciseScrollingDeltas else {
+                let steps = stepper.add(delta, precise: false)
+                if steps != 0 { onSteps?(steps) }
+                return true
+            }
+            if delta != 0 { onPan?(delta) }
+            if event.phase == .ended || event.phase == .cancelled { onPanEnded?() }
             return true
         }
     }

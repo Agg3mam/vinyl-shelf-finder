@@ -173,8 +173,9 @@ Sources/VinylCoreChecks/      selvtest (305 checks)
     Ulempe: ved store søgninger vises releases uden master ikke længere.
 - **Cover Flow** (`CoverFlowView.swift`, `VinylCore/CoverFlow.swift`): knappen "Cover Flow" i en sektions værktøjslinje
   viser sektionen som på en iPod classic i detaljekolonnen. Midten = det valgte i listen. ← → (også fra listen),
-  trackpad/musehjul (`ScrollWheelCatcher`, ingen momentum), klik på sidecover; klik på midten/↩ = Find i reolen.
-  Ingen spejling. Snapshot `13b-coverflow-alene.png` (ImageRenderer; `cacheDisplay` kan ikke tegne 3D).
+  trackpad (glider med fingrene, fjeder 400/30 når de løftes; `CoverFlowGeometry.glide`), musehjul, træk med musen,
+  klik på sidecover; klik på midten/↩ = Find i reolen. Spejling under coverne. Tallene ligger mellem iPlayr
+  (kun inspiration, ingen licens) og ipod-classic-js (MIT): 65°, perspektiv 0,4, sidecovers 90 %. Snapshot `13b-coverflow-alene.png` (ImageRenderer; `cacheDisplay` kan ikke tegne 3D).
 - **GitHub Actions** (`.github/workflows/checks.yml`, runner `macos-26`): bygger, kører VinylCoreChecks (375 grønne
   pr. 1. okt) og tager demo-snapshots ved hvert push. Billederne ligger som artefakt og på grenen `ci-snapshots`
   (kan hentes med git fra en cloud-session, hvor artefakter er blokeret).

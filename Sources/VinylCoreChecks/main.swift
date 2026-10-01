@@ -1517,7 +1517,7 @@ do {
     check(G.side(width: 100, height: 50) == 80, "cover flow: siden er aldrig under 80")
     check(G.side(width: 10_000, height: 10_000) == 360, "cover flow: siden er aldrig over 360")
     check(abs(G.side(width: 500, height: 1000) - 180) < 0.0001, "cover flow: siden begrænses af bredden (36 %)")
-    check(abs(G.side(width: 2000, height: 300) - 240) < 0.0001, "cover flow: siden begrænses af højden (80 %)")
+    check(abs(G.side(width: 2000, height: 300) - 186) < 0.0001, "cover flow: siden begrænses af højden (62 %, plads til spejling)")
     var sizesOK = true
     for w in stride(from: 0.0, through: 3000.0, by: 137.0) {
         for h in stride(from: 0.0, through: 2000.0, by: 91.0) {
@@ -1600,6 +1600,29 @@ do {
     st.reset()
     let d1 = st.add(20, precise: true), d2 = st.add(-20, precise: true), d3 = st.add(20, precise: true)
     check(d1 == 0 && d2 == 0 && d3 == 0, "rulning: retningsskift ophæver hinanden")
+
+    // Glidende position (kommatal) og glid under trackpad
+    check(abs(G.x(0.5, side: side) - 0.31 * side) < 0.0001 && abs(G.angle(0.5) + G.tilt / 2) < 0.0001,
+          "cover flow: halvvejs mellem to pladser står coveret halvvejs og halvt drejet")
+    check(abs(G.x(2.0, side: side) - G.x(2, side: side)) < 0.0001 && G.angle(3.7) == -G.tilt, "cover flow: kommatal og heltal giver det samme")
+    var smooth = true
+    for k in -40...40 {
+        let o = Double(k) / 10
+        if !(G.x(o + 0.1, side: side) > G.x(o, side: side)) { smooth = false }
+    }
+    check(smooth, "cover flow: coverne glider jævnt (x vokser hele vejen)")
+    let g1 = G.glide(center: 5, shift: 0.4, count: 10)
+    check(g1.center == 5 && abs(g1.shift - 0.4) < 0.0001, "glid: under en halv plade bliver midten")
+    let g2 = G.glide(center: 5, shift: 0.7, count: 10)
+    check(g2.center == 6 && abs(g2.shift + 0.3) < 0.0001, "glid: over en halv plade skifter midten uden hop")
+    let g3 = G.glide(center: 5, shift: -2.6, count: 10)
+    check(g3.center == 2 && abs(g3.shift - 0.4) < 0.0001, "glid: flere plader baglæns")
+    let g4 = G.glide(center: 0, shift: -3, count: 10)
+    check(g4.center == 0 && abs(g4.shift + 0.3) < 0.0001, "glid: i starten kan man kun skubbe lidt (gummibånd)")
+    let g5 = G.glide(center: 9, shift: 5, count: 10)
+    check(g5.center == 9 && abs(g5.shift - 0.3) < 0.0001, "glid: i slutningen kan man kun skubbe lidt")
+    let g6 = G.glide(center: 3, shift: 1, count: 0)
+    check(g6.center == 0 && g6.shift == 0, "glid: tom sektion")
 }
 
 print(failures == 0 ? "✓ Alle \(passes) checks bestået" : "✗ \(failures) fejl, \(passes) bestået")
