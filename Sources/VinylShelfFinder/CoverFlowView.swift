@@ -10,6 +10,8 @@ struct CoverFlowView: View {
     @Environment(AppModel.self) private var model
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let locationID: Int64
+    /// false i snapshots: ImageRenderer kan ikke tegne AppKit-views og viser et advarselsskilt i stedet.
+    var catchesScroll = true
     @FocusState private var focused: Bool
 
     var body: some View {
@@ -32,7 +34,9 @@ struct CoverFlowView: View {
         }
         .padding(Spacing.l)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(ScrollWheelCatcher { step($0, from: center, in: items) })
+        .background {
+            if catchesScroll { ScrollWheelCatcher { step($0, from: center, in: items) } }
+        }
         .recordStage(current?.release)
         // Fokus kun ved klik, så ↑↓ i listen til venstre stadig virker efter skift af sektion.
         .focusable()
