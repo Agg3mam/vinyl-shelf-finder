@@ -15,12 +15,15 @@ public struct DiscogsAlbum: Identifiable, Hashable, Sendable {
     public let formats: [String]  // fx ["Vinyl", "LP", "Album"] – kan være tom for masters
     public let inCollection: Bool // fra search-resultatets user_data
     public let inWantlist: Bool
+    /// Stregkoder fra søgeresultatet (findes oftest kun for enkelte udgaver, ikke masters).
+    /// Bruges til at finde præcis samme vare hos iMusic.
+    public let barcodes: [String]
 
     public init(id: Int, isMaster: Bool, title: String, artist: String, year: Int?, thumbURL: URL?, coverURL: URL?,
-                formats: [String], inCollection: Bool, inWantlist: Bool) {
+                formats: [String], inCollection: Bool, inWantlist: Bool, barcodes: [String] = []) {
         self.id = id; self.isMaster = isMaster; self.title = title; self.artist = artist; self.year = year
         self.thumbURL = thumbURL; self.coverURL = coverURL; self.formats = formats
-        self.inCollection = inCollection; self.inWantlist = inWantlist
+        self.inCollection = inCollection; self.inWantlist = inWantlist; self.barcodes = barcodes
     }
 }
 
@@ -375,7 +378,8 @@ extension DiscogsClient {
                 year: yearValue(r.year), thumbURL: imageURL(r.thumb), coverURL: imageURL(r.cover_image),
                 formats: formats,
                 inCollection: r.user_data?.in_collection?.value ?? false,
-                inWantlist: r.user_data?.in_wantlist?.value ?? false))
+                inWantlist: r.user_data?.in_wantlist?.value ?? false,
+                barcodes: r.barcode ?? []))
         }
         return out
     }
@@ -415,6 +419,7 @@ extension DiscogsClient {
         let cover_image: String?
         let format: [String]?
         let user_data: UserFlags?
+        let barcode: [String]?
 
         init(from decoder: Decoder) throws {
             let c = try decoder.container(keyedBy: CodingKeys.self)
@@ -427,8 +432,9 @@ extension DiscogsClient {
             cover_image = try? c.decodeIfPresent(String.self, forKey: .cover_image)
             format = try? c.decodeIfPresent([String].self, forKey: .format)
             user_data = try? c.decodeIfPresent(UserFlags.self, forKey: .user_data)
+            barcode = try? c.decodeIfPresent([String].self, forKey: .barcode)
         }
-        enum CodingKeys: String, CodingKey { case id, type, master_id, title, year, thumb, cover_image, format, user_data }
+        enum CodingKeys: String, CodingKey { case id, type, master_id, title, year, thumb, cover_image, format, user_data, barcode }
     }
 
     struct SearchPage: Decodable {

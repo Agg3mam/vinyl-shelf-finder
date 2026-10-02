@@ -7,6 +7,7 @@ struct SettingsView: View {
             AccountSettings().tabItem { Label("Discogs", systemImage: "person.crop.circle") }
             SortSettings().tabItem { Label("Sortering", systemImage: "textformat.abc") }
             ShelfSettings().tabItem { Label("Reol", systemImage: "books.vertical") }
+            IMusicSettings().tabItem { Label("iMusic", systemImage: "bag") }
             BackupSettings().tabItem { Label("Sikkerhedskopi", systemImage: "clock.arrow.circlepath") }
         }
         .padding(Spacing.l)

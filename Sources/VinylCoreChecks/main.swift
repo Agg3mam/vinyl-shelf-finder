@@ -1625,5 +1625,125 @@ do {
     check(g6.center == 0 && g6.shift == 0, "glid: tom sektion")
 }
 
+// MARK: iMusic (Daisycon-feed, separat cache)
+// Små lokale eksempel-feeds i Daisycons struktur (datafeed › programs › products › product_info / update_info).
+// Det rigtige feed og imusic.dk hentes aldrig i checks.
+let fxIMusicJSON = #"""
+{"datafeed":{"info_array":{"generated":"2026-10-02"},"programs":[{"program_info":{"id":19392,"name":"iMusic DK","url":"https://imusic.dk"},
+ "products":[
+  {"product_info":{"title":"Pink Floyd - Animals (LP)","link":"https://lt45.net/c/?si=19392&li=1&wi=1&ws=&dl=animals","price":"249.00","ean":"5099902987613","category_path":"Musik > Vinyl","in_stock":true,"delivery_time":"1-2 hverdage","images":[{"location":"https://img/1.jpg","size":"large","tag":"","type":"front"}]},
+   "update_info":{"daisycon_unique_id":"a1","status":"active"}},
+  {"product_info":{"title":"Pink Floyd - Animals","brand":"Pink Floyd","link":"https://lt45.net/c/?si=19392&li=1&wi=1&ws=&dl=animals-cd","price":"99,95","ean":"0 77774 64612 5","category":"CD","in_stock":"false","delivery_description":"Bestillingsvare"},
+   "update_info":{"daisycon_unique_id":"a2","status":"active"}},
+  {"product_info":{"title":"Alien (DVD)","link":"https://lt45.net/c/?dl=alien","price":"59","category_path":"Film > DVD","in_stock":true},
+   "update_info":{"status":"active"}},
+  {"product_info":{"title":"David Bowie - Low (LP)","link":"https://lt45.net/c/?dl=low","price":"229","category_path":"Musik > Vinyl","in_stock":true},
+   "update_info":{"status":"deleted"}},
+  {"product_info":{"title":"Kim Larsen - Værsgo \"Remastered\" {LP}","link":"https://lt45.net/c/?dl=vaersgo","price":"1.249,95","keywords":"vinyl dansk rock","in_stock_amount":"3"},
+   "update_info":{"status":"active"}}
+ ]}]}}
+"""#
+let fxIMusicXML = #"""
+<?xml version="1.0" encoding="UTF-8"?>
+<datafeed><programs><program><program_info><id>19392</id><name>iMusic DK</name></program_info>
+<products>
+ <product><product_info><title>Pink Floyd - Animals (LP)</title><link>https://lt45.net/c/?si=19392&amp;dl=animals</link><price>249.00</price><ean>5099902987613</ean><category_path>Musik &gt; Vinyl</category_path><in_stock>true</in_stock><images><image><location>https://img/1.jpg</location></image></images></product_info><update_info><status>active</status></update_info></product>
+ <product><product_info><title><![CDATA[Alien (DVD)]]></title><link>https://lt45.net/c/?dl=alien</link><price>59</price><category_path>Film</category_path></product_info></product>
+ <product><product_info><title>Genesis - Foxtrot</title><brand>Genesis</brand><link>https://lt45.net/c/?dl=foxtrot</link><price>199</price><category>Vinyl</category><in_stock>0</in_stock><delivery_description>Bestillingsvare</delivery_description></product_info><update_info><status>active</status></update_info></product>
+</products></program></programs></datafeed>
+"""#
+do {
+    // Stregkoder
+    check(Barcode.normalize("5 099902 987613") == "5099902987613", "EAN-13 med mellemrum → kun cifre")
+    check(Barcode.normalize("0 77774 64612 5") == "0077774646125" && Barcode.normalize("077774646125") == "0077774646125",
+          "UPC-A (12 cifre) → EAN-13 med foranstillet 0")
+    check(Barcode.normalize("00077774646125") == "0077774646125", "GTIN-14 med foranstillet 0 → EAN-13")
+    check(Barcode.normalize("1234-5678") == "12345678", "EAN-8")
+    check(Barcode.normalize("SHVL 804") == nil && Barcode.normalize("") == nil && Barcode.normalize("12345") == nil,
+          "katalognumre og korte tal er ikke stregkoder")
+
+    // Priser og lager
+    check(IMusicFields.parsePrice("249.00") == 249 && IMusicFields.parsePrice("99,95") == 99.95
+          && IMusicFields.parsePrice("1.249,95") == 1249.95 && IMusicFields.parsePrice("DKK 1,249.50") == 1249.5
+          && IMusicFields.parsePrice("gratis") == nil && IMusicFields.parsePrice("0") == nil, "priser i begge talformater")
+    check(IMusicFields.parseStock("true") == true && IMusicFields.parseStock("0") == false && IMusicFields.parseStock("3") == true
+          && IMusicFields.parseStock("Out of stock") == false && IMusicFields.parseStock("måske") == nil, "lagerstatus")
+
+    // JSON (læst i bidder på 7 byte)
+    let fromJSON = try IMusicFeedParser.parse(data: Data(fxIMusicJSON.utf8))
+    check(fromJSON.map(\.title) == ["Animals (LP)", "Pink Floyd - Animals", "Værsgo \"Remastered\" {LP}"],
+          "JSON: kun aktive musikvarer (ikke film, ikke slettede): \(fromJSON.map(\.title))")
+    let animalsLP = fromJSON.first
+    check(animalsLP?.artist == "Pink Floyd" && animalsLP?.ean == "5099902987613" && animalsLP?.price == 249
+          && animalsLP?.currency == "DKK" && animalsLP?.inStock == true && animalsLP?.isVinyl == true
+          && animalsLP?.link.absoluteString == "https://lt45.net/c/?si=19392&li=1&wi=1&ws=&dl=animals",
+          "JSON: kunstner fra titlen, EAN, pris, lager og affiliate-link")
+    let animalsCD = fromJSON.dropFirst().first
+    check(animalsCD?.artist == "Pink Floyd" && animalsCD?.ean == "0077774646125" && animalsCD?.price == 99.95
+          && animalsCD?.inStock == false && animalsCD?.availabilityText == "bestillingsvare" && animalsCD?.isVinyl == false,
+          "JSON: brand som kunstner, UPC → EAN, bestillingsvare")
+    check(fromJSON.last?.price == 1249.95 && fromJSON.last?.inStock == true, "JSON: anførselstegn og tuborgklammer i tekst, lager som antal")
+    check(animalsLP?.availabilityText == "på lager", "på lager-tekst")
+
+    // XML (streamet)
+    let fromXML = try IMusicFeedParser.parse(data: Data(fxIMusicXML.utf8))
+    check(fromXML.map(\.title) == ["Animals (LP)", "Genesis - Foxtrot"], "XML: kun musikvarer: \(fromXML.map(\.title))")
+    check(fromXML.first?.link.absoluteString == "https://lt45.net/c/?si=19392&dl=animals" && fromXML.first?.ean == "5099902987613",
+          "XML: &amp; i linket og EAN")
+    check(fromXML.last?.artist == "Genesis" && fromXML.last?.inStock == false && fromXML.last?.availabilityText == "bestillingsvare",
+          "XML: brand som kunstner og bestillingsvare")
+    check(IMusicFeedParser.detectFormat(Data("  \n{".utf8)) == .json && IMusicFeedParser.detectFormat(Data("\u{FEFF}<?xml".utf8)) == .xml
+          && IMusicFeedParser.detectFormat(Data("title;link".utf8)) == nil, "formatet genkendes (også med BOM)")
+
+    // Søge-URL (virker uden feed)
+    check(IMusicLink.searchURL(artist: "Pink Floyd", title: "Animals").absoluteString == "https://imusic.dk/page/search?query=Pink%20Floyd%20Animals",
+          "søge-URL på imusic.dk")
+    check(IMusicLink.searchURL(artist: " Kim Larsen ", title: "Værsgo", vinylOnly: true).absoluteString
+          == "https://imusic.dk/vinyl/search?query=Kim%20Larsen%20V%C3%A6rsgo", "søge-URL kun i vinyl, med æøå")
+    check(IMusicLink.searchURL(artist: "AC/DC", title: "Back In Black & More").query?.contains("%26") == true, "& kodes i søgningen")
+
+    // Feed-URL'en
+    check(IMusicFeedUpdater.validate(" https://daisycon.io/datafeed/?media_id=1&program_id[]=19392&type=JSON ") != nil, "Daisycon-feed-URL godtages")
+    check(IMusicFeedUpdater.validate("http://daisycon.io/datafeed/") == nil && IMusicFeedUpdater.validate("https://example.com/feed") == nil
+          && IMusicFeedUpdater.validate("hej") == nil, "kun https hos Daisycon")
+
+    // Cache: separat fil under Caches, aldrig vinyl.sqlite
+    let defaultCache = IMusicCache.defaultURL
+    check(defaultCache.lastPathComponent == "imusic.sqlite" && defaultCache.path.contains("/Caches/VinylShelfFinder/")
+          && defaultCache != ShelfStore.defaultURL && defaultCache.deletingLastPathComponent() != ShelfStore.defaultURL.deletingLastPathComponent(),
+          "iMusic-cachen ligger i Caches, ikke ved vinyl.sqlite")
+    let dir = FileManager.default.temporaryDirectory.appendingPathComponent("imusic-check-\(UUID().uuidString)", isDirectory: true)
+    defer { try? FileManager.default.removeItem(at: dir) }
+    try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+    let feedFile = dir.appendingPathComponent("feed.json")
+    try Data(fxIMusicJSON.utf8).write(to: feedFile)
+    let cache = try IMusicCache(url: dir.appendingPathComponent("imusic.sqlite"))
+    check(IMusicCache.needsRefresh(lastFetched: nil) && cache.lastFetched == nil, "tom cache skal hentes")
+    let day = Date(timeIntervalSince1970: 1_790_000_000)
+    let stored = try cache.replace(withFeedAt: feedFile, now: day)
+    check(stored == 3 && cache.count == 3, "cachen får de 3 musikvarer fra feedet (\(stored))")
+    check(cache.lastFetched == day && !IMusicCache.needsRefresh(lastFetched: day, now: day.addingTimeInterval(3600))
+          && IMusicCache.needsRefresh(lastFetched: day, now: day.addingTimeInterval(25 * 3600)), "feedet hentes højst én gang i døgnet")
+    let files = Set(try FileManager.default.contentsOfDirectory(atPath: dir.path))
+    check(!files.contains("vinyl.sqlite") && files.isSubset(of: ["feed.json", "imusic.sqlite", "imusic.sqlite-wal", "imusic.sqlite-shm"]),
+          "cachen opretter ingen vinyl.sqlite: \(files.sorted())")
+    let xmlFile = dir.appendingPathComponent("feed.xml")
+    try Data(fxIMusicXML.utf8).write(to: xmlFile)
+    let fromXMLFile = try cache.replace(withFeedAt: xmlFile, now: day)
+    check(fromXMLFile == 2 && cache.count == 2, "ny hentning erstatter hele cachen (XML)")
+    _ = try cache.replace(withFeedAt: feedFile, now: day)
+
+    // Matching
+    check(cache.match(barcodes: ["5 099902 987613"], artist: "", title: "")?.price == 249, "match på stregkode")
+    check(cache.match(barcodes: ["077774646125"], artist: "Noget", title: "Andet")?.price == 99.95, "match på UPC mod EAN i feedet")
+    check(cache.match(barcodes: [], artist: "Pink Floyd", title: "Animals")?.isVinyl == true, "kunstner + titel: vinyl foretrækkes")
+    check(cache.match(barcodes: [], artist: "Pink Floyd", title: "Animals", preferVinyl: false)?.isVinyl == false,
+          "uden vinyl-ønske vinder den udgave, der passer bedst (her cd'en uden ekstra ord)")
+    check(cache.match(barcodes: [], artist: "Pink Floid", title: "Animals")?.price == 249, "tåler en stavefejl i kunstnernavnet")
+    check(cache.match(barcodes: [], artist: "Kim Larsen", title: "Værsgo")?.price == 1249.95, "æøå i titlen")
+    check(cache.match(barcodes: [], artist: "Pink Floyd", title: "The Wall") == nil, "intet match, når et ord mangler")
+    check(cache.match(barcodes: ["1234567890128"], artist: "", title: "") == nil, "ukendt stregkode og ingen tekst → intet match")
+} catch { check(false, "iMusic: \(error)") }
+
 print(failures == 0 ? "✓ Alle \(passes) checks bestået" : "✗ \(failures) fejl, \(passes) bestået")
 exit(failures == 0 ? 0 : 1)

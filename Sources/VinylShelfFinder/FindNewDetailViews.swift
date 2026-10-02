@@ -88,6 +88,9 @@ private struct FindNewAlbumCard: View {
         VStack(alignment: .leading, spacing: Spacing.m) {
             FindNewAlbumHeader(album: album, owned: shop.owns(album), formatText: formatText)
             FindNewBestBuy(album: album)
+            // Ekstra købssted: iMusic (pris fra feedet, eller bare en søgning).
+            IMusicOfferLine(barcodes: album.barcodes, artist: album.artist, title: album.title,
+                            preferVinyl: shop.format == .vinyl || shop.format == .all)
         }
         .padding(Spacing.panelInset)
         .frame(maxWidth: .infinity, alignment: .leading)

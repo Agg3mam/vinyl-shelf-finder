@@ -59,13 +59,18 @@ struct RecordDetailView: View {
                     .id(n.target.id)
             }
             .foregroundStyle(Ink.secondary)
-            // Discogs-nummeret er en detalje: lille og sekundært, nederst.
-            Link(destination: n.target.release.discogsURL) {
-                Text("Se pladen på Discogs (#\(String(n.target.release.id)))")
+            // Discogs-nummeret og iMusic er detaljer: små og sekundære, nederst.
+            HStack(spacing: Spacing.m) {
+                Link(destination: n.target.release.discogsURL) {
+                    Text("Se pladen på Discogs (#\(String(n.target.release.id)))")
+                }
+                .font(.caption)
+                .foregroundStyle(Ink.tertiary)
+                .tint(Ink.tertiary)
+                IMusicOfferLine(barcodes: [], artist: n.target.artist, title: n.target.title,
+                                preferVinyl: (n.target.release.format ?? "").localizedCaseInsensitiveContains("vinyl"),
+                                compact: true)
             }
-            .font(.caption)
-            .foregroundStyle(Ink.tertiary)
-            .tint(Ink.tertiary)
         }
         .foregroundStyle(Ink.primary)
         .padding(Spacing.l)

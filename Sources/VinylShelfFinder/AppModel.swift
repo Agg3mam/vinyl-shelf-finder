@@ -86,6 +86,10 @@ final class AppModel {
     /// "Find nye plader" (Discogs' katalog, priser, ønskeliste og køb).
     let findNew = FindNewModel()
 
+    /// iMusic.dk som ekstra købssted (Daisycon-feed). Slået fra i demo- og snapshot-tilstand.
+    let imusic = IMusicModel(enabled: !CommandLine.arguments.contains("--demo")
+                                      && !CommandLine.arguments.contains("--snapshot"))
+
     /// `--demo`: separat database med eksempeldata, ingen Discogs-forbindelse.
     let isDemo = CommandLine.arguments.contains("--demo")
 
@@ -130,6 +134,7 @@ final class AppModel {
         reload()
         findNew.app = self
         startBackups()
+        imusic.start()
     }
 
     // MARK: - Data
