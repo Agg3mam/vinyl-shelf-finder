@@ -18,6 +18,8 @@ struct CoverFlowView: View {
     @ViewState private var shift = 0.0
     @ViewState private var lastDrag: CGFloat = 0
     @ViewState private var stripWidth: CGFloat = 0
+    /// Står rækken mod enden af sektionen (så enden kun mærkes én gang pr. skub).
+    @ViewState private var atEdge = false
 
     var body: some View {
         let items = model.library.items(in: locationID)
@@ -97,7 +99,10 @@ struct CoverFlowView: View {
 
     private func step(_ delta: Int, from center: Int, in items: [RecordItem]) {
         guard !items.isEmpty else { return }
-        select(min(max(center + delta, 0), items.count - 1), in: items)
+        let target = min(max(center + delta, 0), items.count - 1)
+        // Musehjul: mærkes kun med en Magic Mouse/trackpad under fingeren; ellers sker der intet.
+        if target != center { Haptics.tick() }
+        select(target, in: items)
     }
 
     /// Skubber rækken under fingrene/musen. Passerer den en halv plade, skifter midten, uden
@@ -105,6 +110,15 @@ struct CoverFlowView: View {
     private func pan(_ plates: Double, center: Int, items: [RecordItem]) {
         guard !items.isEmpty else { return }
         let g = CoverFlowGeometry.glide(center: center, shift: shift + plates, count: items.count)
+        // Et let "klik" i trackpad'en for hver plade, der passerer midten (som hjulet på iPod'en),
+        // og et tydeligere ved enden af sektionen.
+        let edge = (g.center == 0 && g.shift <= -0.3) || (g.center == items.count - 1 && g.shift >= 0.3)
+        if g.center != center {
+            Haptics.tick()
+        } else if edge && !atEdge {
+            Haptics.edge()
+        }
+        atEdge = edge
         var t = Transaction()
         t.disablesAnimations = true
         withTransaction(t) {
@@ -299,5 +313,19 @@ private struct ScrollWheelCatcher: NSViewRepresentable {
             if event.phase == .ended || event.phase == .cancelled { onPanEnded?() }
             return true
         }
+    }
+}
+
+/// Haptisk feedback i Force Touch-trackpad'en. Mærkes kun, mens fingeren rører trackpad'en,
+/// og kun hvis "Tvangsklik og haptisk feedback" er slået til i Systemindstillinger.
+enum Haptics {
+    /// Én plade passerer midten.
+    static func tick() {
+        NSHapticFeedbackManager.defaultPerformer.perform(.alignment, performanceTime: .now)
+    }
+
+    /// Enden af sektionen.
+    static func edge() {
+        NSHapticFeedbackManager.defaultPerformer.perform(.levelChange, performanceTime: .now)
     }
 }
