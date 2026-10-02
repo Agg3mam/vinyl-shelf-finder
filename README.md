@@ -41,6 +41,7 @@ Andet:
 - **Hvad skal jeg høre?**: tilfældigt forslag filtreret på genre, årti og "ikke hørt længe". Plader, du ikke har hørt længe, vægtes højere. Mellemrum giver et nyt forslag.
 - **Lyttelog**: tryk "Spillet" (⌘L) på en plade. Viser mest spillede, seneste og antal aldrig spillede. En registrering kan fortrydes.
 - **Find nye plader** (sidepanelet, kræver Discogs-forbindelse): søg i hele Discogs' katalog, vælg album og udgave, se laveste pris og antal til salg, og læg udgaven på din ønskeliste. **Køb på Discogs** åbner Discogs' egen salgsside i et vindue i appen – selve købet sker hos Discogs (API'et kan ikke købe), og appen læser eller gemmer aldrig login eller betaling.
+- **iMusic.dk** som ekstra købssted: "Søg på iMusic" åbner iMusics søgning i din browser. Med dit eget produktfeed fra Daisycon (Indstillinger › iMusic) vises iMusics pris og lagerstatus, og "Køb på iMusic" åbner varen. Feedet hentes højst én gang i døgnet og gemmes kun som cache (`~/Library/Caches/VinylShelfFinder/imusic.sqlite`).
 - **Reolskilte** (⌘P): en A4-PDF med ét skilt pr. sektion (første → sidste kunstner og antal) og en QR-kode `vinylshelf://section/<id>`, der åbner sektionen i appen.
 
 ## Arkitektur
@@ -57,6 +58,7 @@ Sources/
     Keychain.swift    token i macOS' nøglering
     Backup.swift      daglig sikkerhedskopi af databasen
     DiscogsQueue.swift fælles kø (rate limit) og cache til Discogs-kald
+    IMusicFeed.swift  iMusic: søge-URL, Daisycon-feed (streamet), separat cache, matching
   VinylShelfFinder/   SwiftUI-app
   VinylCoreChecks/    selvtest: swift run VinylCoreChecks
 ```

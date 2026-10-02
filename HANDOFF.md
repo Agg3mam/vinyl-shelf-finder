@@ -1,6 +1,6 @@
 # Handoff: Vinyl Shelf Finder (hele projektet)
 
-**Opdateret:** 1. oktober 2026, aften (sent: fælles Discogs-kø, cache og daglig backup).
+**Opdateret:** 2. oktober 2026 (iMusic.dk som ekstra købssted, gren `claude/imusic-kobssted`).
 
 **Dette er den eneste handoff-fil.** Den indeholder alt, en ny Claude-session skal vide for at
 arbejde videre på projektet, uanset hvad opgaven er. Giv den videre som den første besked,
@@ -27,7 +27,7 @@ Funktioner, der virker i dag (sidepanelet):
 | Historik | Alle flytninger. De kan fortrydes |
 | Værdi | Discogs' estimat for hele samlingen og markedsdata for hver plade |
 | Hvad skal jeg høre? / Lyttelog | Tilfældigt forslag ud fra filtre, og registrering af spillede plader (⌘L) |
-| **Find nye plader** | Søgning i hele Discogs' katalog med billigste køb øverst. Købet sker i et Discogs-vindue inde i appen |
+| **Find nye plader** | Søgning i hele Discogs' katalog med billigste køb øverst. Købet sker i et Discogs-vindue inde i appen. iMusic.dk som ekstra købssted (søgning, og pris via brugerens Daisycon-feed) |
 | Reolskilte (⌘P) | En A4-PDF med QR-kode pr. sektion. Koden er stadig `vinylshelf://`, så den virker kun på Mac'en |
 
 Genveje: ⌘K søg, ↑↓ vælg, ↩/⌘F Find i reolen, ⇧⌘M flyt, ⌘L spillet, ⌘R sync, ⌘P skilte.
@@ -56,19 +56,21 @@ Genveje: ⌘K søg, ↑↓ vælg, ↩/⌘F Find i reolen, ⇧⌘M flyt, ⌘L spi
 1. **Brugerens rigtige database må ikke røres:** `~/Library/Application Support/VinylShelfFinder/vinyl.sqlite`.
    Den indeholder ca. 114 plader og 2 sektioner. Test altid med `--demo` og en isoleret hjemmemappe:
    `CFFIXED_USER_HOME=<tom mappe i scratchpad> .build/debug/VinylShelfFinder --demo …`
-2. **Discogs-tokenet** ligger kun i nøgleringen (service `dk.vinylshelffinder.discogs`). Det må
+2. **iMusic-feed-URL'en** (Daisycon) indeholder brugerens media_id. Den ligger kun i nøgleringen
+   (service `dk.vinylshelffinder.imusicfeed`) og må aldrig logges, vises eller hentes i test.
+3. **Discogs-tokenet** ligger kun i nøgleringen (service `dk.vinylshelffinder.discogs`). Det må
    aldrig udskrives, logges eller vises.
    - Brugeren har givet lov til et **begrænset antal læse-opslag** (cirka 20) med tokenet,
      når priser skal verificeres. Det sker via et lille testprogram, der læser tokenet i
      processen og kun udskriver svar-felter.
    - Spørg igen ved større runder.
    - Aldrig PUT/POST, køb eller ændringer på kontoen.
-3. **discogs.com må ikke indlæses i test.** Discogs-vinduet testes med en lokal side.
-4. **Skærmbilleder:** kun af demo-appens eget vindue med `screencapture -x -o -l <windowNumber>`, aldrig
+4. **discogs.com må ikke indlæses i test.** Discogs-vinduet testes med en lokal side.
+5. **Skærmbilleder:** kun af demo-appens eget vindue med `screencapture -x -o -l <windowNumber>`, aldrig
    hele skærmen. Der er ingen Tilgængeligheds-tilladelse og derfor ingen tastetryk. Handlinger
    udløses inde fra appen med testkode.
-5. Sikkerhedsindstillinger, nøglering og certifikater ændrer brugeren selv.
-6. Projektet er et **git-repo** og ligger privat på GitHub: `https://github.com/Agg3mam/vinyl-shelf-finder`
+6. Sikkerhedsindstillinger, nøglering og certifikater ændrer brugeren selv.
+7. Projektet er et **git-repo** og ligger privat på GitHub: `https://github.com/Agg3mam/vinyl-shelf-finder`
    (brugerens konto er `Agg3mam`, og `gh` ligger i `/opt/homebrew/bin/gh`).
    - Commits bruger GitHubs skjulte e-mail. Brug aldrig brugerens rigtige e-mail eller Mac'ens navn.
    - Commit og push kun, når brugeren beder om det.
@@ -88,7 +90,7 @@ Appen starter uden data. Forbind til Discogs i appen, eller prøv den med eksemp
 
 - **Kun Command Line Tools, ingen Xcode.** Det er Swift 6.x med macOS 27 SDK, og brugerens Mac kører macOS 27.
   - Brug `@ViewState`, ikke `@State`. Det er et typealias i `App.swift`, fordi `@State`-makroens plugin kun følger med Xcode.
-  - Ingen XCTest og ingen Swift Testing. Brug i stedet **`swift run VinylCoreChecks`**, som havde **305 checks**, alle grønne pr. 1. okt. Grenen `claude/quirky-franklin-9sjx8p` har **375 checks**, grønne på GitHub Actions (macOS 26, Swift 6.3).
+  - Ingen XCTest og ingen Swift Testing. Brug i stedet **`swift run VinylCoreChecks`**, som havde **305 checks**, alle grønne pr. 1. okt. Grenen `claude/quirky-franklin-9sjx8p` har **375 checks**. Grenen `claude/imusic-kobssted` (bygger videre på den) har **419 checks**, grønne på GitHub Actions (macOS 26, Swift 6.3).
     Tilføj checks for ny logik.
   - Store `body`-udtryk kan få compileren til at crashe. Del dem op i små views.
 - **Minimum er macOS 26.** Liquid Glass (`.glassEffect`, `GlassEffectContainer`, `.glassProminent`) bruges direkte uden fallback.
@@ -182,6 +184,33 @@ Sources/VinylCoreChecks/      selvtest (305 checks)
 - **Daglig sikkerhedskopi** (`Backup.swift`, Indstillinger › Sikkerhedskopi): `VACUUM INTO` til
   iCloud Drive › Vinyl Shelf Finder backup (ellers Dokumenter), én fil pr. dag, de 14 nyeste beholdes.
   Kører ved start og hver time, aldrig i `--demo` eller `--snapshot`. Gendannelse står i README.
+
+### iMusic.dk som ekstra købssted (2. okt, gren `claude/imusic-kobssted`, PR mod main)
+
+- **Trin 1 (uden konto):** "Søg på iMusic" på albumkortet i Find nye plader og som lille link ved
+  "Se pladen på Discogs" i plade-detaljen. Åbner i standardbrowseren (`NSWorkspace`), aldrig i Discogs-vinduet.
+  URL: `https://imusic.dk/page/search?query=<kunstner titel>`, kun vinyl: `https://imusic.dk/vinyl/search?query=…`
+  (`IMusicLink.searchURL`). **Ikke verificeret i en browser:** imusic.dk var blokeret fra udviklingsmiljøet;
+  formatet er fundet i adresser, som søgemaskiner har gemt. Tjek det første gang på Mac'en.
+- **Trin 2 (med brugerens Daisycon-feed):** Indstillinger › iMusic › "iMusic-feed (Daisycon)". URL'en gemmes i
+  nøgleringen (`KeychainSecret.iMusicFeed`, service `dk.vinylshelffinder.imusicfeed`); kun https på daisycon.io godtages.
+  - `VinylCore/IMusicFeed.swift`: henter feedet til en midlertidig fil højst én gang i døgnet (ved start og "Opdatér nu"),
+    læser det streamet (JSON i bidder via `JSONElementScanner`, XML via `XMLParser(stream:)`), beholder kun aktive
+    musikvarer og gemmer dem i **`~/Library/Caches/VinylShelfFinder/imusic.sqlite`** (aldrig i vinyl.sqlite).
+  - Match: først stregkode/EAN (normaliseret, UPC-12 → EAN-13), ellers kunstner + titel med `SearchIndex`'s
+    normalisering og stavefejl-afstand; vinyl foretrækkes. Stregkoder kommer fra Discogs-søgeresultatets `barcode`
+    (oftest kun for enkelte udgaver). Plade-detaljen har ingen stregkode, så dér matches på tekst.
+  - Viser "iMusic: 249 kr. · på lager" (eller leveringstekst/"bestillingsvare") og "Køb på iMusic" (feedets link).
+  - Slået fra i `--demo` og `--snapshot` (hverken nøglering eller net).
+- **Daisycon-fakta** (fra søgeresultater og offentlig kode, Daisycons sider var blokeret, så **ikke læst direkte**):
+  feed-URL `https://daisycon.io/datafeed/?media_id=…&program_id[]=19392&standard_id=…&language_code=…&locale_id=…&type=JSON`,
+  struktur `datafeed › programs › products › product_info / update_info`, felter `title`, `link`, `price`, `ean`,
+  `brand`, `category`, `category_path`, `keywords`, `in_stock`, `in_stock_amount`, `delivery_time`,
+  `delivery_description`, `update_info.status` (inactive/deleted springes over). Intet kunstner-, format- eller
+  valutafelt (kunstner fra "Kunstner - Titel" eller brand, valuta antages DKK). `X-Total-Count: 0` = ikke godkendt endnu.
+  Parseren er tolerant (flere mulige navne pr. felt i `IMusicFields`).
+- **Ikke verificeret:** om iMusic-kampagnen (19392) faktisk har et produktfeed, feedets størrelse, standard_id/locale_id
+  for Danmark, og at `link` er affiliate-linket. Første rigtige hentning sker på brugerens Mac.
 
 ### Ikke færdigt / næste skridt (spørg brugeren om rækkefølgen)
 
