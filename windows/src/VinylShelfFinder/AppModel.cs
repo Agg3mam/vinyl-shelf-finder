@@ -313,6 +313,19 @@ public sealed class AppModel : INotifyPropertyChanged
         if (ReturnCopy == copyId) ReturnCopy = null;
     }
 
+    public void Unplace(long copyId) => Perform(() => Store.Unplace(copyId));
+
+    public void SetSortOverrides(long copyId, string? artist, string? title) =>
+        Perform(() => Store.SetSortOverrides(copyId, artist, title));
+
+    /// <summary>"Flyt til cd-hylden" / "Flyt til pladehylden" (null: følg Discogs' format). Kopien venter
+    /// derefter under "Nye cd'er"/"Nye plader" på den anden hylde.</summary>
+    public void SetMedium(long copyId, Medium? medium)
+    {
+        if (Selection == copyId) Selection = null;
+        Perform(() => Store.SetMedium(copyId, medium));
+    }
+
     public void KeepLocalOnly(long copyId) => Perform(() => Store.KeepLocalOnly(copyId));
 
     public void DeleteCopy(long copyId)

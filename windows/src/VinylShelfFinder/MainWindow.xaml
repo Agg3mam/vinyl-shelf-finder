@@ -8,13 +8,14 @@
         <MicaBackdrop />
     </Window.SystemBackdrop>
 
+    <!-- Skærmene bygges i kode (MainWindow.xaml.cs og Views/), som på Mac. -->
     <Grid x:Name="Root" Language="da-DK">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
         </Grid.RowDefinitions>
 
-        <!-- Ny version / status for opdatering (styres af Updater i MainWindow.xaml.cs). -->
+        <!-- Ny version / status for opdatering (styres af Updater). -->
         <InfoBar x:Name="UpdateBar" Grid.Row="0" IsOpen="False" IsClosable="True" Margin="12,8,12,0"
                  CloseButtonClick="UpdateBar_CloseButtonClick">
             <InfoBar.Content>
@@ -28,48 +29,29 @@
 
         <NavigationView x:Name="Nav" Grid.Row="1"
                         PaneDisplayMode="Left"
-                        IsSettingsVisible="False"
+                        IsSettingsVisible="True"
                         IsBackButtonVisible="Collapsed"
                         OpenPaneLength="260"
                         SelectionChanged="Nav_SelectionChanged"
                         ItemInvoked="Nav_ItemInvoked">
-            <NavigationView.MenuItems>
-                <NavigationViewItem Content="Søg" Tag="search">
-                    <NavigationViewItem.Icon><FontIcon Glyph="&#xE721;" /></NavigationViewItem.Icon>
-                </NavigationViewItem>
-                <NavigationViewItemHeader Content="Sektioner" />
-                <NavigationViewItem Content="Nye plader" Tag="new">
-                    <NavigationViewItem.Icon><FontIcon Glyph="&#xE710;" /></NavigationViewItem.Icon>
-                </NavigationViewItem>
-                <NavigationViewItem Content="Fjernet fra Discogs" Tag="removed">
-                    <NavigationViewItem.Icon><FontIcon Glyph="&#xE74D;" /></NavigationViewItem.Icon>
-                </NavigationViewItem>
-                <NavigationViewItem Content="Ude af reolen" Tag="out">
-                    <NavigationViewItem.Icon><FontIcon Glyph="&#xE8F1;" /></NavigationViewItem.Icon>
-                </NavigationViewItem>
-                <NavigationViewItem Content="Historik" Tag="history">
-                    <NavigationViewItem.Icon><FontIcon Glyph="&#xE81C;" /></NavigationViewItem.Icon>
-                </NavigationViewItem>
-                <NavigationViewItem Content="Værdi" Tag="value">
-                    <NavigationViewItem.Icon><FontIcon Glyph="&#xE8EF;" /></NavigationViewItem.Icon>
-                </NavigationViewItem>
-                <NavigationViewItem Content="Hvad skal jeg høre?" Tag="suggest">
-                    <NavigationViewItem.Icon><FontIcon Glyph="&#xE8D6;" /></NavigationViewItem.Icon>
-                </NavigationViewItem>
-                <NavigationViewItem Content="Lyttelog" Tag="listenlog">
-                    <NavigationViewItem.Icon><FontIcon Glyph="&#xE8FD;" /></NavigationViewItem.Icon>
-                </NavigationViewItem>
-                <NavigationViewItem Content="Find nye plader" Tag="discover">
-                    <NavigationViewItem.Icon><FontIcon Glyph="&#xE719;" /></NavigationViewItem.Icon>
-                </NavigationViewItem>
-            </NavigationView.MenuItems>
-            <NavigationView.FooterMenuItems>
-                <NavigationViewItem x:Name="UpdateItem" Content="Opdatering" Tag="update" SelectsOnInvoked="False">
-                    <NavigationViewItem.Icon><FontIcon Glyph="&#xE895;" /></NavigationViewItem.Icon>
-                </NavigationViewItem>
-            </NavigationView.FooterMenuItems>
-
-            <Frame x:Name="ContentFrame" />
+            <Grid x:Name="Body">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="*" />
+                </Grid.RowDefinitions>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition x:Name="ListColumn" Width="420" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+                <Grid x:Name="TopBar" Grid.ColumnSpan="2" />
+                <Border x:Name="ListHost" Grid.Row="1" Grid.Column="0"
+                        BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}" BorderThickness="0,0,1,0" />
+                <Border x:Name="DetailHost" Grid.Row="1" Grid.Column="1" />
+                <Border x:Name="FullHost" Grid.Row="1" Grid.ColumnSpan="2" Visibility="Collapsed" />
+            </Grid>
         </NavigationView>
+
+        <!-- Find i reolen / Sæt tilbage: et lag over hele vinduet. -->
+        <Border x:Name="OverlayHost" Grid.RowSpan="2" />
     </Grid>
 </Window>

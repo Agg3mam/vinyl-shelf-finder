@@ -35,12 +35,6 @@
     <PackageReference Include="Microsoft.WindowsAppSDK" Version="1.6.250205002" />
     <PackageReference Include="Microsoft.Windows.SDK.BuildTools" Version="10.0.26100.1742" />
   </ItemGroup>
-  <!-- Fase 1 (i gang): disse filer er skrevet, men endnu ikke bygget i CI og ikke koblet på MainWindow.
-       Fjern denne ItemGroup, når MainWindow bruger dem, og ret evt. byggefejl fra CI-loggen. -->
-  <ItemGroup>
-    <Compile Remove="AppModel.cs;WindowsCredentialStore.cs;UI\**;Views\**" />
-    <None Include="AppModel.cs;WindowsCredentialStore.cs;UI\**;Views\**" />
-  </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\VinylCore\VinylCore.csproj" />
   </ItemGroup>

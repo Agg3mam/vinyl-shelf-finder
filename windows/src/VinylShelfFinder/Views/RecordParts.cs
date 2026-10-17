@@ -18,7 +18,7 @@ public static class RecordParts
         var icon = Ui.Icon(Ui.Glyph.Library, size * 0.8, Ui.Accent);
         icon.VerticalAlignment = VerticalAlignment.Center;
         p.Children.Add(icon);
-        p.Children.Add(new TextBlock { Text = $"Reol {loc.Shelf}", FontSize = size, FontWeight = FontWeights.SemiBold, VerticalAlignment = VerticalAlignment.Center });
+        p.Children.Add(new TextBlock { Text = $"{loc.Medium.ShelfWord()} {loc.Shelf}", FontSize = size, FontWeight = FontWeights.SemiBold, VerticalAlignment = VerticalAlignment.Center });
         var chev = Ui.Icon(Ui.Glyph.ChevronRight, size * 0.45, Ui.Tertiary);
         chev.VerticalAlignment = VerticalAlignment.Center;
         p.Children.Add(chev);

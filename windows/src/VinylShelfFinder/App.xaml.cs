@@ -1,12 +1,14 @@
 using System.Globalization;
 using Microsoft.UI.Xaml;
+using VinylShelfFinder.Core;
+using VinylShelfFinder.UI;
 
 namespace VinylShelfFinder;
 
 /// <summary>
-/// Appens start. Med argumentet <c>--smoke [mappe]</c> åbner appen hovedvinduet, venter ca. 3 s,
-/// skriver "OK" i mappe/smoke-ok.txt, gemmer et billede af vinduet i mappe/main-window.png og lukker.
-/// Bruges af CI til at bevise, at appen faktisk starter på Windows.
+/// Appens start. <c>--demo</c> bruger en separat database med eksempeldata (ingen Discogs, intet net).
+/// Med <c>--smoke [mappe]</c> (bruges sammen med --demo i CI) går appen selv gennem søg, plade-detalje,
+/// Find i reolen og en sektion, gemmer et billede af hver i mappen, skriver "OK" i smoke-ok.txt og lukker.
 /// </summary>
 public partial class App : Application
 {
@@ -38,9 +40,11 @@ public partial class App : Application
         if (i >= 0)
             _smokeDir = i + 1 < cmd.Length && !cmd[i + 1].StartsWith("--") ? cmd[i + 1] : AppContext.BaseDirectory;
 
-        // Ingen opdatering i demo og i CI's smoke-test (den må ikke kalde GitHub).
-        var updater = new Updater(enabled: _smokeDir is null && !cmd.Contains("--demo"));
-        _window = new MainWindow(updater);
+        bool demo = cmd.Contains("--demo");
+        // Demo og CI's smoke-test henter hverken covers eller opdateringer fra nettet.
+        Ui.AllowNetworkCovers = !demo && _smokeDir is null;
+        var updater = new Updater(enabled: _smokeDir is null && !demo);
+        _window = new MainWindow(updater, new AppModel(demo));
         _window.Activate();
 
         if (_smokeDir is not null)
@@ -57,16 +61,43 @@ public partial class App : Application
             await Task.Delay(3000); // fortsætter på UI-tråden
             if (_window is null || _window.Content is null)
                 throw new InvalidOperationException("Hovedvinduet blev ikke oprettet.");
-            File.WriteAllText(Path.Combine(dir, "smoke-ok.txt"), "OK");
+            var m = _window.Model;
+            var errors = new List<string>();
+            async Task Shot(string name)
+            {
+                await Task.Delay(700);
+                try { await _window.SaveScreenshotAsync(Path.Combine(dir, name)); }
+                catch (Exception ex) { errors.Add($"{name}: {ex}"); }
+            }
 
-            try
+            await Shot("01-start.png");
+            if (m.Library.Copies.Count > 0)
             {
-                await _window.SaveScreenshotAsync(Path.Combine(dir, "main-window.png"));
+                m.Query = "beatles";
+                await Shot("02-sog-og-plade.png");
+                if (m.Selection is long sel)
+                {
+                    m.FindModeCopy = sel;
+                    await Shot("03-find.png");
+                    m.FindModeCopy = null;
+                }
+                if (m.Library.Locations.FirstOrDefault() is Location loc)
+                {
+                    m.Sidebar = SidebarItem.ForSection(loc.Id);
+                    await Shot("04-sektion.png");
+                }
+                m.Sidebar = new SidebarItem(SidebarKind.Away);
+                await Shot("05-ude-af-reolen.png");
+                if (m.AwayItems.FirstOrDefault() is RecordItem away && m.Library.LocationOfCopy.ContainsKey(away.Id))
+                {
+                    m.ReturnCopy = away.Id;
+                    await Shot("06-saet-tilbage.png");
+                    m.ReturnCopy = null;
+                }
             }
-            catch (Exception ex)
-            {
-                TryWrite(Path.Combine(dir, "screenshot-error.txt"), ex.ToString());
-            }
+            if (m.ErrorMessage is string err) errors.Add("Fejl i appen: " + err);
+            if (errors.Count > 0) TryWrite(Path.Combine(dir, "screenshot-error.txt"), string.Join("\n\n", errors));
+            File.WriteAllText(Path.Combine(dir, "smoke-ok.txt"), "OK");
             Environment.Exit(0);
         }
         catch (Exception ex)

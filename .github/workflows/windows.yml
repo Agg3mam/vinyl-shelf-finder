@@ -83,8 +83,8 @@ jobs:
           $out = Join-Path $env:GITHUB_WORKSPACE 'snapshots-windows'
           New-Item -ItemType Directory -Force $out | Out-Null
           $exe = Join-Path $dir 'VinylShelfFinder\VinylShelfFinder.exe'
-          $p = Start-Process -FilePath $exe -ArgumentList '--smoke', "`"$out`"" -PassThru
-          if (-not $p.WaitForExit(90000)) { Stop-Process -Id $p.Id -Force; Write-Host '::error::Appen lukkede ikke inden for 90 s' }
+          $p = Start-Process -FilePath $exe -ArgumentList '--demo', '--smoke', "`"$out`"" -PassThru
+          if (-not $p.WaitForExit(120000)) { Stop-Process -Id $p.Id -Force; Write-Host '::error::Appen lukkede ikke inden for 90 s' }
           Get-ChildItem $out | Format-Table Name, Length
           if (Test-Path "$out\smoke-error.txt") { Get-Content "$out\smoke-error.txt" }
           if (Test-Path "$out\screenshot-error.txt") { Get-Content "$out\screenshot-error.txt" }

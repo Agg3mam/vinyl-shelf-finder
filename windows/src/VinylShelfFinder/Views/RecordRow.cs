@@ -111,6 +111,7 @@ public static class RecordRow
             var status = new MenuFlyoutSubItem { Text = "Status" };
             foreach (var s in StatusChoices(model, copyId)) status.Items.Add(s);
             menu.Items.Add(status);
+            foreach (var m in MediumChoices(model, copyId)) menu.Items.Add(m);
             if (model.Library.Item(copyId) is RecordItem it)
             {
                 menu.Items.Add(new MenuFlyoutSeparator());
@@ -122,6 +123,23 @@ public static class RecordRow
         // En tom menu åbner ikke; Opening fylder den.
         menu.Items.Add(new MenuFlyoutItem { Text = "Find i reolen" });
         return menu;
+    }
+
+    /// <summary>"Flyt til cd-hylden" / "Flyt til pladehylden" og evt. "Følg Discogs' format" (MediumChoice på Mac).</summary>
+    public static IEnumerable<MenuFlyoutItemBase> MediumChoices(AppModel model, long copyId)
+    {
+        if (model.Library.Item(copyId) is not RecordItem it) yield break;
+        var other = it.Medium == Medium.Vinyl ? Medium.Cd : Medium.Vinyl;
+        var move = new MenuFlyoutItem { Text = other == Medium.Cd ? "Flyt til cd-hylden" : "Flyt til pladehylden" };
+        move.Click += (_, _) => model.SetMedium(copyId, other);
+        yield return move;
+        var discogs = MediumExtensions.Of(it.Release.Format);
+        if (it.Copy.MediumOverride is not null && discogs != it.Medium)
+        {
+            var follow = new MenuFlyoutItem { Text = $"Følg Discogs' format ({discogs.Singular()})" };
+            follow.Click += (_, _) => model.SetMedium(copyId, null);
+            yield return follow;
+        }
     }
 
     /// <summary>Statusvalgene. "Udlånt…" og "Opbevaret andet sted…" spørger efter navn/sted.</summary>

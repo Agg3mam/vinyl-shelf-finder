@@ -121,7 +121,7 @@ public static class Ui
     // MARK: Tekst
 
     public static TextBlock Text(string text, string style = "BodyTextBlockStyle", Brush? color = null, bool wrap = true,
-                                 int maxLines = 0, FontWeight? weight = null, double? size = null)
+                                 int maxLines = 0, Windows.UI.Text.FontWeight? weight = null, double? size = null)
     {
         var t = new TextBlock
         {
@@ -133,7 +133,7 @@ public static class Ui
             IsTextSelectionEnabled = false,
         };
         if (color is not null) t.Foreground = color;
-        if (weight is FontWeight w) t.FontWeight = w;
+        if (weight is Windows.UI.Text.FontWeight w) t.FontWeight = w;
         if (size is double s) t.FontSize = s;
         return t;
     }
