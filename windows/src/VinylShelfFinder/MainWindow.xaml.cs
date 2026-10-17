@@ -25,7 +25,7 @@ public sealed partial class MainWindow : Window
     internal DetailPane Detail { get; }
     internal FindOverlay Find { get; }
     private IPane? _listPane;
-    private FrameworkElement? _fullPane;
+    private IPane? _fullPane;
     private readonly InfoBar _errorBar = new() { Severity = InfoBarSeverity.Error, IsClosable = true, Margin = new Thickness(12, 8, 12, 0) };
     private readonly NavigationViewItem _updateItem = new() { Content = "Opdatering", Tag = "update", SelectsOnInvoked = false, Icon = new FontIcon { Glyph = "" } };
     private bool _buildingSidebar;
@@ -100,9 +100,9 @@ public sealed partial class MainWindow : Window
         }
         Search.OnModelChanged(p);
         if (_listPane is not null && _listPane != Search) _listPane.OnModelChanged(p);
+        _fullPane?.OnModelChanged(p);
         Detail.OnModelChanged(p);
         Find.OnModelChanged(p);
-        _onboarding?.OnModelChanged(p);
         if (p == nameof(AppModel.Library)) UpdateToolbar();
     }
 
@@ -243,12 +243,20 @@ public sealed partial class MainWindow : Window
         ShowFull(Ui.Empty(Ui.Glyph.Library, "Indstillinger", "Indstillingerne kommer i en senere version."));
     }
 
-    private void ShowFull(FrameworkElement view)
+    private sealed class StaticPane(FrameworkElement view) : IPane
+    {
+        public FrameworkElement View => view;
+        public void OnModelChanged(string? property) { }
+    }
+
+    private void ShowFull(FrameworkElement view) => ShowFull(new StaticPane(view));
+
+    private void ShowFull(IPane pane)
     {
         _listPane = null;
-        _fullPane = view;
+        _fullPane = pane;
         ListHost.Child = null;
-        FullHost.Child = view;
+        FullHost.Child = pane.View;
         FullHost.Visibility = Visibility.Visible;
         ListHost.Visibility = Visibility.Collapsed;
         DetailHost.Visibility = Visibility.Collapsed;
@@ -271,7 +279,7 @@ public sealed partial class MainWindow : Window
         if (Model.NeedsOnboarding)
         {
             _onboarding ??= new OnboardingView(Model);
-            ShowFull(_onboarding.View);
+            ShowFull(_onboarding);
             return;
         }
         _onboarding = null;
@@ -288,6 +296,15 @@ public sealed partial class MainWindow : Window
                 break;
             case SidebarKind.Section:
                 ShowList(new SectionPane(Model, s.SectionId));
+                break;
+            case SidebarKind.Listen:
+                ShowList(new ListenPane(Model));
+                break;
+            case SidebarKind.Plays:
+                ShowList(new PlaysPane(Model));
+                break;
+            case SidebarKind.History:
+                ShowFull(new HistoryPane(Model));
                 break;
             default:
                 var title = s.Kind switch
@@ -313,6 +330,14 @@ public sealed partial class MainWindow : Window
             a.Invoked += (_, e) => { action(); e.Handled = true; };
             Root.KeyboardAccelerators.Add(a);
         }
+        // Mellemrum = ny plade i "Hvad skal jeg høre?" (men ikke, når man skriver i et tekstfelt).
+        Root.KeyDown += (_, e) =>
+        {
+            if (e.Key != VirtualKey.Space || Model.Sidebar.Kind != SidebarKind.Listen) return;
+            if (Microsoft.UI.Xaml.Input.FocusManager.GetFocusedElement(Root.XamlRoot) is TextBox or PasswordBox or AutoSuggestBox) return;
+            Model.PickRecord();
+            e.Handled = true;
+        };
         Add(VirtualKey.F, VirtualKeyModifiers.Control, () =>
         {
             Model.Sidebar = SidebarItem.Search;

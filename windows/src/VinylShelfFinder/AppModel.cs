@@ -349,6 +349,58 @@ public sealed class AppModel : INotifyPropertyChanged
         Perform(() => Store.SetMedium(copyId, medium));
     }
 
+    /// <summary>"Fortryd" i historikken: sæt pladen tilbage, hvor den stod før.</summary>
+    public void Undo(HistoryEntry entry)
+    {
+        if (entry.CopyId is not long copy || entry.FromLocationId is not long from || entry.FromPosition is not int pos
+            || Library.LocationById(from) is null || !Library.Copies.ContainsKey(copy))
+        {
+            ErrorMessage = "Denne ændring kan ikke fortrydes (pladen eller sektionen findes ikke længere).";
+            return;
+        }
+        Move(copy, from, pos - 1);
+    }
+
+    // MARK: Lytning
+
+    private ListenFilter _listenFilter = new();
+    public ListenFilter ListenFilter
+    {
+        get => _listenFilter;
+        set { if (Set(ref _listenFilter, value)) ClearPick(); }
+    }
+
+    private long? _currentPick;
+    public long? CurrentPick { get => _currentPick; private set => Set(ref _currentPick, value); }
+    private readonly List<long> _recentPicks = new();
+
+    public List<RecordItem> ListenCandidates => ListenPicker.Candidates(Library.AllItems, Library, ListenFilter, Stats);
+
+    /// <summary>"Giv mig en plade": vægtet mod plader, der ikke er hørt længe, og undgår de seneste forslag.</summary>
+    public void PickRecord()
+    {
+        if (ListenPicker.Pick(ListenCandidates, Stats, _recentPicks) is not RecordItem pick)
+        {
+            // Ingen plader passer: vis ikke et gammelt forslag, der ikke matcher filteret.
+            ClearPick();
+            return;
+        }
+        CurrentPick = pick.Id;
+        Selection = pick.Id;
+        _recentPicks.Add(pick.Id);
+        if (_recentPicks.Count > 20) _recentPicks.RemoveAt(0);
+    }
+
+    /// <summary>Nulstiller forslaget og – hvis det var forslaget, der var valgt – også valget.</summary>
+    public void ClearPick()
+    {
+        if (CurrentPick is not long pick) return;
+        if (Selection == pick) Selection = null;
+        CurrentPick = null;
+    }
+
+    public void DeletePlay(long id) => Perform(() => Store.DeletePlay(id));
+
     public void KeepLocalOnly(long copyId) => Perform(() => Store.KeepLocalOnly(copyId));
 
     public void DeleteCopy(long copyId)

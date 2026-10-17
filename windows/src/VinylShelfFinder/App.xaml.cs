@@ -95,6 +95,17 @@ public partial class App : Application
                     m.ReturnCopy = null;
                 }
             }
+            if (m.Library.Copies.Count > 0)
+            {
+                m.Sidebar = new SidebarItem(SidebarKind.Listen);
+                m.PickRecord();
+                await Shot("07-hvad-skal-jeg-hore.png");
+                if (m.Selection is long played) m.LogPlay(played);
+                m.Sidebar = new SidebarItem(SidebarKind.Plays);
+                await Shot("08-lyttelog.png");
+                m.Sidebar = new SidebarItem(SidebarKind.History);
+                await Shot("09-historik.png");
+            }
             if (m.ErrorMessage is string err) errors.Add("Fejl i appen: " + err);
             if (errors.Count > 0) TryWrite(Path.Combine(dir, "screenshot-error.txt"), string.Join("\n\n", errors));
             File.WriteAllText(Path.Combine(dir, "smoke-ok.txt"), "OK");
