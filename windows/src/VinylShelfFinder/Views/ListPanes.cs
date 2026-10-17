@@ -1,5 +1,6 @@
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Controls.Primitives;
 using Windows.System;
 using VinylShelfFinder.Core;
 using VinylShelfFinder.UI;
@@ -176,6 +177,13 @@ public sealed class SectionPane : SelectableListPane
         var next = locIndex + 1 < lib.Locations.Count ? lib.Locations[locIndex + 1] : null;
 
         SetHeader(loc.Name, Subtitle(items.Count, outOfOrder.Count));
+        var flow = new ToggleButton { IsChecked = Model.ShowCoverFlow, Content = Ui.Label(Ui.Glyph.Layers, "Cover Flow", "CaptionTextBlockStyle") };
+        ToolTipService.SetToolTip(flow, Model.ShowCoverFlow ? "Vis plade-detaljen igen" : "Bladr i sektionen med Cover Flow (← →)");
+        flow.Click += (_, _) => Model.ShowCoverFlow = flow.IsChecked == true;
+        var check = Ui.Btn("Kontrollér…", (_, _) => Model.CheckSection = LocationId, tooltip: "Gå sektionen igennem plade for plade");
+        var tools = Ui.HStack(8, flow, check);
+        tools.Margin = new Thickness(0, 6, 0, 0);
+        Header.Children.Add(tools);
 
         if (prev is not null && EdgeItem(prev, last: true) is RecordItem last)
             AddRow(Boundary($"Forrige sektion ({prev.Name}) slutter med", last), null);

@@ -58,6 +58,7 @@ public sealed class AppModel : INotifyPropertyChanged
         _username = Store.Setting("discogs_username");
         _medium = MediumExtensions.FromRaw(Store.Setting("medium")) ?? Medium.Vinyl;
         _currency = Store.Setting("market_currency") ?? "DKK";
+        _showCoverFlow = Store.Setting("cover_flow") == "1";
         try { _market = Store.LoadMarket(); } catch { }
         _collectionValue = Store.LoadCollectionValue();
         _hasToken = !demo && SafeExists(_token);
@@ -365,6 +366,14 @@ public sealed class AppModel : INotifyPropertyChanged
     }
 
     // MARK: Reol
+
+    private bool _showCoverFlow;
+    /// <summary>Cover Flow i stedet for plade-detaljen, når en sektion er valgt.</summary>
+    public bool ShowCoverFlow
+    {
+        get => _showCoverFlow;
+        set { if (Set(ref _showCoverFlow, value)) Store.SetSetting("cover_flow", value ? "1" : "0"); }
+    }
 
     public void AddSection(int shelf)
     {

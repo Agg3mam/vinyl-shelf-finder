@@ -89,6 +89,9 @@ public partial class App : Application
                 {
                     m.Sidebar = SidebarItem.ForSection(loc.Id);
                     await Shot("04-sektion.png");
+                    m.ShowCoverFlow = true;
+                    await Shot("04b-cover-flow.png");
+                    m.ShowCoverFlow = false;
                 }
                 m.Sidebar = new SidebarItem(SidebarKind.Away);
                 await Shot("05-ude-af-reolen.png");

@@ -24,6 +24,7 @@ public sealed partial class MainWindow : Window
     internal SearchPane Search { get; }
     internal DetailPane Detail { get; }
     internal FindOverlay Find { get; }
+    private CoverFlowPane? _coverFlow;
     private IPane? _listPane;
     private IPane? _fullPane;
     private readonly InfoBar _errorBar = new() { Severity = InfoBarSeverity.Error, IsClosable = true, Margin = new Thickness(12, 8, 12, 0) };
@@ -109,6 +110,8 @@ public sealed partial class MainWindow : Window
         _fullPane?.OnModelChanged(p);
         Detail.OnModelChanged(p);
         Find.OnModelChanged(p);
+        if (DetailHost.Child == _coverFlow?.View) _coverFlow?.OnModelChanged(p);
+        if (p == nameof(AppModel.ShowCoverFlow)) UpdateDetail();
         if (p == nameof(AppModel.Library)) UpdateToolbar();
     }
 
@@ -295,6 +298,18 @@ public sealed partial class MainWindow : Window
         DetailHost.Visibility = Visibility.Collapsed;
     }
 
+    /// <summary>Højre kolonne: Cover Flow i en sektion (når det er slået til), ellers plade-detaljen.</summary>
+    private void UpdateDetail()
+    {
+        if (Model.Sidebar.Kind == SidebarKind.Section && Model.ShowCoverFlow && Model.Library.LocationById(Model.Sidebar.SectionId) is not null)
+        {
+            _coverFlow ??= new CoverFlowPane(Model);
+            DetailHost.Child = _coverFlow.View;
+            _coverFlow.Show(Model.Sidebar.SectionId);
+        }
+        else DetailHost.Child = Detail.View;
+    }
+
     private void ShowList(IPane pane)
     {
         _listPane = pane;
@@ -304,6 +319,7 @@ public sealed partial class MainWindow : Window
         ListHost.Child = pane.View;
         ListHost.Visibility = Visibility.Visible;
         DetailHost.Visibility = Visibility.Visible;
+        UpdateDetail();
     }
 
     private void ShowContent()
