@@ -56,6 +56,7 @@ public sealed class AppModel : INotifyPropertyChanged
         _rules = Store.LoadSortRules();
         _neighborCount = int.TryParse(Store.Setting("neighbor_count"), out var n) && n > 0 ? n : 1;
         _username = Store.Setting("discogs_username");
+        _medium = MediumExtensions.FromRaw(Store.Setting("medium")) ?? Medium.Vinyl;
         _hasToken = !demo && SafeExists(_token);
         Reload();
     }
@@ -66,6 +67,27 @@ public sealed class AppModel : INotifyPropertyChanged
     }
 
     // MARK: Egenskaber
+
+    private Medium _medium = Medium.Vinyl;
+    /// <summary>Den viste hylde: plader eller cd'er. Hver har sine egne reoler og sektioner.</summary>
+    public Medium Medium
+    {
+        get => _medium;
+        set
+        {
+            if (!Set(ref _medium, value)) return;
+            Store.SetSetting("medium", value.RawValue());
+            Selection = null;
+            FindModeCopy = null;
+            ReturnCopy = null;
+            if (Sidebar.Kind == SidebarKind.Section) Sidebar = SidebarItem.Search;
+            Reload();
+        }
+    }
+
+    private IReadOnlyDictionary<Medium, int> _mediumCounts = new Dictionary<Medium, int>();
+    /// <summary>Skiftet "Plader / Cd'er" vises kun, når der er cd'er (eller cd-hylden er valgt).</summary>
+    public bool ShowsMediumPicker => _mediumCounts.GetValueOrDefault(Medium.Cd) > 0 || Medium == Medium.Cd;
 
     private Library _library = Library.Empty;
     public Library Library { get => _library; private set => Set(ref _library, value); }
@@ -166,7 +188,8 @@ public sealed class AppModel : INotifyPropertyChanged
     {
         try
         {
-            var lib = Store.LoadLibrary();
+            var lib = Store.LoadLibrary(Medium);
+            _mediumCounts = Store.MediumCounts();
             _searchIndex = new SearchIndex(lib);
             Stats = new ListeningStats(Store.LoadPlays());
             Library = lib;
@@ -258,7 +281,7 @@ public sealed class AppModel : INotifyPropertyChanged
             if (Library.SuggestPlacement(id, Rules) is not PlacementSuggestion s) continue;
             try { Store.Move(id, s.LocationId, s.Index); }
             catch (Exception ex) { ErrorMessage = Describe(ex); break; }
-            try { Library = Store.LoadLibrary(); } catch { }
+            try { Library = Store.LoadLibrary(Medium); } catch { }
         }
         Reload();
     }
@@ -358,7 +381,7 @@ public sealed class AppModel : INotifyPropertyChanged
     {
         var sorted = Rules.Sorted(Library.AllItems.Where(i => i.Copy.InDiscogs)).Select(i => i.Id).ToList();
         var parts = LayoutPlanner.Split(sorted, plan);
-        Perform(() => Store.CreateLayout(plan.Zip(parts, (p, ids) => (p.Shelf, p.Section, (IReadOnlyList<long>)ids)).ToList()));
+        Perform(() => Store.CreateLayout(plan.Zip(parts, (p, ids) => (p.Shelf, p.Section, (IReadOnlyList<long>)ids)).ToList(), Medium));
         ForceOnboarding = false;
         Sidebar = SidebarItem.Search;
         RequestSearchFocus();

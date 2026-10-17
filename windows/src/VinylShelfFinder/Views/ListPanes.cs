@@ -114,9 +114,9 @@ public sealed class RecordListPane : SelectableListPane
     {
         var (title, items, empty, glyph) = _kind switch
         {
-            SidebarKind.NewRecords => ("Nye plader", Model.UnplacedItems, "Ingen nye plader venter på en plads.", Ui.Glyph.New),
-            SidebarKind.Removed => ("Fjernet fra Discogs", Model.RemovedItems, "Alle plader findes stadig i din Discogs-samling.", Ui.Glyph.Check),
-            _ => ("Ude af reolen", Model.AwayItems, "Alle plader står på plads.", Ui.Glyph.Home),
+            SidebarKind.NewRecords => ($"Nye {Model.Medium.Plural()}", Model.UnplacedItems, $"Ingen nye {Model.Medium.Plural()} venter på en plads.", Ui.Glyph.New),
+            SidebarKind.Removed => ("Fjernet fra Discogs", Model.RemovedItems, $"Alle {Model.Medium.Plural()} findes stadig i din Discogs-samling.", Ui.Glyph.Check),
+            _ => ("Ude af reolen", Model.AwayItems, $"Alle {Model.Medium.Plural()} står på plads.", Ui.Glyph.Home),
         };
         SetHeader(title);
         ClearRows();

@@ -29,6 +29,9 @@ public sealed partial class MainWindow : Window
     private readonly InfoBar _errorBar = new() { Severity = InfoBarSeverity.Error, IsClosable = true, Margin = new Thickness(12, 8, 12, 0) };
     private readonly NavigationViewItem _updateItem = new() { Content = "Opdatering", Tag = "update", SelectsOnInvoked = false, Icon = new FontIcon { Glyph = "" } };
     private bool _buildingSidebar;
+    private readonly SelectorBar _mediumBar = new();
+    private readonly Button _syncButton = new();
+    private OnboardingView? _onboarding;
     private bool _dialogOpen;
 
     public MainWindow(Updater updater, AppModel model)
@@ -44,6 +47,7 @@ public sealed partial class MainWindow : Window
         Find = new FindOverlay(model);
         OverlayHost.Child = Find.View;
         DetailHost.Child = Detail.View;
+        TopBar.Children.Add(BuildToolbar());
         TopBar.Children.Add(_errorBar);
         _errorBar.Closed += (_, _) => Model.ErrorMessage = null;
         Nav.FooterMenuItems.Add(_updateItem);
@@ -73,6 +77,14 @@ public sealed partial class MainWindow : Window
             case nameof(AppModel.NeedsOnboarding):
                 ShowContent();
                 break;
+            case nameof(AppModel.SyncState):
+            case nameof(AppModel.HasToken):
+                UpdateToolbar();
+                break;
+            case nameof(AppModel.Medium):
+                UpdateToolbar();
+                ShowContent();
+                break;
             case nameof(AppModel.ErrorMessage):
                 _errorBar.Title = "Noget gik galt";
                 _errorBar.Message = Model.ErrorMessage ?? "";
@@ -89,6 +101,49 @@ public sealed partial class MainWindow : Window
         if (_listPane is not null && _listPane != Search) _listPane.OnModelChanged(p);
         Detail.OnModelChanged(p);
         Find.OnModelChanged(p);
+        _onboarding?.OnModelChanged(p);
+        if (p == nameof(AppModel.Library)) UpdateToolbar();
+    }
+
+    // MARK: Værktøjslinjen
+
+    private FrameworkElement BuildToolbar()
+    {
+        var bar = new Grid { Padding = new Thickness(12, 6, 12, 6), ColumnSpacing = 8 };
+        bar.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        bar.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        foreach (var m in new[] { Medium.Vinyl, Medium.Cd })
+            _mediumBar.Items.Add(new SelectorBarItem { Text = m.Title(), Tag = m });
+        ToolTipService.SetToolTip(_mediumBar, "Skift mellem pladereolerne og cd-reolerne");
+        _mediumBar.SelectionChanged += (_, _) =>
+        {
+            if (_mediumBar.SelectedItem?.Tag is Medium m && Model.Medium != m) Model.Medium = m;
+        };
+        bar.Children.Add(_mediumBar);
+        _syncButton.Click += async (_, _) => await Model.SyncAsync();
+        Grid.SetColumn(_syncButton, 1);
+        bar.Children.Add(_syncButton);
+        UpdateToolbar();
+        return bar;
+    }
+
+    private void UpdateToolbar()
+    {
+        _mediumBar.Visibility = Model.ShowsMediumPicker ? Visibility.Visible : Visibility.Collapsed;
+        var want = _mediumBar.Items.FirstOrDefault(i => i.Tag is Medium m && m == Model.Medium);
+        if (want is not null && _mediumBar.SelectedItem != want) _mediumBar.SelectedItem = want;
+
+        var s = Model.SyncState;
+        _syncButton.Visibility = Model.IsDemo ? Visibility.Collapsed : Visibility.Visible;
+        _syncButton.IsEnabled = Model.HasToken && s.Phase != SyncPhase.Running;
+        _syncButton.Content = s.Phase switch
+        {
+            SyncPhase.Running => Ui.Label("", s.Total > 0 ? $"{s.Done}/{s.Total}" : "Henter…"),
+            SyncPhase.Failed => Ui.Label(Ui.Glyph.Warning, "Synkronisering fejlede"),
+            _ => Ui.Label("", "Synkronisér"),
+        };
+        ToolTipService.SetToolTip(_syncButton, s.Phase == SyncPhase.Failed ? s.Message
+            : Model.HasToken ? "Synkronisér med Discogs (Ctrl+R)" : "Forbind til Discogs for at synkronisere");
     }
 
     /// <summary>Kun én ContentDialog ad gangen i WinUI.</summary>
@@ -124,7 +179,7 @@ public sealed partial class MainWindow : Window
         items.Add(Item("Hvad skal jeg høre?", Ui.Glyph.Shuffle, new SidebarItem(SidebarKind.Listen)));
         items.Add(Item("Lyttelog", Ui.Glyph.List, new SidebarItem(SidebarKind.Plays), Model.Stats.Plays.Count));
         items.Add(new NavigationViewItemHeader { Content = "Indbakke" });
-        items.Add(Item("Nye plader", Ui.Glyph.New, new SidebarItem(SidebarKind.NewRecords), lib.Unplaced.Count));
+        items.Add(Item($"Nye {Model.Medium.Plural()}", Ui.Glyph.New, new SidebarItem(SidebarKind.NewRecords), lib.Unplaced.Count));
         items.Add(Item("Fjernet fra Discogs", Ui.Glyph.Warning, new SidebarItem(SidebarKind.Removed), Model.RemovedItems.Count));
         items.Add(Item("Ude af reolen", Ui.Glyph.Package, new SidebarItem(SidebarKind.Away), Model.AwayItems.Count));
         foreach (var shelf in lib.Locations.Select(l => l.Shelf).Distinct())
@@ -214,9 +269,11 @@ public sealed partial class MainWindow : Window
         if (_settingsShown) return;
         if (Model.NeedsOnboarding)
         {
-            ShowFull(Ui.Empty(Ui.Glyph.Disc, "Kom i gang", "Forbind til Discogs og opret dine reoler. (Opsætningen kommer i næste version.)"));
+            _onboarding ??= new OnboardingView(Model);
+            ShowFull(_onboarding.View);
             return;
         }
+        _onboarding = null;
         var s = Model.Sidebar;
         switch (s.Kind)
         {
@@ -265,6 +322,7 @@ public sealed partial class MainWindow : Window
             Model.Sidebar = SidebarItem.Search;
             Model.RequestSearchFocus();
         });
+        Add(VirtualKey.R, VirtualKeyModifiers.Control, () => _ = Model.SyncAsync());
         Add(VirtualKey.L, VirtualKeyModifiers.Control, () => { if (Model.Selection is long s) Detail.LogPlay(s); });
         Add(VirtualKey.M, VirtualKeyModifiers.Control | VirtualKeyModifiers.Shift, () => { if (Model.Selection is long s) Model.MoveCopy = s; });
     }
