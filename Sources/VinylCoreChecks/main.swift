@@ -547,7 +547,7 @@ do {
     check(SQLValue.double(.nan).int == nil && SQLValue.double(1e300).int == nil && SQLValue.double(3.9).int == 3, "REAL→Int crasher ikke")
     let (s, url) = try freshStore("schema")
     defer { try? FileManager.default.removeItem(at: url) }
-    check(s.db.userVersion == 4, "skema v4")
+    check(s.db.userVersion == 5, "skema v5")
     _ = try s.applyCollection([item(1, 1, "O'Brien", "Robert'); DROP TABLE copies;--")])
     let reopened = try ShelfStore(path: url.path)
     check((try? reopened.loadLibrary())?.allItems.first?.title == "Robert'); DROP TABLE copies;--", "genåbning + strenge bindes sikkert")
@@ -561,7 +561,7 @@ do {
     try s.db.execute("DROP TABLE plays; PRAGMA user_version = 3;")
     let up = try ShelfStore(path: url.path)
     let cid = try up.loadLibrary().copies.keys.first!
-    check(up.db.userVersion == 4 && (try? up.logPlay(copyID: cid)) != nil, "migration v3→v4 opretter plays og bevarer kopier")
+    check(up.db.userVersion == 5 && (try? up.logPlay(copyID: cid)) != nil, "migration v3→v5 opretter plays og bevarer kopier")
 }
 
 // Søgning: Unicode og grænsetilfælde

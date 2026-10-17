@@ -131,11 +131,20 @@ public final class ShelfStore {
         if db.userVersion < 5 {
             // Cd'er: egne reoler (`locations.medium`) og brugerens eget valg pr. kopi.
             try db.transaction {
-            try db.execute("ALTER TABLE locations ADD COLUMN medium TEXT NOT NULL DEFAULT 'vinyl'")
-            try db.execute("ALTER TABLE copies ADD COLUMN medium_override TEXT")
+            // Kan køres igen uden fejl (fx når en ældre user_version er sat tilbage).
+            if !(try hasColumn("locations", "medium")) {
+                try db.execute("ALTER TABLE locations ADD COLUMN medium TEXT NOT NULL DEFAULT 'vinyl'")
+            }
+            if !(try hasColumn("copies", "medium_override")) {
+                try db.execute("ALTER TABLE copies ADD COLUMN medium_override TEXT")
+            }
             try db.execute("PRAGMA user_version = 5")
             }
         }
+    }
+
+    private func hasColumn(_ table: String, _ column: String) throws -> Bool {
+        try db.query("SELECT name FROM pragma_table_info(?)", table).contains { $0["name"]?.text == column }
     }
 
     // MARK: - Indlæsning
