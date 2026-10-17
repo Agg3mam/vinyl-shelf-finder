@@ -94,6 +94,12 @@ public sealed partial class MainWindow : Window
             case nameof(AppModel.MoveCopy):
                 if (Model.MoveCopy is long m) _ = ShowDialog(() => Dialogs.ShowMoveAsync(Model, m, Root.XamlRoot), () => Model.MoveCopy = null);
                 break;
+            case nameof(AppModel.CheckSection):
+                if (Model.CheckSection is long cs) _ = ShowDialog(() => new CheckShelf(Model, cs).RunAsync(Root.XamlRoot), () => Model.CheckSection = null);
+                break;
+            case nameof(AppModel.SyncReportToShow):
+                if (Model.SyncReportToShow is SyncReport rep) _ = ShowDialog(() => CheckShelf.ShowSyncReportAsync(Model, rep, Root.XamlRoot), () => Model.SyncReportToShow = null);
+                break;
             case nameof(AppModel.StatusNoteRequest):
                 if (Model.StatusNoteRequest is StatusNoteRequest r) _ = ShowDialog(() => Dialogs.ShowStatusNoteAsync(Model, r, Root.XamlRoot), () => Model.StatusNoteRequest = null);
                 break;
@@ -191,7 +197,9 @@ public sealed partial class MainWindow : Window
             {
                 int onShelf = lib.Sections.TryGetValue(loc.Id, out var ids)
                     ? ids.Count(id => lib.Copies.TryGetValue(id, out var c) && c.Status.IsOnShelf()) : 0;
-                items.Add(Item($"Sektion {loc.Section}", Ui.Glyph.Library, SidebarItem.ForSection(loc.Id), onShelf));
+                var secItem = Item($"Sektion {loc.Section}", Ui.Glyph.Library, SidebarItem.ForSection(loc.Id), onShelf);
+                secItem.ContextFlyout = SectionMenu(loc, shelf, onShelf == 0 && (!lib.Sections.TryGetValue(loc.Id, out var all) || all.Count == 0));
+                items.Add(secItem);
             }
         }
         items.Add(new NavigationViewItemSeparator());
@@ -201,6 +209,25 @@ public sealed partial class MainWindow : Window
         // En sektion, der ikke findes mere: tilbage til søgning.
         if (Model.Sidebar.Kind == SidebarKind.Section && lib.LocationById(Model.Sidebar.SectionId) is null)
             Model.Sidebar = SidebarItem.Search;
+    }
+
+    /// <summary>Højreklik på en sektion: Kontrollér, tilføj sektion, slet tom sektion.</summary>
+    private MenuFlyout SectionMenu(Location loc, int shelf, bool empty)
+    {
+        var menu = new MenuFlyout();
+        var check = new MenuFlyoutItem { Text = "Kontrollér sektion…" };
+        check.Click += (_, _) => Model.CheckSection = loc.Id;
+        menu.Items.Add(check);
+        var add = new MenuFlyoutItem { Text = $"Tilføj sektion i {loc.Medium.ShelfWord()} {shelf}" };
+        add.Click += (_, _) => Model.AddSection(shelf);
+        menu.Items.Add(add);
+        if (empty)
+        {
+            var del = new MenuFlyoutItem { Text = "Slet tom sektion" };
+            del.Click += (_, _) => Model.DeleteSection(loc.Id);
+            menu.Items.Add(del);
+        }
+        return menu;
     }
 
     private void SelectSidebar()

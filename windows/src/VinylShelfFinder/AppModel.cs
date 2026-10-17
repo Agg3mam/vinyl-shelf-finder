@@ -613,7 +613,15 @@ public sealed class AppModel : INotifyPropertyChanged
         OnChanged(nameof(NeedsOnboarding));
     }
 
-    public async Task SyncAsync()
+    /// <summary>Rapporten fra den seneste synkronisering; vises som dialog i hovedvinduet.</summary>
+    private SyncReport? _syncReport;
+    public SyncReport? SyncReportToShow { get => _syncReport; set => Set(ref _syncReport, value); }
+
+    /// <summary>"Kontrollér sektion": hovedvinduet viser kontrollen for denne sektion.</summary>
+    private long? _checkSection;
+    public long? CheckSection { get => _checkSection; set => Set(ref _checkSection, value); }
+
+    public async Task SyncAsync(bool showReport = true)
     {
         if (SyncState.Phase == SyncPhase.Running || IsDemo) return;
         string? token = null;
@@ -636,6 +644,7 @@ public sealed class AppModel : INotifyPropertyChanged
             var report = Store.ApplyCollection(items);
             SyncState = SyncState.Idle;
             Reload();
+            if (showReport && Library.Locations.Count > 0) SyncReportToShow = report;
             if (report.NewCopies.Count > 0 && Library.Locations.Count > 0) Sidebar = new SidebarItem(SidebarKind.NewRecords);
         }
         catch (Exception ex)

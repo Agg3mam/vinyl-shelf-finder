@@ -140,7 +140,7 @@ public sealed class OnboardingView : IPane
         if (await _model.ConnectAsync(_token.Password))
         {
             _token.Password = "";
-            await _model.SyncAsync();
+            await _model.SyncAsync(showReport: false);
         }
         _busy = false;
         Rebuild();
@@ -158,15 +158,15 @@ public sealed class OnboardingView : IPane
                 break;
             case SyncPhase.Failed:
                 row.Children.Add(Ui.Text(s.Message ?? "", color: Ui.ThemeBrush("SystemFillColorCriticalBrush")));
-                row.Children.Add(Ui.Btn("Prøv igen", async (_, _) => await _model.SyncAsync()));
+                row.Children.Add(Ui.Btn("Prøv igen", async (_, _) => await _model.SyncAsync(showReport: false)));
                 break;
             default:
                 if (_model.Library.Copies.Count == 0)
-                    row.Children.Add(Ui.Btn("Hent samlingen", async (_, _) => await _model.SyncAsync(), accent: true));
+                    row.Children.Add(Ui.Btn("Hent samlingen", async (_, _) => await _model.SyncAsync(showReport: false), accent: true));
                 else
                 {
                     row.Children.Add(Ui.Text($"Din samling indeholder {_model.Library.Copies.Count} {_model.Medium.Plural()}.", wrap: false));
-                    if (!_model.IsDemo) row.Children.Add(Ui.Btn("Hent igen", async (_, _) => await _model.SyncAsync()));
+                    if (!_model.IsDemo) row.Children.Add(Ui.Btn("Hent igen", async (_, _) => await _model.SyncAsync(showReport: false)));
                 }
                 break;
         }
