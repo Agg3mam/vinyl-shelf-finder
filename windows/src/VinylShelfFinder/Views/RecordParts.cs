@@ -128,12 +128,14 @@ public static class RecordParts
         text.Children.Add(Ui.Text(item.Title, "BodyStrongTextBlockStyle", maxLines: 2));
         Grid.SetColumn(text, 1);
         grid.Children.Add(text);
+        // Detaljelinjen kun når der er plads: kunstner og titel har forrang.
         var detail = Ui.Text(item.DetailLine, "CaptionTextBlockStyle", Ui.Tertiary, wrap: false, maxLines: 1);
         detail.MaxWidth = 180;
         detail.VerticalAlignment = VerticalAlignment.Center;
         detail.TextAlignment = TextAlignment.Right;
         Grid.SetColumn(detail, 2);
         grid.Children.Add(detail);
+        grid.SizeChanged += (_, e) => detail.Visibility = e.NewSize.Width < 460 ? Visibility.Collapsed : Visibility.Visible;
         var b = new Button
         {
             Content = grid,

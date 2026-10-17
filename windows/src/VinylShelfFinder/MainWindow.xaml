@@ -40,7 +40,7 @@
                     <RowDefinition Height="*" />
                 </Grid.RowDefinitions>
                 <Grid.ColumnDefinitions>
-                    <ColumnDefinition x:Name="ListColumn" Width="420" />
+                    <ColumnDefinition x:Name="ListColumn" Width="360" />
                     <ColumnDefinition Width="*" />
                 </Grid.ColumnDefinitions>
                 <Grid x:Name="TopBar" Grid.ColumnSpan="2" />

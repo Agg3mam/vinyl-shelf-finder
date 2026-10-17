@@ -183,7 +183,8 @@ public sealed class SearchPane : IPane
 
     private void UpdateEmpty()
     {
-        _clear.Visibility = _model.Query.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
+        // TextBox har selv et ryd-kryds; vores egen knap bruges ikke (to kryds så forkert ud).
+        _clear.Visibility = Visibility.Collapsed;
         _emptyHost.Children.Clear();
         var q = _model.Query.Trim();
         if (_model.Query.Length == 0)

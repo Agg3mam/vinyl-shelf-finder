@@ -51,6 +51,7 @@ public sealed partial class MainWindow : Window
         TopBar.Children.Add(_errorBar);
         _errorBar.Closed += (_, _) => Model.ErrorMessage = null;
         Nav.FooterMenuItems.Add(_updateItem);
+        Nav.Loaded += (_, _) => { if (Nav.SettingsItem is NavigationViewItem si) si.Content = "Indstillinger"; };
 
         _updater.Changed += ShowUpdateState;
         Model.PropertyChanged += OnModelChanged;
