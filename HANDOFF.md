@@ -265,6 +265,33 @@ første udgivelse (fx v1.0.0, efter brugerens ja), og byg resten af Windows-skæ
 Lytning, Lyttelog, Find nye plader med WebView2, iMusic, Cover Flow, Historik, Indstillinger,
 skiftet Plader/Cd'er) med højst to agenter ad gangen.
 
+### 17. okt (session 2): Windows-skærmene (gren `claude/windows-skaerme`)
+
+Bygger oven på `claude/opdatering` + `claude/windows-ui`. Alle Mac-skærmene er oversat til WinUI 3
+(bygget i C#, ikke XAML, i `windows/src/VinylShelfFinder/Views/`): søg, plade-detalje (med prislinje og
+iMusic), Find i reolen og "Sæt tilbage" (lag over vinduet: `FindOverlay`), Flyt og navn/sted
+(`Dialogs`), Nye/Fjernet/Ude af reolen, sektioner (højreklik: Kontrollér, Tilføj, Slet tom),
+Cover Flow (`CoverFlowPane`, PlaneProjection), Kom i gang (`OnboardingView`), skiftet Plader/Cd'er og
+Synkronisér i værktøjslinjen, Historik med Fortryd, Hvad skal jeg høre?, Lyttelog, Værdi,
+Indstillinger (Discogs, Sortering, Reol, iMusic, Sikkerhedskopi, Opdatering), Kontrollér sektion og
+synkroniseringsrapport (`CheckShelf`), Find nye plader (`FindNewModel` + `FindNewPanes`), Discogs-
+vinduet (`DiscogsBrowserWindow`, WebView2, ingen scripts, data i %LOCALAPPDATA%\VinylShelfFinder\WebView2),
+iMusic (`IMusicModel`, feed-URL i Legitimationsadministrator), reolskilte som HTML med QR (`LabelsPrint`,
+pakken QRCoder 1.6.0) og daglig sikkerhedskopi.
+
+- `--demo` bruger demo.sqlite og intet net. CI kører `--demo --smoke` og gemmer billeder af hver skærm
+  (01-start … 12-find-nye-plader) på grenen `ci-snapshots-windows`.
+- **Lokal oversættelse uden Windows:** installér .NET 8 (dotnet-install.sh) og byg et hjælpeprojekt, der
+  inkluderer `VinylShelfFinder/**/*.cs` + referencer til WindowsAppSDK's `lib/net6.0-windows10.0.18362.0/*.dll`
+  og WebView2's `lib_manual/.../Microsoft.Web.WebView2.Core.Projection.dll`, med `EnableWindowsTargeting`,
+  `AllowUnsafeBlocks` og en stub-fil med de felter, XAML ellers genererer (Root, Nav, ListHost …).
+  Det fanger næsten alle fejl før CI.
+- Ikke lavet på Windows: `vinylshelf://`-adresser (QR-koder åbner ikke appen), mobilsiden (heller ikke
+  færdig på Mac). Ikke afprøvet på en rigtig Windows-pc: Discogs-login/køb i WebView2, iMusic-feed,
+  opdatering via "Opdatér nu".
+- Ingen af grenene er merget. Første udgivelse (v1.0.0) venter på, at brugeren laver den på GitHub
+  (sessionen må ikke skubbe tags).
+
 ### Ikke færdigt / næste skridt (spørg brugeren om rækkefølgen)
 
 1. **Mobilside via iPhone-hotspot (opgave 1)**, så QR-koderne virker. Det er det største åbne punkt.
