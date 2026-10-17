@@ -237,11 +237,17 @@ public sealed partial class MainWindow : Window
 
     private bool _settingsShown;
 
+    private SettingsPane? _settings;
+
     private void ShowSettings()
     {
         _settingsShown = true;
-        ShowFull(Ui.Empty(Ui.Glyph.Library, "Indstillinger", "Indstillingerne kommer i en senere version."));
+        _settings ??= new SettingsPane(Model, _updater);
+        ShowFull(_settings);
     }
+
+    /// <summary>Åbner Indstillinger (fx fra "Opdatering" i sidepanelet).</summary>
+    internal void OpenSettings() => Nav.SelectedItem = Nav.SettingsItem;
 
     private sealed class StaticPane(FrameworkElement view) : IPane
     {
@@ -351,6 +357,7 @@ public sealed partial class MainWindow : Window
             Model.Sidebar = SidebarItem.Search;
             Model.RequestSearchFocus();
         });
+        Add(VirtualKey.P, VirtualKeyModifiers.Control, () => { if (Model.Library.Locations.Count > 0) _ = LabelsPrint.ExportAsync(Model); });
         Add(VirtualKey.R, VirtualKeyModifiers.Control, () => _ = Model.SyncAsync());
         Add(VirtualKey.L, VirtualKeyModifiers.Control, () => { if (Model.Selection is long s) Detail.LogPlay(s); });
         Add(VirtualKey.M, VirtualKeyModifiers.Control | VirtualKeyModifiers.Shift, () => { if (Model.Selection is long s) Model.MoveCopy = s; });

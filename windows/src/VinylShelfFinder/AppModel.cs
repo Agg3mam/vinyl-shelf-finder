@@ -364,6 +364,67 @@ public sealed class AppModel : INotifyPropertyChanged
         Move(copy, from, pos - 1);
     }
 
+    // MARK: Reol
+
+    public void AddSection(int shelf)
+    {
+        int existing = Library.Locations.Count(l => l.Shelf == shelf);
+        Perform(() => Store.AddSection(shelf, LayoutPlanner.SectionLetter(existing), Medium));
+    }
+
+    public void DeleteSection(long id)
+    {
+        if (Sidebar == SidebarItem.ForSection(id)) Sidebar = SidebarItem.Search;
+        Perform(() => Store.DeleteEmptySection(id));
+    }
+
+    public DateTimeOffset? LastSync =>
+        double.TryParse(Store.Setting("last_sync"), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var t)
+            ? DateTimeOffset.FromUnixTimeMilliseconds((long)(t * 1000)) : null;
+
+    // MARK: Sikkerhedskopi (én gang om dagen, se DatabaseBackup)
+
+    public string BackupFolder { get; } = DatabaseBackup.DefaultFolder();
+
+    private DateTimeOffset? _lastBackup;
+    public DateTimeOffset? LastBackup { get => _lastBackup; private set => Set(ref _lastBackup, value); }
+
+    private string? _backupError;
+    public string? BackupError { get => _backupError; private set => Set(ref _backupError, value); }
+
+    /// <summary>Ved start og derefter hver time: tag dagens kopi, hvis den mangler. Aldrig i demo.</summary>
+    public void StartBackups()
+    {
+        if (IsDemo) return;
+        try { LastBackup = DatabaseBackup.Latest(BackupFolder); } catch { }
+        BackupIfDue();
+        var timer = _dispatcher?.CreateTimer();
+        if (timer is null) return;
+        timer.Interval = TimeSpan.FromHours(1);
+        timer.Tick += (_, _) => BackupIfDue();
+        timer.Start();
+    }
+
+    private void BackupIfDue()
+    {
+        if (DatabaseBackup.IsDue(LastBackup)) BackupNow();
+    }
+
+    public void BackupNow()
+    {
+        if (IsDemo) return;
+        try
+        {
+            DatabaseBackup.Run(Store, BackupFolder);
+            LastBackup = DateTimeOffset.Now;
+            BackupError = null;
+        }
+        catch (Exception ex)
+        {
+            BackupError = Describe(ex);
+        }
+    }
+
     // MARK: Værdi
 
     private Dictionary<int, MarketInfo> _market = new();

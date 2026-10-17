@@ -44,13 +44,17 @@ public partial class App : Application
         // Demo og CI's smoke-test henter hverken covers eller opdateringer fra nettet.
         Ui.AllowNetworkCovers = !demo && _smokeDir is null;
         var updater = new Updater(enabled: _smokeDir is null && !demo);
-        _window = new MainWindow(updater, new AppModel(demo));
+        var model = new AppModel(demo);
+        _window = new MainWindow(updater, model);
         _window.Activate();
 
         if (_smokeDir is not null)
             _ = RunSmokeAsync(_smokeDir);
         else
+        {
+            model.StartBackups();
             _ = _window.CheckForUpdateOnLaunchAsync();
+        }
     }
 
     private async Task RunSmokeAsync(string dir)
@@ -107,6 +111,8 @@ public partial class App : Application
                 await Shot("10-vaerdi.png");
                 m.Sidebar = new SidebarItem(SidebarKind.History);
                 await Shot("09-historik.png");
+                _window.OpenSettings();
+                await Shot("11-indstillinger.png");
             }
             if (m.ErrorMessage is string err) errors.Add("Fejl i appen: " + err);
             if (errors.Count > 0) TryWrite(Path.Combine(dir, "screenshot-error.txt"), string.Join("\n\n", errors));
