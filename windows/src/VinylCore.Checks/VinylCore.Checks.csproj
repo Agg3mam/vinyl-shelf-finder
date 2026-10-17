@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Selvtest af kernelogikken (samme idé som VinylCoreChecks på Mac). Kør: dotnet run, projekt src/VinylCore.Checks -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <RootNamespace>VinylShelfFinder.Checks</RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\VinylCore\VinylCore.csproj" />
+  </ItemGroup>
+</Project>
