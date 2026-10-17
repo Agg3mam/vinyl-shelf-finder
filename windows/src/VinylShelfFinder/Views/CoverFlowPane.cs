@@ -144,7 +144,7 @@ public sealed class CoverFlowPane
         int onShelf = _model.Library.OnShelfCount(_locationId);
         TextBlock Center(TextBlock t) { t.HorizontalAlignment = HorizontalAlignment.Center; t.TextAlignment = TextAlignment.Center; return t; }
         _caption.Children.Add(Center(Ui.Text(it.Title, "SubtitleTextBlockStyle", wrap: false)));
-        _caption.Children.Add(Center(Ui.Text(it.Artist, "BodyLargeTextBlockStyle", Ui.Secondary, wrap: false)));
+        _caption.Children.Add(Center(Ui.Text(it.Artist, "BodyTextBlockStyle", Ui.Secondary, wrap: false, size: 18)));
         _caption.Children.Add(Center(Ui.Text(numbers.TryGetValue(it.Id, out var n) ? $"Nr. {n} af {onShelf}" : it.AwayMessage() ?? "Ude af reolen",
             "BodyTextBlockStyle", Ui.Tertiary, wrap: false)));
         var find = Ui.Btn("Find i reolen", (_, _) => _model.FindModeCopy = it.Id, Ui.Glyph.Pin, accent: true, tooltip: "Find i reolen (Enter)");

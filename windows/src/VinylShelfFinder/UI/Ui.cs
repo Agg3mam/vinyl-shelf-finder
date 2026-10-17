@@ -126,7 +126,8 @@ public static class Ui
         var t = new TextBlock
         {
             Text = text,
-            Style = Res<Style>(style),
+            // En ukendt stil må aldrig få appen til at gå ned: brug brødtekst i stedet.
+            Style = Application.Current.Resources.TryGetValue(style, out var st) && st is Style found ? found : Res<Style>("BodyTextBlockStyle"),
             TextWrapping = wrap ? TextWrapping.WrapWholeWords : TextWrapping.NoWrap,
             TextTrimming = TextTrimming.CharacterEllipsis,
             MaxLines = maxLines,
