@@ -1,0 +1,34 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.0.31903.59
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "src", "src", "{66FDEDFF-632D-4C52-A150-02518694B32E}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "VinylCore", "src\VinylCore\VinylCore.csproj", "{67B0B3A2-4B2F-449A-A25F-9498F681267F}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "VinylCore.Checks", "src\VinylCore.Checks\VinylCore.Checks.csproj", "{D2AF052E-E689-4A30-9EB4-E164E85F4C01}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{67B0B3A2-4B2F-449A-A25F-9498F681267F}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{67B0B3A2-4B2F-449A-A25F-9498F681267F}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{67B0B3A2-4B2F-449A-A25F-9498F681267F}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{67B0B3A2-4B2F-449A-A25F-9498F681267F}.Release|Any CPU.Build.0 = Release|Any CPU
+		{D2AF052E-E689-4A30-9EB4-E164E85F4C01}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{D2AF052E-E689-4A30-9EB4-E164E85F4C01}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{D2AF052E-E689-4A30-9EB4-E164E85F4C01}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{D2AF052E-E689-4A30-9EB4-E164E85F4C01}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(NestedProjects) = preSolution
+		{67B0B3A2-4B2F-449A-A25F-9498F681267F} = {66FDEDFF-632D-4C52-A150-02518694B32E}
+		{D2AF052E-E689-4A30-9EB4-E164E85F4C01} = {66FDEDFF-632D-4C52-A150-02518694B32E}
+	EndGlobalSection
+EndGlobal
