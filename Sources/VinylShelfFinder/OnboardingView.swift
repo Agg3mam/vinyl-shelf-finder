@@ -207,7 +207,7 @@ struct LayoutStep: View {
                     ForEach(plan.indices, id: \.self) { i in
                         let start = ranges[i], end = start + plan[i].count
                         HStack(alignment: .top) {
-                            Text("Reol \(plan[i].shelf) · \(plan[i].section)")
+                            Text("\(model.medium == .vinyl ? "Reol" : "Cd") \(plan[i].shelf) · \(plan[i].section)")
                                 .font(.callout.weight(.semibold)).frame(width: 90, alignment: .leading)
                             // Grænsekontrol: bindingen kan blive læst for en række, der lige er
                             // fjernet (færre reoler/sektioner), og så ville `plan[i]` crashe.
@@ -231,13 +231,13 @@ struct LayoutStep: View {
             }
 
             HStack {
-                Text("\(model.medium.title) \(rangeText()) – i alt \(items.count).")
+                Text("\(model.medium == .vinyl ? "Plader " : "")\(rangeText()) – i alt \(items.count).")
                     .font(.caption).foregroundStyle(.secondary)
                 Spacer()
                 if model.forceOnboarding {
                     Button("Annullér") { model.forceOnboarding = false }
                 }
-                Button("Opret reol") {
+                Button(model.medium == .vinyl ? "Opret reol" : "Opret cd-reol") {
                     if model.library.locations.isEmpty { model.createLayout(plan) } else { confirmReplace = true }
                 }
                 .buttonStyle(.borderedProminent)

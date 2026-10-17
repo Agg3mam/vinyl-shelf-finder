@@ -235,7 +235,7 @@ private struct FindPlacement: View {
                 LocationPanel(location: loc, position: position, count: n.sectionCount,
                               title: putBack ? "Sæt den her" : (away ? "Her plejer den at stå" : "Gå til"),
                               hint: putBack ? adv.placementHint
-                                  : "\(away ? "Plads" : "Plade") \(position) af \(n.sectionCount) fra venstre",
+                                  : "\(away ? "Plads" : loc.medium.singular.capitalized) \(position) af \(n.sectionCount) fra venstre",
                               tone: tone)
                 HStack(alignment: .top, spacing: Spacing.l) {
                     ReferenceBlock(title: "Find først", ref: adv.primary)
@@ -294,7 +294,7 @@ struct PlacementLine: View {
                 .symbolRenderingMode(.monochrome)
                 .foregroundStyle(tone.accent)
                 .accessibilityHidden(true)
-            Text("Reol \(location.shelf)")
+            Text("\(location.medium.shelfWord) \(location.shelf)")
             Image(systemName: "chevron.right")
                 .imageScale(.small)
                 .fontWeight(.semibold)
@@ -538,13 +538,13 @@ struct MoveSheet: View {
     var body: some View {
         VStack(alignment: .leading, spacing: Spacing.m) {
             if let it = model.library.item(copyID) {
-                Text("Flyt plade").font(.title2.weight(.bold))
+                Text("Flyt \(it.medium.singular)").font(.title2.weight(.bold))
                 Text(it.fullName).font(.headline)
                 if let from = model.library.location(of: copyID), let pos = model.library.neighbors(of: copyID)?.position {
                     // Fysisk nummer, som i sektionslisten (plader, der er ude, tæller ikke med).
                     Text(model.isAway(copyID)
                          ? "Hører til: \(from.name), plads \(pos) fra venstre (står ikke i reolen nu)"
-                         : "Står nu: \(from.name), plade \(pos) fra venstre").foregroundStyle(.secondary)
+                         : "Står nu: \(from.name), \(from.medium.singular) \(pos) fra venstre").foregroundStyle(.secondary)
                 } else {
                     Text("Står nu: ikke placeret i reolen").foregroundStyle(.secondary)
                 }
@@ -991,7 +991,7 @@ struct HistoryText {
 
         func place(_ loc: Int64?, _ pos: Int?) -> String? {
             guard let loc, let l = library.location(loc) else { return nil }
-            return pos.map { "\(l.name), plade \($0)" } ?? l.name
+            return pos.map { "\(l.name), \(l.medium.singular) \($0)" } ?? l.name
         }
         let from = place(e.fromLocationID, e.fromPosition), to = place(e.toLocationID, e.toPosition)
 

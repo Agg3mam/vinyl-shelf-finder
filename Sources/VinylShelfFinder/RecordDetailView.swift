@@ -149,7 +149,7 @@ private struct DetailLocationPanel: View {
                 PlacementLine(location: location, tone: tone).font(Typo.locationCompact)
             }
             ShelfSpines(position: position, count: count, accent: tone.accent)
-            Text("\(away ? "Plads" : "Plade") \(position) af \(count) fra venstre")
+            Text("\(away ? "Plads" : location.medium.singular.capitalized) \(position) af \(count) fra venstre")
                 .font(.callout.monospacedDigit()).foregroundStyle(Ink.secondary)
         }
         .padding(Spacing.panelInset)
