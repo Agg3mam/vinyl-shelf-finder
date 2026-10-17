@@ -1,0 +1,120 @@
+name: Windows
+
+# Bygger Windows-versionen hos GitHub (ingen Windows-maskine nødvendig):
+# VinylCore + selvtest, udgiver WinUI-appen som selvstændig mappe, zipper den,
+# starter den med --smoke (beviser at den starter) og gemmer et billede af vinduet.
+# På et tag v* lægges zip'en også på en GitHub Release.
+on:
+  push:
+    branches-ignore: [ci-snapshots, ci-snapshots-windows, design-retning-*]
+    tags: ['v*']
+  workflow_dispatch:
+
+# contents: write: Release ved tags + billedet på grenen ci-snapshots-windows.
+permissions:
+  contents: write
+
+concurrency:
+  group: windows-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    timeout-minutes: 40
+    defaults:
+      run:
+        shell: pwsh
+        working-directory: windows
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: |
+            windows
+            .github
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: windows/global.json
+      - name: Vis værktøjer
+        run: |
+          dotnet --info
+          [System.Environment]::OSVersion
+
+      - name: Byg VinylCore og kør checks
+        run: dotnet run -c Release --project src/VinylCore.Checks/VinylCore.Checks.csproj
+
+      - name: Udgiv Windows-appen
+        run: >
+          dotnet publish src/VinylShelfFinder/VinylShelfFinder.csproj
+          -c Release -r win-x64 --self-contained true
+          -p:Platform=x64
+          -p:WindowsPackageType=None
+          -p:WindowsAppSDKSelfContained=true
+          -p:PublishReadyToRun=false
+          -o ${{ github.workspace }}/publish/VinylShelfFinder
+
+      - name: Zip
+        working-directory: ${{ github.workspace }}
+        run: |
+          Get-ChildItem publish/VinylShelfFinder | Select-Object Name, Length | Format-Table -AutoSize | Out-String -Width 200
+          Compress-Archive -Path publish/VinylShelfFinder -DestinationPath VinylShelfFinder-Windows-x64.zip -Force
+          "{0:N1} MB" -f ((Get-Item VinylShelfFinder-Windows-x64.zip).Length / 1MB)
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: VinylShelfFinder-Windows-x64
+          path: VinylShelfFinder-Windows-x64.zip
+          retention-days: 14
+
+      # Start den udgivne exe fra en udpakket kopi af zip'en (som en bruger ville gøre).
+      - name: Smoke (appen starter)
+        working-directory: ${{ github.workspace }}
+        run: |
+          $dir = Join-Path $env:RUNNER_TEMP 'unzipped'
+          Expand-Archive VinylShelfFinder-Windows-x64.zip -DestinationPath $dir -Force
+          $out = Join-Path $env:GITHUB_WORKSPACE 'snapshots-windows'
+          New-Item -ItemType Directory -Force $out | Out-Null
+          $exe = Join-Path $dir 'VinylShelfFinder\VinylShelfFinder.exe'
+          $p = Start-Process -FilePath $exe -ArgumentList '--smoke', "`"$out`"" -PassThru
+          if (-not $p.WaitForExit(90000)) { Stop-Process -Id $p.Id -Force; Write-Host '::error::Appen lukkede ikke inden for 90 s' }
+          Get-ChildItem $out | Format-Table Name, Length
+          if (Test-Path "$out\smoke-error.txt") { Get-Content "$out\smoke-error.txt" }
+          if (Test-Path "$out\screenshot-error.txt") { Get-Content "$out\screenshot-error.txt" }
+          Write-Host "Exit code: $($p.ExitCode)"
+          if (-not (Test-Path "$out\smoke-ok.txt") -or (Get-Content "$out\smoke-ok.txt" -Raw).Trim() -ne 'OK') {
+            Get-WinEvent -LogName Application -MaxEvents 20 -ErrorAction SilentlyContinue | Where-Object { $_.LevelDisplayName -eq 'Error' } | Format-List TimeCreated, ProviderName, Message
+            throw 'Smoke fejlede: smoke-ok.txt mangler'
+          }
+
+      - name: Gem billede
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: snapshots-windows
+          path: snapshots-windows
+          if-no-files-found: warn
+          retention-days: 7
+
+      # Billedet lægges også på grenen ci-snapshots-windows (overskrives hver gang),
+      # så det kan hentes med git: git clone -b ci-snapshots-windows <repo>
+      - name: Læg billede på grenen ci-snapshots-windows
+        if: always() && github.ref_type == 'branch'
+        continue-on-error: true
+        working-directory: ${{ github.workspace }}
+        shell: bash
+        run: |
+          [ -d snapshots-windows ] && [ -n "$(ls snapshots-windows)" ] || exit 0
+          cd snapshots-windows
+          git init -q -b ci-snapshots-windows
+          git config user.name "github-actions[bot]"
+          git config user.email "41898099+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -q -m "Windows-billede fra ${GITHUB_REF_NAME} @ ${GITHUB_SHA::7}"
+          git push -q -f "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" ci-snapshots-windows
+
+      - name: Release (kun tags v*)
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: VinylShelfFinder-Windows-x64.zip
+          fail_on_unmatched_files: true

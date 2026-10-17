@@ -9,6 +9,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "VinylCore", "src\VinylCore\
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "VinylCore.Checks", "src\VinylCore.Checks\VinylCore.Checks.csproj", "{D2AF052E-E689-4A30-9EB4-E164E85F4C01}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "VinylShelfFinder", "src\VinylShelfFinder\VinylShelfFinder.csproj", "{05AAE6B2-8993-4290-AF5C-5164AA6A9E21}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -26,9 +28,14 @@ Global
 		{D2AF052E-E689-4A30-9EB4-E164E85F4C01}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{D2AF052E-E689-4A30-9EB4-E164E85F4C01}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{D2AF052E-E689-4A30-9EB4-E164E85F4C01}.Release|Any CPU.Build.0 = Release|Any CPU
+		{05AAE6B2-8993-4290-AF5C-5164AA6A9E21}.Debug|Any CPU.ActiveCfg = Debug|x64
+		{05AAE6B2-8993-4290-AF5C-5164AA6A9E21}.Debug|Any CPU.Build.0 = Debug|x64
+		{05AAE6B2-8993-4290-AF5C-5164AA6A9E21}.Release|Any CPU.ActiveCfg = Release|x64
+		{05AAE6B2-8993-4290-AF5C-5164AA6A9E21}.Release|Any CPU.Build.0 = Release|x64
 	EndGlobalSection
 	GlobalSection(NestedProjects) = preSolution
 		{67B0B3A2-4B2F-449A-A25F-9498F681267F} = {66FDEDFF-632D-4C52-A150-02518694B32E}
 		{D2AF052E-E689-4A30-9EB4-E164E85F4C01} = {66FDEDFF-632D-4C52-A150-02518694B32E}
+		{05AAE6B2-8993-4290-AF5C-5164AA6A9E21} = {66FDEDFF-632D-4C52-A150-02518694B32E}
 	EndGlobalSection
 EndGlobal
