@@ -17,8 +17,12 @@ public struct Library {
     public let indexInSection: [Int64: Int]
     /// Kopier uden fysisk placering (typisk nye fra Discogs).
     public let unplaced: [Int64]
+    /// Plader eller cd'er. Styrer ordene i Find-teksterne ("din plade" / "din cd").
+    public let medium: Medium
 
-    public init(releases: [Int: Release], copies: [Int64: Copy], locations: [Location], placements: [(copyID: Int64, locationID: Int64, position: Int)]) {
+    public init(releases: [Int: Release], copies: [Int64: Copy], locations: [Location],
+                placements: [(copyID: Int64, locationID: Int64, position: Int)], medium: Medium = .vinyl) {
+        self.medium = medium
         self.releases = releases
         self.copies = copies
         let locs = locations.sorted { ($0.sortIndex, $0.id) < ($1.sortIndex, $1.id) }
@@ -216,6 +220,8 @@ public struct Library {
         let target = n.target
         let targetArtist = target.artist
         let before = n.before.first, after = n.after.first
+        let word = medium.singular, words = medium.plural
+        let capWord = medium.singular.prefix(1).uppercased() + medium.singular.dropFirst()
 
         // Kunstnerblok: hvor mange plader af samme kunstner står i træk omkring målet?
         // Der tælles kun plader, der fysisk står i reolen (plus målet selv), ellers bliver
@@ -242,14 +248,14 @@ public struct Library {
         // leftOf: pladen står til venstre for målet. rightOf: til højre for målet.
         func leftOf(_ it: RecordItem) -> String {
             putBack ? "Sæt den lige til højre for \(Self.sentenceEnd(called(it)))"
-                    : "\(called(it, first: true)) står lige til venstre for din plade."
+                    : "\(called(it, first: true)) står lige til venstre for din \(word)."
         }
         func rightOf(_ it: RecordItem) -> String {
             putBack ? "Sæt den lige til venstre for \(Self.sentenceEnd(called(it)))"
-                    : "\(called(it, first: true)) står lige til højre for din plade."
+                    : "\(called(it, first: true)) står lige til højre for din \(word)."
         }
-        let atLeftEdge = putBack ? "Sæt den yderst til venstre i sektionen." : "Din plade står yderst til venstre i sektionen."
-        let atRightEdge = putBack ? "Sæt den yderst til højre i sektionen." : "Din plade står yderst til højre i sektionen."
+        let atLeftEdge = putBack ? "Sæt den yderst til venstre i sektionen." : "Din \(word) står yderst til venstre i sektionen."
+        let atRightEdge = putBack ? "Sæt den yderst til højre i sektionen." : "Din \(word) står yderst til højre i sektionen."
         let otherArtist = "Det er en anden kunstner, så den er let at få øje på."
 
         var primary: Reference
@@ -275,11 +281,11 @@ public struct Library {
                 // (en anden kunstner eller sektionens kant). Det er den eneste tælleinstruktion.
                 countsInPrimary = true
                 let fromStart = sIdx - blockStart, fromEnd = blockEnd - sIdx
-                let among = putBack ? "Din plade skal stå blandt \(blockSize) \(targetArtist)-plader i træk."
-                                    : "Din plade står blandt \(blockSize) \(targetArtist)-plader i træk."
+                let among = putBack ? "Din \(word) skal stå blandt \(blockSize) \(targetArtist)-\(words) i træk."
+                                    : "Din \(word) står blandt \(blockSize) \(targetArtist)-\(words) i træk."
                 func count(_ nr: Int, _ side: String, _ it: RecordItem) -> String {
-                    putBack ? "din plade skal stå som nr. \(nr), lige til \(side) for \(Self.sentenceEnd(called(it)))"
-                            : "din plade er nr. \(nr), lige til \(side) for \(Self.sentenceEnd(called(it)))"
+                    putBack ? "din \(word) skal stå som nr. \(nr), lige til \(side) for \(Self.sentenceEnd(called(it)))"
+                            : "din \(word) er nr. \(nr), lige til \(side) for \(Self.sentenceEnd(called(it)))"
                 }
                 if fromStart <= fromEnd {
                     let start = blockStart > 0
@@ -311,8 +317,8 @@ public struct Library {
             let side = sIdx == blockStart ? "venstre" : sIdx == blockEnd ? "højre" : nil
             if let side {
                 blockHint = putBack
-                    ? "Din plade skal stå længst til \(side) blandt \(blockSize) \(targetArtist)-plader i træk."
-                    : "Der står \(blockSize) \(targetArtist)-plader i træk, og din plade er den længst til \(side)."
+                    ? "Din \(word) skal stå længst til \(side) blandt \(blockSize) \(targetArtist)-\(words) i træk."
+                    : "Der står \(blockSize) \(targetArtist)-\(words) i træk, og din \(word) er den længst til \(side)."
             }
         }
 
@@ -326,7 +332,7 @@ public struct Library {
         let edgeHint: String? = edge.isEmpty ? nil : edge.joined(separator: " ")
 
         // Fysiske tal: talt blandt pladerne i reolen, med målpladen selv.
-        let placementHint = "\(putBack ? "Plads" : "Plade") \(position) af \(n.sectionCount) fra venstre"
+        let placementHint = "\(putBack ? "Plads" : capWord) \(position) af \(n.sectionCount) fra venstre"
         return ReferenceAdvice(primary: primary, secondary: secondary, artistBlockHint: blockHint,
                                placementHint: placementHint, sectionEdgeHint: edgeHint)
     }

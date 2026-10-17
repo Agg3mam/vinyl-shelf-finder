@@ -251,6 +251,8 @@ struct StatusMenu: View {
     var body: some View {
         Menu {
             StatusChoices(copyID: item.id)
+            Divider()
+            MediumChoice(copyID: item.id)
         } label: {
             // En plade uden plads i reolen er ikke "På plads", selv om status er standard.
             if item.copy.status == .home && model.library.locationOfCopy[item.id] == nil {

@@ -158,18 +158,29 @@ struct ShelfSettings: View {
     @Environment(AppModel.self) private var model
 
     var body: some View {
+        @Bindable var model = model
         Form {
+            if model.showsMediumPicker {
+                Section {
+                    Picker("Hylde", selection: $model.medium) {
+                        ForEach(Medium.allCases) { Text($0.title).tag($0) }
+                    }
+                    .pickerStyle(.segmented)
+                } footer: {
+                    Text("Plader og cd'er har hver deres reoler. Ændringerne herunder gælder den valgte hylde.")
+                }
+            }
             Section("Struktur") {
                 ForEach(model.library.shelves, id: \.self) { shelf in
                     let secs = model.library.locations.filter { $0.shelf == shelf }
                     HStack {
-                        Text("Reol \(shelf)")
+                        Text("\(model.medium.shelfWord) \(shelf)")
                         Spacer()
                         Text(secs.map(\.section).joined(separator: ", ")).foregroundStyle(.secondary)
                         Button { model.addSection(shelf: shelf) } label: { Label("Sektion", systemImage: "plus") }
                     }
                 }
-                Button { model.addSection(shelf: (model.library.shelves.last ?? 0) + 1) } label: { Label("Ny reol", systemImage: "plus") }
+                Button { model.addSection(shelf: (model.library.shelves.last ?? 0) + 1) } label: { Label(model.medium == .vinyl ? "Ny reol" : "Ny cd-reol", systemImage: "plus") }
             }
             Section {
                 Button { model.exportLabels() } label: { Label("Udskriv reolskilte med QR-kode… (⌘P)", systemImage: "qrcode") }

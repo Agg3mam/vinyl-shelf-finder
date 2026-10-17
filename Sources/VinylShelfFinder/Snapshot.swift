@@ -115,6 +115,21 @@ enum Snapshotter {
         model.forceOnboarding = true
         render(ContentView().appRoot().environment(model), size: CGSize(width: 1000, height: 900), to: dir.appendingPathComponent("6-onboarding.png"))
         model.forceOnboarding = false
+
+        // Cd-hylden: egne reoler, samme skærme. Skiftet sættes tilbage til pladerne bagefter.
+        model.medium = .cd
+        if let loc = model.library.locations.first {
+            model.sidebar = .section(loc.id)
+            model.selection = model.library.sections[loc.id]?.dropFirst().first
+            render(MainView().appRoot().environment(model), size: CGSize(width: 1280, height: 820), to: dir.appendingPathComponent("14-cd-sektion.png"))
+            if let id = model.selection {
+                renderSwiftUI(FindModeView(copyID: id).environment(model), size: CGSize(width: 640, height: 640),
+                              to: dir.appendingPathComponent("14b-cd-find.png"))
+            }
+        }
+        model.forceOnboarding = true
+        render(ContentView().appRoot().environment(model), size: CGSize(width: 1000, height: 900), to: dir.appendingPathComponent("14c-cd-opdeling.png"))
+        model.medium = .vinyl
         NSApp.terminate(nil)
     }
 

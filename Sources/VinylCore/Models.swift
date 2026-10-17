@@ -28,6 +28,35 @@ public struct Release: Equatable, Hashable {
     public var discogsURL: URL { URL(string: "https://www.discogs.com/release/\(id)")! }
 }
 
+// MARK: - Plader og cd'er
+
+/// Hvilken slags hylde en kopi hører til. Plader og cd'er har hver deres reoler, sektioner og
+/// nummerering, men samme Discogs-samling. Gemmes som tekst (`rawValue`).
+public enum Medium: String, CaseIterable, Identifiable {
+    case vinyl
+    case cd
+
+    public var id: String { rawValue }
+
+    /// Ud fra Discogs' format, fx "Vinyl, LP" eller "2×CD, Album". Kun det første format tæller.
+    /// Alt, der ikke er en cd (vinyl, kassetter, bokse …), hører til pladerne, som før.
+    public static func of(format: String?) -> Medium {
+        guard let first = format?.split(separator: ",").first else { return .vinyl }
+        var name = first.trimmingCharacters(in: .whitespaces).uppercased()
+        if let x = name.firstIndex(of: "×") { name = String(name[name.index(after: x)...]) }
+        return ["CD", "CDR", "SACD", "HDCD"].contains(name) ? .cd : .vinyl
+    }
+
+    /// "Plader" / "Cd'er" – til skiftet øverst og overskrifter.
+    public var title: String { self == .vinyl ? "Plader" : "Cd'er" }
+    /// "plade" / "cd"
+    public var singular: String { self == .vinyl ? "plade" : "cd" }
+    /// "plader" / "cd'er"
+    public var plural: String { self == .vinyl ? "plader" : "cd'er" }
+    /// "Reol" / "Cd-reol"
+    public var shelfWord: String { self == .vinyl ? "Reol" : "Cd-reol" }
+}
+
 // MARK: - Fysisk data ("Denne konkrete kopi står her")
 
 /// Pladens fysiske status. Gemmes som tekst (`rawValue`) i `copies.status`.
@@ -83,16 +112,19 @@ public struct Copy: Equatable, Hashable, Identifiable {
     public var dateAdded: String?
     /// Pladens plads i Discogs' egen artist-sortering ved seneste sync (0-baseret).
     public var discogsRank: Int?
+    /// Brugerens eget valg af hylde, når Discogs' format ikke passer (fx en boks med en cd).
+    public var mediumOverride: Medium?
 
     public init(id: Int64, instanceID: Int?, releaseID: Int, status: CopyStatus = .home,
                 statusNote: String? = nil, inDiscogs: Bool = true, removedFromDiscogsAt: Date? = nil,
                 sortArtistOverride: String? = nil, sortTitleOverride: String? = nil, dateAdded: String? = nil,
-                discogsRank: Int? = nil) {
+                discogsRank: Int? = nil, mediumOverride: Medium? = nil) {
         self.id = id; self.instanceID = instanceID; self.releaseID = releaseID; self.status = status
         self.statusNote = statusNote; self.inDiscogs = inDiscogs; self.removedFromDiscogsAt = removedFromDiscogsAt
         self.sortArtistOverride = sortArtistOverride; self.sortTitleOverride = sortTitleOverride
         self.dateAdded = dateAdded
         self.discogsRank = discogsRank
+        self.mediumOverride = mediumOverride
     }
 }
 
@@ -105,12 +137,16 @@ public struct Location: Equatable, Hashable, Identifiable {
     public var sortIndex: Int
     /// Til fremtidig QR-scanning af en sektion.
     public var scanCode: String?
+    /// Plade- eller cd-reol.
+    public var medium: Medium
 
-    public init(id: Int64, shelf: Int, section: String, sortIndex: Int, scanCode: String? = nil) {
+    public init(id: Int64, shelf: Int, section: String, sortIndex: Int, scanCode: String? = nil, medium: Medium = .vinyl) {
         self.id = id; self.shelf = shelf; self.section = section; self.sortIndex = sortIndex; self.scanCode = scanCode
+        self.medium = medium
     }
 
-    public var name: String { "Reol \(shelf) · Sektion \(section)" }
+    /// "Reol 1 · Sektion A" eller "Cd-reol 1 · Sektion A".
+    public var name: String { "\(medium.shelfWord) \(shelf) · Sektion \(section)" }
     public var shortName: String { "\(shelf)\(section)" }
 }
 
@@ -141,6 +177,8 @@ public struct RecordItem: Identifiable, Hashable {
     public var artist: String { release.artist }
     public var title: String { release.title }
     public var fullName: String { "\(release.artist) – \(release.title)" }
+    /// Plade eller cd: brugerens valg, ellers Discogs' format.
+    public var medium: Medium { copy.mediumOverride ?? Medium.of(format: release.format) }
 
     /// "1973 • Harvest • SHVL 804 • Vinyl, LP" – bruges til at skelne pressings.
     public var detailLine: String {

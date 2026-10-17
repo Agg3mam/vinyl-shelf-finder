@@ -31,6 +31,28 @@ final class AppModel {
     private(set) var searchIndex = SearchIndex(library: .empty)
     private(set) var rules: SortRules
 
+    /// Plader eller cd'er: hver har sine egne reoler. Skiftet øverst vises, når der er cd'er.
+    var medium: Medium = .vinyl {
+        didSet {
+            guard medium != oldValue else { return }
+            store.setSetting("medium", medium.rawValue)
+            // Valg, ark og forslag hører til den anden hylde.
+            selection = nil
+            findModeCopy = nil
+            returnCopy = nil
+            moveCopy = nil
+            checkSection = nil
+            currentPick = nil
+            forceOnboarding = false
+            sidebar = .search
+            reload()
+        }
+    }
+    /// Antal kopier pr. hylde i hele samlingen.
+    private(set) var mediumCounts: [Medium: Int] = [:]
+    /// Skiftet "Plader / Cd'er" giver kun mening, når der er cd'er i samlingen.
+    var showsMediumPicker: Bool { (mediumCounts[.cd] ?? 0) > 0 || medium == .cd }
+
     var sidebar: SidebarItem? = .search
     var query = "" { didSet { runSearch(autoSelect: true) } }
     private(set) var results: [Int64] = []
@@ -131,6 +153,8 @@ final class AppModel {
         }
         market = (try? store.loadMarket()) ?? [:]
         collectionValue = store.loadCollectionValue()
+        // Sættes før `reload` og uden `didSet` (det kører ikke i init).
+        medium = store.setting("medium").flatMap(Medium.init(rawValue:)) ?? .vinyl
         reload()
         findNew.app = self
         startBackups()
@@ -141,7 +165,8 @@ final class AppModel {
 
     func reload() {
         do {
-            library = try store.loadLibrary()
+            library = try store.loadLibrary(medium: medium)
+            mediumCounts = try store.mediumCounts()
             stats = ListeningStats(plays: try store.loadPlays())
             searchIndex = SearchIndex(library: library)
             // Efter en handling (spillet, flyt, status …) må valget kun skifte, når man
@@ -234,7 +259,7 @@ final class AppModel {
             if let s = library.suggestPlacement(for: id, rules: rules) {
                 do { try store.move(copyID: id, to: s.locationID, index: s.index) }
                 catch { errorMessage = error.localizedDescription; break }
-                library = (try? store.loadLibrary()) ?? library
+                library = (try? store.loadLibrary(medium: medium)) ?? library
             }
         }
         reload()
@@ -368,9 +393,17 @@ final class AppModel {
 
     func unplace(_ copyID: Int64) { perform { try store.unplace(copyID: copyID) } }
 
+    /// "Det er en cd" / "Det er en plade" (`nil`: følg Discogs' format). Kopien forsvinder fra
+    /// den viste hylde og venter under "Nye cd'er"/"Nye plader" på den anden.
+    func setMedium(_ copyID: Int64, _ new: Medium?) {
+        if selection == copyID { selection = nil }
+        if currentPick == copyID { currentPick = nil }
+        perform { try store.setMedium(copyID: copyID, new) }
+    }
+
     func addSection(shelf: Int) {
         let existing = library.locations.filter { $0.shelf == shelf }.count
-        perform { try store.addSection(shelf: shelf, section: LayoutPlanner.sectionLetter(existing)) }
+        perform { try store.addSection(shelf: shelf, section: LayoutPlanner.sectionLetter(existing), medium: medium) }
     }
 
     func deleteSection(_ id: Int64) {
@@ -396,7 +429,7 @@ final class AppModel {
         let sorted = rules.sorted(library.allItems.filter { $0.copy.inDiscogs }).map(\.id)
         let parts = LayoutPlanner.split(sorted, plan: plan)
         perform {
-            try store.createLayout(zip(plan, parts).map { (shelf: $0.shelf, section: $0.section, copies: $1) })
+            try store.createLayout(zip(plan, parts).map { (shelf: $0.shelf, section: $0.section, copies: $1) }, medium: medium)
         }
         forceOnboarding = false
         sidebar = .search

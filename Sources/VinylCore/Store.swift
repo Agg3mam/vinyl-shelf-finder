@@ -128,11 +128,20 @@ public final class ShelfStore {
             try db.execute("PRAGMA user_version = 4")
             }
         }
+        if db.userVersion < 5 {
+            // Cd'er: egne reoler (`locations.medium`) og brugerens eget valg pr. kopi.
+            try db.transaction {
+            try db.execute("ALTER TABLE locations ADD COLUMN medium TEXT NOT NULL DEFAULT 'vinyl'")
+            try db.execute("ALTER TABLE copies ADD COLUMN medium_override TEXT")
+            try db.execute("PRAGMA user_version = 5")
+            }
+        }
     }
 
     // MARK: - Indlæsning
 
-    public func loadLibrary() throws -> Library {
+    /// Samlingen for én slags hylde: kun plader (standard) eller kun cd'er, med deres egne reoler.
+    public func loadLibrary(medium: Medium = .vinyl) throws -> Library {
         var releases: [Int: Release] = [:]
         for r in try db.query("SELECT * FROM releases") {
             let id = Int(r["discogs_release_id"]!.int!)
@@ -145,16 +154,33 @@ public final class ShelfStore {
         var copies: [Int64: Copy] = [:]
         for r in try db.query("SELECT * FROM copies") {
             let c = copy(from: r)
+            guard Self.medium(of: c, releases) == medium else { continue }
             copies[c.id] = c
         }
-        let locations = try db.query("SELECT * FROM locations").map {
+        let locations = try db.query("SELECT * FROM locations WHERE medium = ?", medium.rawValue).map {
             Location(id: $0["id"]!.int!, shelf: Int($0["shelf"]!.int!), section: $0["section"]?.text ?? "",
-                     sortIndex: Int($0["sort_index"]!.int!), scanCode: $0["scan_code"]?.text)
+                     sortIndex: Int($0["sort_index"]!.int!), scanCode: $0["scan_code"]?.text, medium: medium)
         }
+        let locationIDs = Set(locations.map(\.id))
+        // En kopi, der står på en reol af den anden slags (fx efter "Det er en cd"), regnes som uplaceret.
         let placements = try db.query("SELECT * FROM placements").map {
             (copyID: $0["copy_id"]!.int!, locationID: $0["location_id"]!.int!, position: Int($0["position"]!.int!))
+        }.filter { copies[$0.copyID] != nil && locationIDs.contains($0.locationID) }
+        return Library(releases: releases, copies: copies, locations: locations, placements: placements, medium: medium)
+    }
+
+    private static func medium(of c: Copy, _ releases: [Int: Release]) -> Medium {
+        c.mediumOverride ?? Medium.of(format: releases[c.releaseID]?.format)
+    }
+
+    /// Antal kopier pr. slags hylde (bruges til at vise skiftet "Plader / Cd'er", når der er cd'er).
+    public func mediumCounts() throws -> [Medium: Int] {
+        var counts: [Medium: Int] = [:]
+        for r in try db.query("SELECT c.medium_override, r.format FROM copies c JOIN releases r ON r.discogs_release_id = c.release_id") {
+            let m = r["medium_override"]?.text.flatMap(Medium.init(rawValue:)) ?? Medium.of(format: r["format"]?.text)
+            counts[m, default: 0] += 1
         }
-        return Library(releases: releases, copies: copies, locations: locations, placements: placements)
+        return counts
     }
 
     private func copy(from r: SQLRow) -> Copy {
@@ -167,7 +193,8 @@ public final class ShelfStore {
              sortArtistOverride: r["sort_artist_override"]?.text,
              sortTitleOverride: r["sort_title_override"]?.text,
              dateAdded: r["date_added"]?.text,
-             discogsRank: r["discogs_rank"]?.int.map(Int.init))
+             discogsRank: r["discogs_rank"]?.int.map(Int.init),
+             mediumOverride: r["medium_override"]?.text.flatMap(Medium.init(rawValue:)))
     }
 
     // MARK: - Indstillinger
@@ -249,8 +276,9 @@ public final class ShelfStore {
     }
 
     private func locationName(_ id: Int64?) -> String {
-        guard let id, let r = try? db.query("SELECT shelf, section FROM locations WHERE id = ?", id).first else { return "ukendt sektion" }
-        return "Reol \(r["shelf"]?.int ?? 0) · Sektion \(r["section"]?.text ?? "")"
+        guard let id, let r = try? db.query("SELECT shelf, section, medium FROM locations WHERE id = ?", id).first else { return "ukendt sektion" }
+        let medium = r["medium"]?.text.flatMap(Medium.init(rawValue:)) ?? .vinyl
+        return "\(medium.shelfWord) \(r["shelf"]?.int ?? 0) · Sektion \(r["section"]?.text ?? "")"
     }
 
     /// Placering til historikken: "Reol 1 · Sektion A, plads 16".
@@ -334,30 +362,47 @@ public final class ShelfStore {
     }
 
     /// Opretter reol-strukturen fra onboarding. `layout` er sektioner i rækkefølge med
-    /// kopier i fysisk rækkefølge. Erstatter eksisterende struktur (kun efter bekræftelse).
-    public func createLayout(_ layout: [(shelf: Int, section: String, copies: [Int64])]) throws {
+    /// kopier i fysisk rækkefølge. Erstatter eksisterende struktur for samme slags hylde
+    /// (kun efter bekræftelse) – pladernes reoler røres ikke, når cd-reolerne oprettes, og omvendt.
+    public func createLayout(_ layout: [(shelf: Int, section: String, copies: [Int64])], medium: Medium = .vinyl) throws {
         try db.transaction {
-            try db.run("DELETE FROM placements")
-            try db.run("DELETE FROM locations")
+            try db.run("DELETE FROM placements WHERE location_id IN (SELECT id FROM locations WHERE medium = ?)", medium.rawValue)
+            try db.run("DELETE FROM locations WHERE medium = ?", medium.rawValue)
+            let offset = Int(try db.query("SELECT COALESCE(MAX(sort_index) + 1, 0) AS n FROM locations").first?["n"]?.int ?? 0)
             for (i, s) in layout.enumerated() {
-                let locID = try db.run("INSERT INTO locations(shelf, section, sort_index) VALUES(?, ?, ?)", s.shelf, s.section, i)
+                let locID = try db.run("INSERT INTO locations(shelf, section, sort_index, medium) VALUES(?, ?, ?, ?)", s.shelf, s.section, offset + i, medium.rawValue)
                 try writeSection(locID, s.copies)
             }
             let total = layout.reduce(0) { $0 + $1.copies.count }
-            try log(.layoutCreated, copyID: nil, "Reolerne er oprettet: \(layout.count == 1 ? "1 sektion" : "\(layout.count) sektioner"), \(total == 1 ? "1 plade" : "\(total) plader")")
+            let what = medium == .vinyl ? "Reolerne" : "Cd-reolerne"
+            try log(.layoutCreated, copyID: nil, "\(what) er oprettet: \(layout.count == 1 ? "1 sektion" : "\(layout.count) sektioner"), \(total == 1 ? "1 \(medium.singular)" : "\(total) \(medium.plural)")")
         }
+    }
+
+    /// "Det er en cd" / "Det er en plade": flytter kopien til den anden slags hylde. Står den på en
+    /// reol af den gamle slags, fjernes den derfra (og får en plads på den nye via "Nye cd'er").
+    /// `nil` = følg Discogs' format igen.
+    public func setMedium(copyID: Int64, _ medium: Medium?) throws {
+        // `unplace` kører sin egen transaktion (og skriver i historikken), derfor ingen ydre transaktion her.
+        if let p = try currentPlacement(copyID),
+           let r = try db.query("SELECT medium FROM locations WHERE id = ?", p.0).first {
+            let fmt = try db.query("SELECT r.format FROM copies c JOIN releases r ON r.discogs_release_id = c.release_id WHERE c.id = ?", copyID).first?["format"]?.text
+            let new = medium ?? Medium.of(format: fmt)
+            if r["medium"]?.text != new.rawValue { try unplace(copyID: copyID) }
+        }
+        try db.run("UPDATE copies SET medium_override = ? WHERE id = ?", medium?.rawValue, copyID)
     }
 
     /// Tilføjer en ny tom sektion sidst i en reol (eller i en ny reol).
     @discardableResult
-    public func addSection(shelf: Int, section: String) throws -> Int64 {
+    public func addSection(shelf: Int, section: String, medium: Medium = .vinyl) throws -> Int64 {
         try db.transaction {
-            let existing = try db.query("SELECT id, shelf, sort_index FROM locations ORDER BY sort_index")
+            let existing = try db.query("SELECT id, shelf, sort_index FROM locations WHERE medium = ? ORDER BY sort_index", medium.rawValue)
             // Indsæt efter den sidste sektion i samme (eller lavere) reol.
             let insertAfter = existing.last { Int($0["shelf"]!.int!) <= shelf }
             let newIndex = insertAfter.map { Int($0["sort_index"]!.int!) + 1 } ?? 0
             try db.run("UPDATE locations SET sort_index = sort_index + 1 WHERE sort_index >= ?", newIndex)
-            return try db.run("INSERT INTO locations(shelf, section, sort_index) VALUES(?, ?, ?)", shelf, section, newIndex)
+            return try db.run("INSERT INTO locations(shelf, section, sort_index, medium) VALUES(?, ?, ?, ?)", shelf, section, newIndex, medium.rawValue)
         }
     }
 

@@ -1745,5 +1745,86 @@ do {
     check(cache.match(barcodes: ["1234567890128"], artist: "", title: "") == nil, "ukendt stregkode og ingen tekst → intet match")
 } catch { check(false, "iMusic: \(error)") }
 
+// MARK: Cd'er: egen hylde i samme samling
+do {
+    check(Medium.of(format: "CD, Album") == .cd && Medium.of(format: "2×CD, Compilation") == .cd
+          && Medium.of(format: "CDr, Album") == .cd && Medium.of(format: "SACD, Hybrid") == .cd, "cd-formater genkendes")
+    check(Medium.of(format: "Vinyl, LP, Album") == .vinyl && Medium.of(format: "2×Vinyl, LP") == .vinyl
+          && Medium.of(format: "Cassette, Album") == .vinyl && Medium.of(format: nil) == .vinyl
+          && Medium.of(format: "Box Set, CD") == .vinyl, "alt andet hører til pladerne (kun første format tæller)")
+
+    let (s, url) = try freshStore("cd")
+    defer { try? FileManager.default.removeItem(at: url) }
+    func item(_ i: Int, _ artist: String, _ title: String, _ format: String) -> DiscogsCollectionItem {
+        DiscogsCollectionItem(instanceID: 70_000 + i, dateAdded: nil,
+                              release: Release(id: 700_000 + i, artist: artist, title: title, format: format))
+    }
+    _ = try s.applyCollection([item(0, "ABBA", "Arrival", "Vinyl, LP"), item(1, "Blur", "Parklife", "CD, Album"),
+                               item(2, "Bowie", "Low", "Vinyl, LP"), item(3, "Radiohead", "Kid A", "CD, Album"),
+                               item(4, "Radiohead", "OK Computer", "CD, Album")])
+    let counts = try s.mediumCounts()
+    check(counts[.vinyl] == 2 && counts[.cd] == 3, "antal pr. hylde: \(counts)")
+    let vinyl = try s.loadLibrary(), cds = try s.loadLibrary(medium: .cd)
+    check(vinyl.copies.count == 2 && cds.copies.count == 3 && cds.medium == .cd, "samlingen deles op i plader og cd'er")
+
+    let rules = SortRules()
+    try s.createLayout([(shelf: 1, section: "A", copies: rules.sorted(vinyl.allItems).map(\.id))])
+    try s.createLayout([(shelf: 1, section: "A", copies: rules.sorted(cds.allItems).map(\.id))], medium: .cd)
+    var v = try s.loadLibrary(), c = try s.loadLibrary(medium: .cd)
+    check(v.locations.count == 1 && c.locations.count == 1 && v.locations[0].id != c.locations[0].id
+          && v.unplaced.isEmpty && c.unplaced.isEmpty, "egne reoler pr. hylde")
+    check(c.locations[0].name == "Cd-reol 1 · Sektion A" && v.locations[0].name == "Reol 1 · Sektion A", "cd-reolens navn")
+
+    // Cd-reolen kan oprettes igen uden at røre pladernes placeringer.
+    let vinylBefore = placementRows(s)
+    try s.createLayout([(shelf: 1, section: "A", copies: Array(rules.sorted(cds.allItems).map(\.id).prefix(1))),
+                        (shelf: 1, section: "B", copies: Array(rules.sorted(cds.allItems).map(\.id).dropFirst()))], medium: .cd)
+    v = try s.loadLibrary(); c = try s.loadLibrary(medium: .cd)
+    check(v.locations.count == 1 && v.globalOrder.count == 2 && c.locations.count == 2 && c.globalOrder.count == 3,
+          "ny cd-opdeling rører ikke pladereolen")
+    check(placementRows(s).count == vinylBefore.count, "samme antal placeringer i alt")
+
+    // Find-teksterne siger "cd".
+    let kidA = c.allItems.first { $0.title == "Kid A" }!.id
+    let adv = c.referenceAdvice(for: kidA)!
+    check(adv.placementHint.hasPrefix("Cd ") && !adv.placementHint.contains("Plade"), "Find på cd: \(adv.placementHint)")
+    check(adv.primary.reason.contains("cd") && !adv.primary.reason.contains("plade"), "Find på cd: \(adv.primary.reason)")
+    let low = v.allItems.first { $0.title == "Low" }!.id
+    check(v.referenceAdvice(for: low)!.placementHint.hasPrefix("Plade "), "pladerne siger stadig plade")
+
+    // En ny sektion lander på den rigtige hylde.
+    let newCD = try s.addSection(shelf: 2, section: "A", medium: .cd)
+    c = try s.loadLibrary(medium: .cd); v = try s.loadLibrary()
+    check(c.location(newCD)?.name == "Cd-reol 2 · Sektion A" && v.location(newCD) == nil && c.locations.last?.id == newCD,
+          "ny cd-sektion står sidst på cd-hylden")
+
+    // "Det er en plade": kopien flyttes til den anden hylde og mister sin cd-plads.
+    try s.setMedium(copyID: kidA, .vinyl)
+    v = try s.loadLibrary(); c = try s.loadLibrary(medium: .cd)
+    check(v.unplaced.contains(kidA) && c.copies[kidA] == nil && v.item(kidA)?.medium == .vinyl, "skift til plader: uplaceret blandt pladerne")
+    let lastKind = try s.history().first?.kind
+    check(lastKind == .unplaced, "skiftet står i historikken")
+    try s.setMedium(copyID: kidA, nil)
+    c = try s.loadLibrary(medium: .cd)
+    check(c.unplaced.contains(kidA), "tilbage til Discogs' format: cd igen (uden plads)")
+
+    // En sync ændrer ikke brugerens valg.
+    try s.setMedium(copyID: kidA, .vinyl)
+    _ = try s.applyCollection([item(0, "ABBA", "Arrival", "Vinyl, LP"), item(1, "Blur", "Parklife", "CD, Album"),
+                               item(2, "Bowie", "Low", "Vinyl, LP"), item(3, "Radiohead", "Kid A", "CD, Album"),
+                               item(4, "Radiohead", "OK Computer", "CD, Album")])
+    let kept = try s.loadLibrary().copies[kidA]?.mediumOverride
+    check(kept == .vinyl, "sync bevarer valget af hylde")
+
+    // Demo har begge hylder.
+    let (d, durl) = try freshStore("cd-demo")
+    defer { try? FileManager.default.removeItem(at: durl) }
+    try DemoData.seedIfEmpty(d)
+    let dcd = try d.loadLibrary(medium: .cd)
+    check(dcd.copies.count == 10 && dcd.locations.count == 2 && dcd.unplaced.isEmpty, "demo: cd-reol med 2 sektioner")
+    let demoVinyl = try d.loadLibrary().copies.count
+    check(demoVinyl == 43, "demo: pladerne er uændrede")
+} catch { check(false, "cd'er: \(error)") }
+
 print(failures == 0 ? "✓ Alle \(passes) checks bestået" : "✗ \(failures) fejl, \(passes) bestået")
 exit(failures == 0 ? 0 : 1)

@@ -12,8 +12,14 @@ struct OnboardingView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: Spacing.l) {
                 VStack(alignment: .leading, spacing: Spacing.xs) {
-                    Text("Vinyl Shelf Finder").font(.system(size: 34, weight: .heavy))
-                    Text("Find dine plader i reolen. Tre trin, så er du i gang.")
+                    HStack(alignment: .firstTextBaseline) {
+                        Text(model.medium == .cd ? "Dine cd'er" : "Vinyl Shelf Finder").font(.system(size: 34, weight: .heavy))
+                        Spacer()
+                        if model.showsMediumPicker { MediumPicker() }
+                    }
+                    Text(model.medium == .cd
+                         ? "Cd'erne får deres egne reoler og sektioner. Dine plader og deres placeringer røres ikke."
+                         : "Find dine plader i reolen. Tre trin, så er du i gang.")
                         .font(.title3).foregroundStyle(.secondary)
                 }
                 StepBox(number: 1, title: "Forbind til Discogs", done: step1Done) { ConnectStep() }
@@ -150,7 +156,7 @@ struct ImportStep: View {
                 if model.library.copies.isEmpty {
                     Button("Hent samlingen") { Task { await model.sync(showReport: false) } }
                 } else {
-                    Text("Din samling indeholder **\(model.library.copies.count)** plader.")
+                    Text("Din samling indeholder **\(model.library.copies.count)** \(model.medium.plural).")
                     Spacer()
                     Button("Hent igen") { Task { await model.sync(showReport: false) } }
                 }
@@ -174,7 +180,7 @@ struct LayoutStep: View {
     var body: some View {
         let items = sortedItems
         VStack(alignment: .leading, spacing: Spacing.m) {
-            Text("Samlingen sorteres efter reglerne herunder – ligesom pladerne står i din reol. Angiv hvor mange reoler og sektioner du har; plader fordeles jævnt, og du justerer grænserne, så de passer med virkeligheden.")
+            Text("Samlingen sorteres efter reglerne herunder – ligesom \(model.medium == .vinyl ? "pladerne" : "cd'erne") står i din reol. Angiv hvor mange reoler og sektioner du har; \(model.medium.plural) fordeles jævnt, og du justerer grænserne, så de passer med virkeligheden.")
                 .fixedSize(horizontal: false, vertical: true)
                 .foregroundStyle(.secondary)
 
@@ -188,7 +194,7 @@ struct LayoutStep: View {
                         if sectionsPerShelf.count > 1 { sectionsPerShelf.removeLast() }
                     })
                     ForEach(sectionsPerShelf.indices, id: \.self) { i in
-                        Stepper("Reol \(i + 1): \(sectionCount(i)) \(sectionCount(i) == 1 ? "sektion" : "sektioner")", value: sectionBinding(i), in: 1...26)
+                        Stepper("\(model.medium.shelfWord) \(i + 1): \(sectionCount(i)) \(sectionCount(i) == 1 ? "sektion" : "sektioner")", value: sectionBinding(i), in: 1...26)
                             .padding(.leading, Spacing.s)
                     }
                     Button("Fordel jævnt") { redistribute(items.count) }
@@ -225,7 +231,7 @@ struct LayoutStep: View {
             }
 
             HStack {
-                Text("Plader \(rangeText()) – i alt \(items.count).")
+                Text("\(model.medium.title) \(rangeText()) – i alt \(items.count).")
                     .font(.caption).foregroundStyle(.secondary)
                 Spacer()
                 if model.forceOnboarding {
@@ -255,7 +261,9 @@ struct LayoutStep: View {
         .confirmationDialog("Erstat den nuværende reolstruktur?", isPresented: $confirmReplace) {
             Button("Erstat alle placeringer", role: .destructive) { model.createLayout(plan) }
         } message: {
-            Text("Alle nuværende fysiske placeringer erstattes med den sorterede rækkefølge. Historikken bevares.")
+            Text(model.medium == .vinyl
+                 ? "Alle nuværende fysiske placeringer erstattes med den sorterede rækkefølge. Historikken bevares."
+                 : "Cd'ernes nuværende placeringer erstattes med den sorterede rækkefølge. Pladerne røres ikke. Historikken bevares.")
         }
     }
 
@@ -286,7 +294,7 @@ struct LayoutStep: View {
             acc = e
             if let cur = shelfRanges[p.shelf] { shelfRanges[p.shelf] = (cur.0, e) } else { shelfRanges[p.shelf] = (s, e) }
         }
-        return shelfRanges.keys.sorted().map { "Reol \($0): \(shelfRanges[$0]!.0)–\(shelfRanges[$0]!.1)" }.joined(separator: " · ")
+        return shelfRanges.keys.sorted().map { "\(model.medium.shelfWord) \($0): \(shelfRanges[$0]!.0)–\(shelfRanges[$0]!.1)" }.joined(separator: " · ")
     }
 }
 

@@ -289,9 +289,27 @@ struct RecordContextMenu: View {
         Menu("Status") {
             StatusChoices(copyID: copyID)
         }
+        MediumChoice(copyID: copyID)
         if let it = model.library.item(copyID) {
             Divider()
             Link("Åbn på Discogs", destination: it.release.discogsURL)
+        }
+    }
+}
+
+/// "Flyt til cd-hylden" / "Flyt til pladehylden", når Discogs' format ikke passer (fx en boks,
+/// der i virkeligheden står blandt cd'erne). Med eget valg: også "Følg Discogs' format".
+struct MediumChoice: View {
+    @Environment(AppModel.self) private var model
+    let copyID: Int64
+
+    var body: some View {
+        if let it = model.library.item(copyID) {
+            let other: Medium = it.medium == .vinyl ? .cd : .vinyl
+            Button(other == .cd ? "Flyt til cd-hylden" : "Flyt til pladehylden") { model.setMedium(copyID, other) }
+            if it.copy.mediumOverride != nil, Medium.of(format: it.release.format) != it.medium {
+                Button("Følg Discogs' format (\(Medium.of(format: it.release.format).singular))") { model.setMedium(copyID, nil) }
+            }
         }
     }
 }

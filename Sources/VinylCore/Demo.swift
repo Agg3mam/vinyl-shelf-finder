@@ -48,6 +48,20 @@ public enum DemoData {
         ("Åge Aleksandersen", "Levva Livet", 1984, "Mercury", "818 413-1"),
     ]
 
+    /// Cd'er til den anden hylde (samme Discogs-samling, format "CD").
+    static let cds: [(String, String, Int, String, String)] = [
+        ("Björk", "Debut", 1993, "One Little Indian", "TPLP 31 CD"),
+        ("Blur", "Parklife", 1994, "Food", "FOODCD 10"),
+        ("The Cardigans", "First Band On The Moon", 1996, "Stockholm Records", "533 117-2"),
+        ("D-A-D", "No Fuel Left For The Pilgrims", 1989, "Medley Records", "MdCD 6176"),
+        ("Massive Attack", "Mezzanine", 1998, "Virgin", "WBRCD4"),
+        ("Portishead", "Dummy", 1994, "Go! Beat", "828 553-2"),
+        ("Radiohead", "OK Computer", 1997, "Parlophone", "7243 8 55229 2 5"),
+        ("Radiohead", "Kid A", 2000, "Parlophone", "7243 5 27753 2 3"),
+        ("TV-2", "Nærmest Lykkelig", 1985, "Medley Records", "MdCD 6050"),
+        ("The Verve", "Urban Hymns", 1997, "Hut Recordings", "CDHUT45"),
+    ]
+
     static func demoGenre(_ artist: String) -> String {
         switch artist {
         case "ABBA", "A-ha", "Aurora": return "Pop"
@@ -63,12 +77,17 @@ public enum DemoData {
                                   release: Release(id: 100_000 + i, artist: r.0, title: r.1, year: r.2,
                                                    label: r.3, catalogNumber: r.4, format: "Vinyl, LP, Album",
                                                    genres: demoGenre(r.0)))
+        } + cds.enumerated().map { i, r in
+            DiscogsCollectionItem(instanceID: 9_500 + i, dateAdded: nil,
+                                  release: Release(id: 150_000 + i, artist: r.0, title: r.1, year: r.2,
+                                                   label: r.3, catalogNumber: r.4, format: "CD, Album",
+                                                   genres: demoGenre(r.0)))
         }
     }
 
-    /// Fylder en tom database med eksempeldata og en reol med 3 sektioner.
+    /// Fylder en tom database med eksempeldata: en pladereol med 3 sektioner og en cd-reol med 2.
     public static func seedIfEmpty(_ store: ShelfStore) throws {
-        guard try store.loadLibrary().copies.isEmpty else { return }
+        guard try store.mediumCounts().isEmpty else { return }
         _ = try store.applyCollection(collection)
         // Demo-listen er ikke i Discogs' rækkefølge, så demoen bruger appens egne regler.
         var rules = store.loadSortRules()
@@ -78,5 +97,10 @@ public enum DemoData {
         let plan = LayoutPlanner.evenPlan(total: sorted.count, sectionsPerShelf: [2, 1])
         let parts = LayoutPlanner.split(sorted, plan: plan)
         try store.createLayout(zip(plan, parts).map { (shelf: $0.shelf, section: $0.section, copies: $1) })
+
+        let cdSorted = rules.sorted(try store.loadLibrary(medium: .cd).allItems).map(\.id)
+        let cdPlan = LayoutPlanner.evenPlan(total: cdSorted.count, sectionsPerShelf: [2])
+        let cdParts = LayoutPlanner.split(cdSorted, plan: cdPlan)
+        try store.createLayout(zip(cdPlan, cdParts).map { (shelf: $0.shelf, section: $0.section, copies: $1) }, medium: .cd)
     }
 }

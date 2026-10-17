@@ -77,6 +77,9 @@ struct MainView: View {
             DetailColumn()
         }
         .toolbar {
+            if model.showsMediumPicker {
+                ToolbarItem(placement: .principal) { MediumPicker() }
+            }
             ToolbarItem(placement: .primaryAction) { SyncButton() }
         }
         .modifier(MainSheets())
@@ -108,6 +111,24 @@ struct StatusNoteAlert: ViewModifier {
     }
 }
 
+/// "Plader / Cd'er" øverst i vinduet. Hver hylde har sine egne reoler og sektioner.
+struct MediumPicker: View {
+    @Environment(AppModel.self) private var model
+
+    var body: some View {
+        @Bindable var model = model
+        Picker("Hylde", selection: $model.medium) {
+            ForEach(Medium.allCases) { m in
+                Text(m.title).tag(m)
+            }
+        }
+        .pickerStyle(.segmented)
+        .labelsHidden()
+        .fixedSize()
+        .help("Skift mellem pladereolerne og cd-reolerne")
+    }
+}
+
 struct ContentColumn: View {
     @Environment(AppModel.self) private var model
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -118,16 +139,17 @@ struct ContentColumn: View {
             SearchResultsView()
         case .newRecords:
             let items = model.unplacedItems
-            RecordListView(title: "Nye plader", items: items,
-                           empty: "Ingen nye plader venter på en plads.",
+            let m = model.medium
+            RecordListView(title: "Nye \(m.plural)", items: items,
+                           empty: "Ingen nye \(m.plural) venter på en plads.",
                            headerAction: items.isEmpty ? nil : HeaderAction(label: "Placér alle som foreslået") { model.placeAllAsSuggested() },
                            emptySymbol: "tray")
         case .removed:
             RecordListView(title: "Fjernet fra Discogs", items: model.removedItems,
-                           empty: "Alle plader findes stadig i din Discogs-samling.")
+                           empty: "Alle \(model.medium.plural) findes stadig i din Discogs-samling.")
         case .away:
             RecordListView(title: "Ude af reolen", items: model.awayItems,
-                           empty: "Alle plader står på plads.", emptySymbol: "house")
+                           empty: "Alle \(model.medium.plural) står på plads.", emptySymbol: "house")
         case .section(let id):
             SectionView(locationID: id)
                 .id(id)
@@ -289,7 +311,7 @@ struct SidebarView: View {
             }
 
             Section("Indbakke") {
-                sidebarLabel("Nye plader", "sparkles")
+                sidebarLabel("Nye \(model.medium.plural)", "sparkles")
                     .badge(model.library.unplaced.count)
                     .tag(SidebarItem.newRecords)
                 sidebarLabel("Fjernet fra Discogs", "exclamationmark.triangle")
@@ -301,7 +323,7 @@ struct SidebarView: View {
             }
 
             ForEach(model.library.shelves, id: \.self) { shelf in
-                Section("Reol \(shelf)") {
+                Section("\(model.medium.shelfWord) \(shelf)") {
                     ForEach(model.library.locations.filter { $0.shelf == shelf }) { loc in
                         sidebarLabel("Sektion \(loc.section)", "books.vertical")
                             // Kun plader, der faktisk står i reolen (ikke dem på væggen, udlånte osv.).
@@ -309,7 +331,7 @@ struct SidebarView: View {
                             .tag(SidebarItem.section(loc.id))
                             .contextMenu {
                                 Button("Kontrollér sektion…") { model.checkSection = loc.id }
-                                Button("Tilføj sektion i Reol \(shelf)") { model.addSection(shelf: shelf) }
+                                Button("Tilføj sektion i \(model.medium.shelfWord) \(shelf)") { model.addSection(shelf: shelf) }
                                 if (model.library.sections[loc.id] ?? []).isEmpty {
                                     Button("Slet tom sektion", role: .destructive) { model.deleteSection(loc.id) }
                                 }
