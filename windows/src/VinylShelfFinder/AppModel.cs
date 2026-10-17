@@ -57,6 +57,9 @@ public sealed class AppModel : INotifyPropertyChanged
         _neighborCount = int.TryParse(Store.Setting("neighbor_count"), out var n) && n > 0 ? n : 1;
         _username = Store.Setting("discogs_username");
         _medium = MediumExtensions.FromRaw(Store.Setting("medium")) ?? Medium.Vinyl;
+        _currency = Store.Setting("market_currency") ?? "DKK";
+        try { _market = Store.LoadMarket(); } catch { }
+        _collectionValue = Store.LoadCollectionValue();
         _hasToken = !demo && SafeExists(_token);
         Reload();
     }
@@ -359,6 +362,79 @@ public sealed class AppModel : INotifyPropertyChanged
             return;
         }
         Move(copy, from, pos - 1);
+    }
+
+    // MARK: Værdi
+
+    private Dictionary<int, MarketInfo> _market = new();
+    public IReadOnlyDictionary<int, MarketInfo> Market => _market;
+
+    private CollectionValue? _collectionValue;
+    public CollectionValue? CollectionValue { get => _collectionValue; private set => Set(ref _collectionValue, value); }
+
+    private SyncState _valueState = SyncState.Idle;
+    public SyncState ValueState { get => _valueState; private set => Set(ref _valueState, value); }
+
+    private string _currency;
+    public string Currency
+    {
+        get => _currency;
+        set { if (Set(ref _currency, value)) Store.SetSetting("market_currency", value); }
+    }
+
+    /// <summary>
+    /// Henter Discogs' samlingsestimat og markedsdata pr. release. Springer releases over, der er
+    /// hentet i samme valuta inden for 7 dage. Ca. 1 sekund pr. plade (Discogs' grænse).
+    /// </summary>
+    public async Task RefreshValuesAsync()
+    {
+        if (ValueState.Phase == SyncPhase.Running || IsDemo) return;
+        string? token = null;
+        try { token = _token.Load(); } catch { }
+        if (token is null || Username is not string user)
+        {
+            ValueState = new SyncState(SyncPhase.Failed, Message: DiscogsException.MissingToken().Message);
+            return;
+        }
+        var client = new DiscogsClient(token);
+        var cutoff = DateTimeOffset.Now.AddDays(-7);
+        var stale = Library.Copies.Values.Where(c => c.InDiscogs).Select(c => c.ReleaseId).Distinct().OrderBy(i => i)
+            .Where(id => !_market.TryGetValue(id, out var m) || m.Currency != Currency || m.FetchedAt < cutoff).ToList();
+        ValueState = new SyncState(SyncPhase.Running, 0, stale.Count);
+        try
+        {
+            try
+            {
+                var v = await client.CollectionValueAsync(user);
+                Store.SaveCollectionValue(v);
+                CollectionValue = v;
+            }
+            catch { }
+            string? discogsCurrency = null;
+            if (stale.Count > 0) { try { discogsCurrency = await client.UserCurrencyAsync(user); } catch { } }
+            for (int i = 0; i < stale.Count; i++)
+            {
+                try
+                {
+                    var m = await client.ReleaseMarketInfoAsync(stale[i], discogsCurrency, Currency);
+                    Store.SaveMarket(stale[i], m);
+                    _market[stale[i]] = m;
+                }
+                catch (DiscogsException e) when (e.IsNotFound)
+                {
+                    // Releasen findes ikke længere på Discogs – spring den over.
+                }
+                ValueState = new SyncState(SyncPhase.Running, i + 1, stale.Count);
+                OnChanged(nameof(Market));
+                // Hold os under Discogs' grænse på 60 forespørgsler i minuttet.
+                await Task.Delay(1050);
+            }
+            ValueState = SyncState.Idle;
+        }
+        catch (Exception ex)
+        {
+            ValueState = new SyncState(SyncPhase.Failed, Message: Describe(ex));
+        }
     }
 
     // MARK: Lytning

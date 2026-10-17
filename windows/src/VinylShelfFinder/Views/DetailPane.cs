@@ -46,6 +46,7 @@ public sealed class DetailPane
             case nameof(AppModel.NeighborCount):
             case nameof(AppModel.Stats):
             case nameof(AppModel.Rules):
+            case nameof(AppModel.Market):
                 Rebuild();
                 break;
         }
@@ -113,6 +114,7 @@ public sealed class DetailPane
         text.Children.Add(Ui.Text(it.Artist, "SubtitleTextBlockStyle", Ui.Secondary));
         text.Children.Add(Ui.Text(it.Title, "TitleTextBlockStyle"));
         text.Children.Add(Ui.Text(it.DetailLine, "BodyTextBlockStyle", Ui.Tertiary, maxLines: 2));
+        if (_model.Market.TryGetValue(it.Release.Id, out var m)) text.Children.Add(MarketLine(m));
         text.Children.Add(Ui.Text(RecordParts.PlayCountText(_model, it.Id), "CaptionTextBlockStyle", Ui.Secondary));
         var status = StatusButton(it);
         status.Margin = new Thickness(-8, 4, 0, 0);
@@ -120,6 +122,17 @@ public sealed class DetailPane
         Grid.SetColumn(text, 1);
         grid.Children.Add(text);
         return grid;
+    }
+
+    /// <summary>"Fra 120,00 kr. · 4 til salg · 300 har / 80 ønsker" (MarketLine på Mac).</summary>
+    private static FrameworkElement MarketLine(MarketInfo m)
+    {
+        var parts = new List<string> { m.LowestPrice is double p ? $"Fra {ValuePane.Money(p, m.Currency)}" : "Ikke til salg lige nu" };
+        if (m.NumForSale is int n) parts.Add($"{n} til salg");
+        if (m.Have is int h && m.Want is int w) parts.Add($"{h} har / {w} ønsker");
+        var l = Ui.Label("", string.Join(" · ", parts), "CaptionTextBlockStyle", Ui.Secondary, 12);
+        ToolTipService.SetToolTip(l, $"Discogs-markedsdata hentet {DanishDate.DateTime(m.FetchedAt)}");
+        return l;
     }
 
     /// <summary>Statusmenuen under titlen (StatusMenu på Mac), med valget af hylde (plader/cd'er).</summary>

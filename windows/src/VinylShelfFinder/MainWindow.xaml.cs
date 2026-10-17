@@ -303,6 +303,9 @@ public sealed partial class MainWindow : Window
             case SidebarKind.Plays:
                 ShowList(new PlaysPane(Model));
                 break;
+            case SidebarKind.Value:
+                ShowList(new ValuePane(Model));
+                break;
             case SidebarKind.History:
                 ShowFull(new HistoryPane(Model));
                 break;

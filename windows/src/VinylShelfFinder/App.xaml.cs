@@ -103,6 +103,8 @@ public partial class App : Application
                 if (m.Selection is long played) m.LogPlay(played);
                 m.Sidebar = new SidebarItem(SidebarKind.Plays);
                 await Shot("08-lyttelog.png");
+                m.Sidebar = new SidebarItem(SidebarKind.Value);
+                await Shot("10-vaerdi.png");
                 m.Sidebar = new SidebarItem(SidebarKind.History);
                 await Shot("09-historik.png");
             }
