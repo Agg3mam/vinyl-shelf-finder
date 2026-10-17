@@ -9,12 +9,30 @@
     </Window.SystemBackdrop>
 
     <Grid x:Name="Root" Language="da-DK">
-        <NavigationView x:Name="Nav"
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+
+        <!-- Ny version / status for opdatering (styres af Updater i MainWindow.xaml.cs). -->
+        <InfoBar x:Name="UpdateBar" Grid.Row="0" IsOpen="False" IsClosable="True" Margin="12,8,12,0"
+                 CloseButtonClick="UpdateBar_CloseButtonClick">
+            <InfoBar.Content>
+                <StackPanel x:Name="UpdateButtons" Orientation="Horizontal" Spacing="8" Margin="0,0,0,12">
+                    <Button x:Name="UpdateNowButton" Content="Opdatér nu" Style="{StaticResource AccentButtonStyle}" Click="UpdateNow_Click" />
+                    <Button x:Name="UpdateLaterButton" Content="Senere" Click="UpdateLater_Click" />
+                    <Button x:Name="UpdateCheckButton" Content="Søg efter opdatering" Click="UpdateCheck_Click" />
+                </StackPanel>
+            </InfoBar.Content>
+        </InfoBar>
+
+        <NavigationView x:Name="Nav" Grid.Row="1"
                         PaneDisplayMode="Left"
                         IsSettingsVisible="False"
                         IsBackButtonVisible="Collapsed"
                         OpenPaneLength="260"
-                        SelectionChanged="Nav_SelectionChanged">
+                        SelectionChanged="Nav_SelectionChanged"
+                        ItemInvoked="Nav_ItemInvoked">
             <NavigationView.MenuItems>
                 <NavigationViewItem Content="Søg" Tag="search">
                     <NavigationViewItem.Icon><FontIcon Glyph="&#xE721;" /></NavigationViewItem.Icon>
@@ -45,6 +63,11 @@
                     <NavigationViewItem.Icon><FontIcon Glyph="&#xE719;" /></NavigationViewItem.Icon>
                 </NavigationViewItem>
             </NavigationView.MenuItems>
+            <NavigationView.FooterMenuItems>
+                <NavigationViewItem x:Name="UpdateItem" Content="Opdatering" Tag="update" SelectsOnInvoked="False">
+                    <NavigationViewItem.Icon><FontIcon Glyph="&#xE895;" /></NavigationViewItem.Icon>
+                </NavigationViewItem>
+            </NavigationView.FooterMenuItems>
 
             <Frame x:Name="ContentFrame" />
         </NavigationView>

@@ -43,10 +43,18 @@ jobs:
       - name: Byg VinylCore og kør checks
         run: dotnet run -c Release --project src/VinylCore.Checks/VinylCore.Checks.csproj
 
+      # Version fra tagget (v1.2.3 -> 1.2.3); ellers csproj'ens egen. Appens opdatering sammenligner med den.
+      - name: Version fra tagget
+        run: |
+          $v = if ($env:GITHUB_REF_TYPE -eq 'tag') { $env:GITHUB_REF_NAME -replace '^v', '' } else { '' }
+          "APP_VERSION=$v" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          "Version: $v"
+
       - name: Udgiv Windows-appen
         run: >
           dotnet publish src/VinylShelfFinder/VinylShelfFinder.csproj
           -c Release -r win-x64 --self-contained true
+          ${{ env.APP_VERSION != '' && format('-p:Version={0}', env.APP_VERSION) || '' }}
           -p:Platform=x64
           -p:WindowsPackageType=None
           -p:WindowsAppSDKSelfContained=true

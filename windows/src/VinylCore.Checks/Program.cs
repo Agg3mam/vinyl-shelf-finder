@@ -8,6 +8,7 @@ using VinylShelfFinder.Checks;
 ModelChecks.Run();
 DataChecks.Run();
 NetChecks.Run();
+UpdateChecks.Run();
 
 Console.WriteLine(Check.Failures == 0
     ? $"✓ Alle {Check.Passes} checks bestået"

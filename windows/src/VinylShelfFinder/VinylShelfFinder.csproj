@@ -26,6 +26,9 @@
     <DefaultLanguage>da-DK</DefaultLanguage>
     <SatelliteResourceLanguages>da;en</SatelliteResourceLanguages>
     <Product>Vinyl Shelf Finder</Product>
+    <!-- Samme udgangspunkt som Mac (Info.plist). Ved et tag v* sætter windows.yml -p:Version= fra tagget. -->
+    <Version>0.1.0</Version>
+    <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
     <AssemblyTitle>Vinyl Shelf Finder</AssemblyTitle>
   </PropertyGroup>
   <ItemGroup>

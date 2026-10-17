@@ -38,11 +38,15 @@ public partial class App : Application
         if (i >= 0)
             _smokeDir = i + 1 < cmd.Length && !cmd[i + 1].StartsWith("--") ? cmd[i + 1] : AppContext.BaseDirectory;
 
-        _window = new MainWindow();
+        // Ingen opdatering i demo og i CI's smoke-test (den må ikke kalde GitHub).
+        var updater = new Updater(enabled: _smokeDir is null && !cmd.Contains("--demo"));
+        _window = new MainWindow(updater);
         _window.Activate();
 
         if (_smokeDir is not null)
             _ = RunSmokeAsync(_smokeDir);
+        else
+            _ = _window.CheckForUpdateOnLaunchAsync();
     }
 
     private async Task RunSmokeAsync(string dir)

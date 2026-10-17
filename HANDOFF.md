@@ -249,9 +249,16 @@ Grene (hver bygger oven på den forrige):
   er klar" med "Opdatér nu"/"Senere", fanen Indstillinger › Opdatering, henter zip, tjekker
   bundle-id, signerer med "Vinyl Shelf Finder Udvikler", hvis certifikatet findes, så nøgleringen
   husker appen, udskifter appen og åbner den igen). `.github/workflows/release-mac.yml` bygger
-  `VinylShelfFinder-macOS.zip` på et tag `v*`. Mangler: se CI-resultatet for grenen, Windows-delen
-  af opdateringen (samme GitHub-svar, filen `VinylShelfFinder-Windows-x64.zip`; windows.yml skal
-  sætte `-p:Version=` fra tagget), og den første udgivelse (spørg brugeren, før der laves et tag).
+  `VinylShelfFinder-macOS.zip` på et tag `v*`.
+  **Windows-delen er lavet (17. okt, session 2):** `windows/src/VinylCore/Update.cs` (port af
+  Update.swift, 11 nye checks, i alt 535), `windows/src/VinylShelfFinder/Updater.cs` (tjek ved start
+  højst én gang i døgnet, tilstand i `%LOCALAPPDATA%\VinylShelfFinder\update.json`, henter
+  `VinylShelfFinder-Windows-x64.zip`, tjekker at exe'en findes, og et skjult PowerShell-script kopierer
+  de nye filer ind, når appen er lukket, og åbner den igen). Bjælke øverst i hovedvinduet med
+  "Version X er klar", "Opdatér nu" og "Senere", og punktet "Opdatering" nederst i sidepanelet.
+  Slået fra i `--demo` og `--smoke`. Version 0.1.0 i csproj (som Mac); windows.yml sætter
+  `-p:Version=` fra tagget. Ikke afprøvet: selve udskiftningen på en rigtig Windows-maskine (kræver
+  en udgivelse). Mangler: den første udgivelse (spørg brugeren, før der laves et tag).
 
 Næste skridt, i den rækkefølge brugeren bad om: gør opdateringen færdig (Mac + Windows), lav
 første udgivelse (fx v1.0.0, efter brugerens ja), og byg resten af Windows-skærmene (Værdi,
