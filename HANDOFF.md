@@ -212,6 +212,45 @@ Sources/VinylCoreChecks/      selvtest (305 checks)
 - **Ikke verificeret:** om iMusic-kampagnen (19392) faktisk har et produktfeed, feedets størrelse, standard_id/locale_id
   for Danmark, og at `link` er affiliate-linket. Første rigtige hentning sker på brugerens Mac.
 
+### 17. okt: cd'er, Windows-version og opdatering (status ved overdragelse)
+
+Arbejdet blev stoppet midt i, fordi brugeren var ved at løbe tør for forbrug i skyen. Alt er
+skubbet til GitHub. Projektet er nu **offentligt** (brugerens eget valg, så appen kan hente
+opdateringer uden adgangskode). Ingen af grenene er merget; PR #1 (iMusic) er stadig åben.
+
+Grene (hver bygger oven på den forrige):
+- `claude/imusic-kobssted`: iMusic (PR #1).
+- `claude/cd-hylde`: **cd'er som egen hylde i Mac-appen. Færdig og grøn på CI.**
+  Kopier deles op efter Discogs' format (`Medium.of(format:)`, kun første format: CD/CDr/SACD/HDCD
+  er cd, alt andet plader) eller brugerens valg ("Flyt til cd-hylden" i højrekliksmenuen og
+  statusmenuen). Skema v5: `locations.medium` (vinyl/cd) og `copies.medium_override`.
+  `loadLibrary(medium:)` giver én hylde ad gangen; `createLayout(_:medium:)` rører kun den hylde.
+  Skiftet "Plader / Cd'er" øverst (og i Indstillinger › Reol) vises, når der er cd'er; en hylde
+  uden reoler viser opdelingen. Demo har 10 cd'er på "Cd-reol 1" (2 sektioner).
+  Snapshots: `14-cd-sektion.png`, `14b-cd-find.png`, `14c-cd-opdeling.png`.
+  Ikke set endnu: plade-detaljen og Find efter rettelsen "Cd-reol"/"Cd 2 af 5" (sidste commit).
+- `claude/windows-app`: Windows-versionen (C#/.NET 8/WinUI 3, mappen `windows/`). Kernen er
+  færdig og oversat 1:1 fra Swift med 524 checks (`cd windows && dotnet run --project
+  src/VinylCore.Checks`), inkl. cd'er. Database-skemaet er identisk med Mac (v5).
+  WinUI-skallen bygges, testes og zippes af `.github/workflows/windows.yml` på windows-latest.
+- `claude/windows-ui`: første skærme i Windows-appen (søgning, detalje, Find i reolen, sektioner,
+  opsætning, Windows' adgangskodelager). Lavet af en agent; se grenens sidste commits for, hvor
+  langt den nåede. Skærmbilleder fra CI ligger på grenen `ci-snapshots-windows`.
+- `claude/opdatering` (= cd-hylde + windows-app): **opdateringsknap, kun Mac-delen skrevet**.
+  `Sources/VinylCore/Update.swift` (versioner, GitHubs svar, højst ét tjek pr. døgn, kun
+  GitHub-adresser) med checks, `Sources/VinylShelfFinder/Updater.swift` (tjek ved start, "Version X
+  er klar" med "Opdatér nu"/"Senere", fanen Indstillinger › Opdatering, henter zip, tjekker
+  bundle-id, signerer med "Vinyl Shelf Finder Udvikler", hvis certifikatet findes, så nøgleringen
+  husker appen, udskifter appen og åbner den igen). `.github/workflows/release-mac.yml` bygger
+  `VinylShelfFinder-macOS.zip` på et tag `v*`. Mangler: se CI-resultatet for grenen, Windows-delen
+  af opdateringen (samme GitHub-svar, filen `VinylShelfFinder-Windows-x64.zip`; windows.yml skal
+  sætte `-p:Version=` fra tagget), og den første udgivelse (spørg brugeren, før der laves et tag).
+
+Næste skridt, i den rækkefølge brugeren bad om: gør opdateringen færdig (Mac + Windows), lav
+første udgivelse (fx v1.0.0, efter brugerens ja), og byg resten af Windows-skærmene (Værdi,
+Lytning, Lyttelog, Find nye plader med WebView2, iMusic, Cover Flow, Historik, Indstillinger,
+skiftet Plader/Cd'er) med højst to agenter ad gangen.
+
 ### Ikke færdigt / næste skridt (spørg brugeren om rækkefølgen)
 
 1. **Mobilside via iPhone-hotspot (opgave 1)**, så QR-koderne virker. Det er det største åbne punkt.

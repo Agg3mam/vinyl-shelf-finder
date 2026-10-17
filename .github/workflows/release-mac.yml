@@ -1,0 +1,33 @@
+name: Mac-udgivelse
+
+# Ved et tag v* (fx v1.1.0) bygges Mac-appen og lægges på GitHub Release som
+# VinylShelfFinder-macOS.zip. Appens "Opdatering" henter netop den fil.
+# Windows-zippen lægges på samme udgivelse af windows.yml.
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  mac:
+    runs-on: macos-26
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: Version fra tagget
+        run: |
+          V="${GITHUB_REF_NAME#v}"
+          /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $V" Resources/Info.plist
+          /usr/libexec/PlistBuddy -c "Set :CFBundleVersion ${GITHUB_RUN_NUMBER}" Resources/Info.plist
+      - name: Byg appen
+        run: ./build-app.sh
+      - name: Selvtest
+        run: swift run VinylCoreChecks
+      - name: Zip
+        run: ditto -c -k --keepParent "build/Vinyl Shelf Finder.app" VinylShelfFinder-macOS.zip
+      - name: Læg på udgivelsen
+        uses: softprops/action-gh-release@v2
+        with:
+          files: VinylShelfFinder-macOS.zip

@@ -9,6 +9,7 @@ struct SettingsView: View {
             ShelfSettings().tabItem { Label("Reol", systemImage: "books.vertical") }
             IMusicSettings().tabItem { Label("iMusic", systemImage: "bag") }
             BackupSettings().tabItem { Label("Sikkerhedskopi", systemImage: "clock.arrow.circlepath") }
+            UpdateSettings().tabItem { Label("Opdatering", systemImage: "arrow.down.circle") }
         }
         .padding(Spacing.l)
     }

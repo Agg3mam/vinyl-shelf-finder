@@ -115,6 +115,10 @@ final class AppModel {
     /// `--demo`: separat database med eksempeldata, ingen Discogs-forbindelse.
     let isDemo = CommandLine.arguments.contains("--demo")
 
+    /// "Ny version klar" fra GitHub. Slået fra i demo- og snapshot-tilstand.
+    let updater = Updater(enabled: !CommandLine.arguments.contains("--demo")
+                                   && !CommandLine.arguments.contains("--snapshot"))
+
     // Sikkerhedskopi (én gang om dagen, se `DatabaseBackup`)
     let backupFolder = DatabaseBackup.defaultFolder()
     private(set) var lastBackup: Date?
@@ -159,6 +163,7 @@ final class AppModel {
         findNew.app = self
         startBackups()
         imusic.start()
+        updater.start()
     }
 
     // MARK: - Data

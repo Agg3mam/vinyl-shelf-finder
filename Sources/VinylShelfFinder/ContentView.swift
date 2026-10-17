@@ -14,6 +14,7 @@ struct ContentView: View {
             }
         }
         .onOpenURL { model.open($0) }
+        .modifier(UpdatePrompt())
         .task {
             if model.needsRankSync { await model.sync(showReport: false) }
         }

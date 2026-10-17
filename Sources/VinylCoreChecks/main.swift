@@ -1826,5 +1826,33 @@ do {
     check(demoVinyl == 43, "demo: pladerne er uændrede")
 } catch { check(false, "cd'er: \(error)") }
 
+// MARK: Opdatering fra GitHub Releases (uden net)
+do {
+    check(AppVersion("v1.2.3")! > AppVersion("1.2")! && AppVersion("1.10")! > AppVersion("1.9")!
+          && AppVersion("1.0")! == AppVersion("1.0.0")!, "versioner sammenlignes tal for tal")
+    check(AppVersion("v2.0.0-beta.1")?.description == "2.0.0" && AppVersion("abc") == nil && AppVersion("") == nil
+          && AppVersion("1..2") == nil, "versionstekst renses, og affald afvises")
+    let json = #"{"tag_name":"v1.1.0","html_url":"https://github.com/Agg3mam/vinyl-shelf-finder/releases/tag/v1.1.0","draft":false,"prerelease":false,"body":"Cd'er får deres egen hylde.\r\n","assets":[{"name":"VinylShelfFinder-Windows-x64.zip","size":66000000,"browser_download_url":"https://github.com/Agg3mam/vinyl-shelf-finder/releases/download/v1.1.0/VinylShelfFinder-Windows-x64.zip"},{"name":"VinylShelfFinder-macOS.zip","size":9000000,"browser_download_url":"https://github.com/Agg3mam/vinyl-shelf-finder/releases/download/v1.1.0/VinylShelfFinder-macOS.zip"}]}"#
+    let r = AppUpdate.parseLatest(Data(json.utf8))
+    check(r?.version.description == "1.1.0" && r?.downloadURL.lastPathComponent == "VinylShelfFinder-macOS.zip"
+          && r?.notes == "Cd'er får deres egen hylde.", "udgivelse læses: version, Mac-zip og tekst")
+    check(AppUpdate.parseLatest(Data(json.utf8), assetName: "VinylShelfFinder-Windows-x64.zip")?.size == 66000000, "Windows-zippen findes også")
+    check(r.map { AppUpdate.isNewer($0, than: "1.0.0") } == true && r.map { AppUpdate.isNewer($0, than: "1.1") } == false
+          && r.map { AppUpdate.isNewer($0, than: "2.0") } == false, "kun nyere versioner tilbydes")
+    let pre = json.replacingOccurrences(of: #""prerelease":false"#, with: #""prerelease":true"#)
+    check(AppUpdate.parseLatest(Data(pre.utf8)) == nil, "prøveudgaver tilbydes ikke")
+    let noMac = json.replacingOccurrences(of: "VinylShelfFinder-macOS.zip", with: "andet.zip")
+    check(AppUpdate.parseLatest(Data(noMac.utf8)) == nil, "udgave uden Mac-zip springes over")
+    let evil = json.replacingOccurrences(of: "https://github.com/Agg3mam/vinyl-shelf-finder/releases/download/v1.1.0/VinylShelfFinder-macOS.zip",
+                                         with: "https://example.com/VinylShelfFinder-macOS.zip")
+    check(AppUpdate.parseLatest(Data(evil.utf8)) == nil, "kun filer fra GitHub")
+    check(AppUpdate.isTrustedHost("objects.githubusercontent.com") && !AppUpdate.isTrustedHost("github.com.example.com")
+          && !AppUpdate.isTrustedHost(nil), "GitHubs downloadadresser")
+    check(AppUpdate.parseLatest(Data("ikke json".utf8)) == nil, "affald giver ingen opdatering")
+    let now = Date()
+    check(AppUpdate.isCheckDue(last: nil, now: now) && !AppUpdate.isCheckDue(last: now.addingTimeInterval(-3600), now: now)
+          && AppUpdate.isCheckDue(last: now.addingTimeInterval(-25 * 3600), now: now), "højst ét tjek pr. døgn")
+}
+
 print(failures == 0 ? "✓ Alle \(passes) checks bestået" : "✗ \(failures) fejl, \(passes) bestået")
 exit(failures == 0 ? 0 : 1)
