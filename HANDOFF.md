@@ -233,9 +233,16 @@ Grene (hver bygger oven på den forrige):
   færdig og oversat 1:1 fra Swift med 524 checks (`cd windows && dotnet run --project
   src/VinylCore.Checks`), inkl. cd'er. Database-skemaet er identisk med Mac (v5).
   WinUI-skallen bygges, testes og zippes af `.github/workflows/windows.yml` på windows-latest.
-- `claude/windows-ui`: første skærme i Windows-appen (søgning, detalje, Find i reolen, sektioner,
-  opsætning, Windows' adgangskodelager). Lavet af en agent; se grenens sidste commits for, hvor
-  langt den nåede. Skærmbilleder fra CI ligger på grenen `ci-snapshots-windows`.
+- `claude/windows-ui` (commit 35b0ca7): første Windows-skærme, **skrevet, men aldrig bygget**.
+  Findes: `WindowsCredentialStore.cs` (Credential Manager), `AppModel.cs` (som AppModel.swift),
+  `UI/Ui.cs` (farver, tekststile, cover, "2A"-mærke), `Views/RecordRow.cs`, `Views/SearchPane.cs`,
+  `Views/ListPanes.cs` (indbakke og sektion), `Views/RecordParts.cs` (placeringspanel, naboer).
+  De er midlertidigt holdt ude af bygget med `<Compile Remove=...>` i VinylShelfFinder.csproj.
+  Mangler: `Views/DetailPane.cs` og `Views/FindOverlay.cs` (fra RecordDetailView.swift og
+  Sheets.swift), `Views/OnboardingView.cs`, MainWindow der bygger sidepanelet i kode og viser
+  panerne (Find som overlay-Grid, så skærmbilledet kan fange det), `--demo` i App.xaml.cs og i
+  smoke-testen i windows.yml, skærmbilleder af søg/detalje/Find/sektion/opsætning. Fjern derefter
+  `Compile Remove`, skub, og ret det, CI melder.
 - `claude/opdatering` (= cd-hylde + windows-app): **opdateringsknap, kun Mac-delen skrevet**.
   `Sources/VinylCore/Update.swift` (versioner, GitHubs svar, højst ét tjek pr. døgn, kun
   GitHub-adresser) med checks, `Sources/VinylShelfFinder/Updater.swift` (tjek ved start, "Version X
