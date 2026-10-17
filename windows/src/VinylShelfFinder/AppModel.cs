@@ -614,6 +614,13 @@ public sealed class AppModel : INotifyPropertyChanged
         }
     }
 
+    /// <summary>Tokenet til et kald (aldrig i demo). Vises og logges aldrig.</summary>
+    internal string? LoadToken()
+    {
+        if (IsDemo) return null;
+        try { return _token.Load(); } catch { return null; }
+    }
+
     public void Disconnect()
     {
         if (IsDemo) return;

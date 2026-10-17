@@ -45,7 +45,8 @@ public partial class App : Application
         Ui.AllowNetworkCovers = !demo && _smokeDir is null;
         var updater = new Updater(enabled: _smokeDir is null && !demo);
         var model = new AppModel(demo);
-        _window = new MainWindow(updater, model);
+        var imusic = new IMusicModel(enabled: !demo && _smokeDir is null);
+        _window = new MainWindow(updater, model, imusic);
         _window.Activate();
 
         if (_smokeDir is not null)
@@ -53,6 +54,7 @@ public partial class App : Application
         else
         {
             model.StartBackups();
+            imusic.Start();
             _ = _window.CheckForUpdateOnLaunchAsync();
         }
     }
@@ -110,6 +112,8 @@ public partial class App : Application
                 if (m.Selection is long played) m.LogPlay(played);
                 m.Sidebar = new SidebarItem(SidebarKind.Plays);
                 await Shot("08-lyttelog.png");
+                m.Sidebar = new SidebarItem(SidebarKind.FindNew);
+                await Shot("12-find-nye-plader.png");
                 m.Sidebar = new SidebarItem(SidebarKind.Value);
                 await Shot("10-vaerdi.png");
                 m.Sidebar = new SidebarItem(SidebarKind.History);

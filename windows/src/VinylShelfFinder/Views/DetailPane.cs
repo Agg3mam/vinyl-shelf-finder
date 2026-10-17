@@ -29,6 +29,9 @@ public sealed class DetailPane
 
     public FrameworkElement View => _root;
 
+    /// <summary>iMusic-linjen nederst (sat af hovedvinduet).</summary>
+    public static IMusicModel? IMusic { get; set; }
+
     public DetailPane(AppModel model)
     {
         _model = model;
@@ -96,7 +99,11 @@ public sealed class DetailPane
             NavigateUri = it.Release.DiscogsUrl,
             Padding = new Thickness(0),
         };
-        p.Children.Add(link);
+        var bottom = Ui.HStack(16, link);
+        if (IMusic is IMusicModel im)
+            bottom.Children.Add(im.OfferLine(Array.Empty<string>(), it.Artist, it.Title,
+                (it.Release.Format ?? "").Contains("vinyl", StringComparison.OrdinalIgnoreCase), compact: true));
+        p.Children.Add(bottom);
         return p;
     }
 

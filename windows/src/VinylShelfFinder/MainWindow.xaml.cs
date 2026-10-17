@@ -25,6 +25,9 @@ public sealed partial class MainWindow : Window
     internal DetailPane Detail { get; }
     internal FindOverlay Find { get; }
     private CoverFlowPane? _coverFlow;
+    internal FindNewModel FindNew { get; }
+    internal IMusicModel IMusic { get; }
+    private FindNewDetailPane? _findNewDetail;
     private IPane? _listPane;
     private IPane? _fullPane;
     private readonly InfoBar _errorBar = new() { Severity = InfoBarSeverity.Error, IsClosable = true, Margin = new Thickness(12, 8, 12, 0) };
@@ -35,10 +38,15 @@ public sealed partial class MainWindow : Window
     private OnboardingView? _onboarding;
     private bool _dialogOpen;
 
-    public MainWindow(Updater updater, AppModel model)
+    public MainWindow(Updater updater, AppModel model, IMusicModel imusic)
     {
         _updater = updater;
         Model = model;
+        IMusic = imusic;
+        FindNew = new FindNewModel(model);
+        FindNew.OpenBrowserRequested += url => DiscogsBrowserWindow.Open(Model, url);
+        SettingsPane.IMusicTab = m => IMusic.SettingsTab(m);
+        DetailPane.IMusic = imusic;
         InitializeComponent();
         Title = "Vinyl Shelf Finder";
         AppWindow.Resize(new Windows.Graphics.SizeInt32(1280, 820));
@@ -80,8 +88,12 @@ public sealed partial class MainWindow : Window
                 ShowContent();
                 break;
             case nameof(AppModel.SyncState):
-            case nameof(AppModel.HasToken):
                 UpdateToolbar();
+                break;
+            case nameof(AppModel.HasToken):
+                FindNew.ResetClient();
+                UpdateToolbar();
+                if (Model.Sidebar.Kind == SidebarKind.FindNew) ShowContent();
                 break;
             case nameof(AppModel.Medium):
                 UpdateToolbar();
@@ -111,6 +123,7 @@ public sealed partial class MainWindow : Window
         Detail.OnModelChanged(p);
         Find.OnModelChanged(p);
         if (DetailHost.Child == _coverFlow?.View) _coverFlow?.OnModelChanged(p);
+        if (DetailHost.Child == _findNewDetail?.View) _findNewDetail?.OnModelChanged(p);
         if (p == nameof(AppModel.ShowCoverFlow)) UpdateDetail();
         if (p == nameof(AppModel.Library)) UpdateToolbar();
     }
@@ -301,6 +314,12 @@ public sealed partial class MainWindow : Window
     /// <summary>Højre kolonne: Cover Flow i en sektion (når det er slået til), ellers plade-detaljen.</summary>
     private void UpdateDetail()
     {
+        if (Model.Sidebar.Kind == SidebarKind.FindNew)
+        {
+            _findNewDetail ??= new FindNewDetailPane(Model, FindNew, IMusic);
+            DetailHost.Child = _findNewDetail.View;
+            return;
+        }
         if (Model.Sidebar.Kind == SidebarKind.Section && Model.ShowCoverFlow && Model.Library.LocationById(Model.Sidebar.SectionId) is not null)
         {
             _coverFlow ??= new CoverFlowPane(Model);
@@ -351,6 +370,9 @@ public sealed partial class MainWindow : Window
                 break;
             case SidebarKind.Plays:
                 ShowList(new PlaysPane(Model));
+                break;
+            case SidebarKind.FindNew:
+                ShowList(new FindNewSearchPane(Model, FindNew));
                 break;
             case SidebarKind.Value:
                 ShowList(new ValuePane(Model));
