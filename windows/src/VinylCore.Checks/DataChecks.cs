@@ -69,6 +69,7 @@ static class DataChecks
         Backup();
         CoverFlow();
         Planner();
+        Cds();
 
         foreach (var d in Dirs)
         {
@@ -386,6 +387,78 @@ static class DataChecks
         Check.That(!(s.Setting("sort_rules") ?? "").Contains("Dylan"), "kunstner-overrides står ikke i sort_rules");
     });
 
+    // MARK: Cd'er: egen hylde i samme samling (samme checks som på Mac)
+
+    private static void Cds() => Check.Section("cd'er", () =>
+    {
+        Check.That(MediumExtensions.Of("CD, Album") == Medium.Cd && MediumExtensions.Of("2×CD, Compilation") == Medium.Cd
+                   && MediumExtensions.Of("CDr, Album") == Medium.Cd && MediumExtensions.Of("SACD, Hybrid") == Medium.Cd, "cd-formater genkendes");
+        Check.That(MediumExtensions.Of("Vinyl, LP, Album") == Medium.Vinyl && MediumExtensions.Of("2×Vinyl, LP") == Medium.Vinyl
+                   && MediumExtensions.Of("Cassette, Album") == Medium.Vinyl && MediumExtensions.Of(null) == Medium.Vinyl
+                   && MediumExtensions.Of("Box Set, CD") == Medium.Vinyl, "alt andet hører til pladerne (kun første format tæller)");
+        Check.That(Medium.Cd.RawValue() == "cd" && MediumExtensions.FromRaw("vinyl") == Medium.Vinyl, "gemmes som samme tekst som på Mac");
+
+        using var s = new ShelfStore(TempDb("cd"));
+        static DiscogsCollectionItem It(int i, string artist, string title, string format) =>
+            new(70_000 + i, null, new Release(700_000 + i, artist, title, Format: format));
+        var all = new List<DiscogsCollectionItem> { It(0, "ABBA", "Arrival", "Vinyl, LP"), It(1, "Blur", "Parklife", "CD, Album"),
+            It(2, "Bowie", "Low", "Vinyl, LP"), It(3, "Radiohead", "Kid A", "CD, Album"), It(4, "Radiohead", "OK Computer", "CD, Album") };
+        s.ApplyCollection(all);
+        var counts = s.MediumCounts();
+        Check.That(counts.GetValueOrDefault(Medium.Vinyl) == 2 && counts.GetValueOrDefault(Medium.Cd) == 3, "antal pr. hylde");
+        var vinyl = s.LoadLibrary();
+        var cds = s.LoadLibrary(Medium.Cd);
+        Check.That(vinyl.Copies.Count == 2 && cds.Copies.Count == 3 && cds.Medium == Medium.Cd, "samlingen deles op i plader og cd'er");
+
+        var rules = new SortRules();
+        var cdIds = rules.Sorted(cds.AllItems).Select(i => i.Id).ToList();
+        s.CreateLayout(new List<(int, string, IReadOnlyList<long>)> { (1, "A", rules.Sorted(vinyl.AllItems).Select(i => i.Id).ToList()) });
+        s.CreateLayout(new List<(int, string, IReadOnlyList<long>)> { (1, "A", cdIds) }, Medium.Cd);
+        var v = s.LoadLibrary();
+        var c = s.LoadLibrary(Medium.Cd);
+        Check.That(v.Locations.Count == 1 && c.Locations.Count == 1 && v.Locations[0].Id != c.Locations[0].Id
+                   && v.Unplaced.Count == 0 && c.Unplaced.Count == 0, "egne reoler pr. hylde");
+        Check.That(c.Locations[0].Name == "Cd-reol 1 · Sektion A" && v.Locations[0].Name == "Reol 1 · Sektion A", "cd-reolens navn");
+
+        s.CreateLayout(new List<(int, string, IReadOnlyList<long>)> { (1, "A", cdIds.Take(1).ToList()), (1, "B", cdIds.Skip(1).ToList()) }, Medium.Cd);
+        v = s.LoadLibrary();
+        c = s.LoadLibrary(Medium.Cd);
+        Check.That(v.Locations.Count == 1 && v.GlobalOrder.Count == 2 && c.Locations.Count == 2 && c.GlobalOrder.Count == 3,
+                   "ny cd-opdeling rører ikke pladereolen");
+
+        var kidA = c.AllItems.First(i => i.Title == "Kid A").Id;
+        var adv = c.ReferenceAdviceFor(kidA)!;
+        Check.That(adv.PlacementHint.StartsWith("Cd ") && !adv.PlacementHint.Contains("Plade"), $"Find på cd: {adv.PlacementHint}");
+        Check.That(adv.Primary.Reason.Contains("cd") && !adv.Primary.Reason.Contains("plade"), $"Find på cd: {adv.Primary.Reason}");
+        var low = v.AllItems.First(i => i.Title == "Low").Id;
+        Check.That(v.ReferenceAdviceFor(low)!.PlacementHint.StartsWith("Plade "), "pladerne siger stadig plade");
+
+        var newCd = s.AddSection(2, "A", Medium.Cd);
+        c = s.LoadLibrary(Medium.Cd);
+        v = s.LoadLibrary();
+        Check.That(c.LocationById(newCd)?.Name == "Cd-reol 2 · Sektion A" && v.LocationById(newCd) is null && c.Locations[^1].Id == newCd,
+                   "ny cd-sektion står sidst på cd-hylden");
+
+        s.SetMedium(kidA, Medium.Vinyl);
+        v = s.LoadLibrary();
+        c = s.LoadLibrary(Medium.Cd);
+        Check.That(v.Unplaced.Contains(kidA) && !c.Copies.ContainsKey(kidA) && v.Item(kidA)?.Medium == Medium.Vinyl,
+                   "skift til plader: uplaceret blandt pladerne");
+        Check.That(s.History().FirstOrDefault()?.Kind == HistoryKind.Unplaced, "skiftet står i historikken");
+        s.SetMedium(kidA, null);
+        Check.That(s.LoadLibrary(Medium.Cd).Unplaced.Contains(kidA), "tilbage til Discogs' format: cd igen (uden plads)");
+
+        s.SetMedium(kidA, Medium.Vinyl);
+        s.ApplyCollection(all);
+        Check.That(s.LoadLibrary().Copies.GetValueOrDefault(kidA)?.MediumOverride == Medium.Vinyl, "sync bevarer valget af hylde");
+
+        using var d = new ShelfStore(TempDb("cd-demo"));
+        DemoData.SeedIfEmpty(d);
+        var dcd = d.LoadLibrary(Medium.Cd);
+        Check.That(dcd.Copies.Count == 10 && dcd.Locations.Count == 2 && dcd.Unplaced.Count == 0, "demo: cd-reol med 2 sektioner");
+        Check.That(d.LoadLibrary().Copies.Count == 43, "demo: pladerne er uændrede");
+    });
+
     // MARK: Reference-mode på demo-data
 
     private static void DemoReference() => Check.Section("reference-mode på demo", () =>
@@ -393,7 +466,7 @@ static class DataChecks
         using var demo = new ShelfStore(TempDb("demo"));
         DemoData.SeedIfEmpty(demo);
         var dl = demo.LoadLibrary();
-        Check.That(DemoData.Collection.Count == 43, "demo: 43 eksempelplader");
+        Check.That(DemoData.Collection.Count == 53 && dl.Copies.Count == 43, "demo: 43 eksempelplader og 10 cd'er");
         Check.That(dl.Unplaced.Count == 0 && dl.Locations.Count == 3, "demo: 3 sektioner, alt placeret");
         var station = dl.AllItems.First(i => i.Title == "Station To Station").Id;
         var adv = dl.ReferenceAdviceFor(station)!;
@@ -655,7 +728,7 @@ static class DataChecks
         var path = TempDb("schema");
         using (var s = new ShelfStore(path))
         {
-            Check.That(s.Db.UserVersion == 4, "skema v4");
+            Check.That(s.Db.UserVersion == 5, "skema v5");
             s.ApplyCollection(new[] { Item(1, 1, "O'Brien", "Robert'); DROP TABLE copies;--") });
         }
         using var reopened = new ShelfStore(path);
@@ -678,7 +751,7 @@ static class DataChecks
         var cid = up.LoadLibrary().Copies.Keys.First();
         bool ok;
         try { up.LogPlay(cid); ok = true; } catch (DatabaseException) { ok = false; }
-        Check.That(up.Db.UserVersion == 4 && ok, "migration v3→v4 opretter plays og bevarer kopier");
+        Check.That(up.Db.UserVersion == 5 && ok, "migration v3→v5 opretter plays og bevarer kopier");
     });
 
     // Søgning: Unicode og grænsetilfælde

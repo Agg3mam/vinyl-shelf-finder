@@ -60,14 +60,32 @@ public static class DemoData
         _ => "Rock",
     };
 
+    /// Cd'er til den anden hylde (samme Discogs-samling, format "CD"). Samme som på Mac.
+    internal static readonly (string Artist, string Title, int Year, string Label, string Catalog)[] Cds =
+    {
+        ("Björk", "Debut", 1993, "One Little Indian", "TPLP 31 CD"),
+        ("Blur", "Parklife", 1994, "Food", "FOODCD 10"),
+        ("The Cardigans", "First Band On The Moon", 1996, "Stockholm Records", "533 117-2"),
+        ("D-A-D", "No Fuel Left For The Pilgrims", 1989, "Medley Records", "MdCD 6176"),
+        ("Massive Attack", "Mezzanine", 1998, "Virgin", "WBRCD4"),
+        ("Portishead", "Dummy", 1994, "Go! Beat", "828 553-2"),
+        ("Radiohead", "OK Computer", 1997, "Parlophone", "7243 8 55229 2 5"),
+        ("Radiohead", "Kid A", 2000, "Parlophone", "7243 5 27753 2 3"),
+        ("TV-2", "Nærmest Lykkelig", 1985, "Medley Records", "MdCD 6050"),
+        ("The Verve", "Urban Hymns", 1997, "Hut Recordings", "CDHUT45"),
+    };
+
     public static List<DiscogsCollectionItem> Collection =>
         Records.Select((r, i) => new DiscogsCollectionItem(9_000 + i, null,
-            new Release(100_000 + i, r.Artist, r.Title, r.Year, r.Label, r.Catalog, "Vinyl, LP, Album", Genres: DemoGenre(r.Artist)))).ToList();
+            new Release(100_000 + i, r.Artist, r.Title, r.Year, r.Label, r.Catalog, "Vinyl, LP, Album", Genres: DemoGenre(r.Artist))))
+        .Concat(Cds.Select((r, i) => new DiscogsCollectionItem(9_500 + i, null,
+            new Release(150_000 + i, r.Artist, r.Title, r.Year, r.Label, r.Catalog, "CD, Album", Genres: DemoGenre(r.Artist)))))
+        .ToList();
 
-    /// Fylder en tom database med eksempeldata og en reol med 3 sektioner.
+    /// Fylder en tom database med eksempeldata: en pladereol med 3 sektioner og en cd-reol med 2.
     public static void SeedIfEmpty(ShelfStore store)
     {
-        if (store.LoadLibrary().Copies.Count > 0) return;
+        if (store.MediumCounts().Count > 0) return;
         store.ApplyCollection(Collection);
         // Demo-listen er ikke i Discogs' rækkefølge, så demoen bruger appens egne regler.
         var rules = store.LoadSortRules();
@@ -77,5 +95,10 @@ public static class DemoData
         var plan = LayoutPlanner.EvenPlan(sorted.Count, new[] { 2, 1 });
         var parts = LayoutPlanner.Split(sorted, plan);
         store.CreateLayout(plan.Zip(parts, (p, ids) => (p.Shelf, p.Section, (IReadOnlyList<long>)ids)).ToList());
+
+        var cdSorted = rules.Sorted(store.LoadLibrary(Medium.Cd).AllItems).Select(i => i.Id).ToList();
+        var cdPlan = LayoutPlanner.EvenPlan(cdSorted.Count, new[] { 2 });
+        var cdParts = LayoutPlanner.Split(cdSorted, cdPlan);
+        store.CreateLayout(cdPlan.Zip(cdParts, (p, ids) => (p.Shelf, p.Section, (IReadOnlyList<long>)ids)).ToList(), Medium.Cd);
     }
 }

@@ -73,9 +73,14 @@ public sealed class Library
     /// Kopier uden fysisk placering (typisk nye fra Discogs).
     public IReadOnlyList<long> Unplaced { get; }
 
+    /// Plader eller cd'er. Styrer ordene i Find-teksterne ("din plade" / "din cd").
+    public Medium Medium { get; }
+
     public Library(IReadOnlyDictionary<int, Release> releases, IReadOnlyDictionary<long, Copy> copies,
-                   IEnumerable<Location> locations, IEnumerable<(long CopyId, long LocationId, int Position)> placements)
+                   IEnumerable<Location> locations, IEnumerable<(long CopyId, long LocationId, int Position)> placements,
+                   Medium medium = Medium.Vinyl)
     {
+        Medium = medium;
         Releases = releases;
         Copies = copies;
         var locs = locations.OrderBy(l => l.SortIndex).ThenBy(l => l.Id).ToList();
@@ -231,6 +236,8 @@ public sealed class Library
         var targetArtist = target.Artist;
         var before = n.Before.FirstOrDefault();
         var after = n.After.FirstOrDefault();
+        string word = Medium.Singular(), words = Medium.Plural();
+        string capWord = char.ToUpperInvariant(word[0]) + word[1..];
 
         // Kunstnerblok: hvor mange plader af samme kunstner står i træk omkring målet?
         // Der tælles kun plader, der fysisk står i reolen (plus målet selv), ellers bliver
@@ -255,12 +262,12 @@ public sealed class Library
         // LeftOf: pladen står til venstre for målet. RightOf: til højre for målet.
         string LeftOf(RecordItem it) => putBack
             ? $"Sæt den lige til højre for {SentenceEnd(Called(it))}"
-            : $"{Called(it, first: true)} står lige til venstre for din plade.";
+            : $"{Called(it, first: true)} står lige til venstre for din {word}.";
         string RightOf(RecordItem it) => putBack
             ? $"Sæt den lige til venstre for {SentenceEnd(Called(it))}"
-            : $"{Called(it, first: true)} står lige til højre for din plade.";
-        var atLeftEdge = putBack ? "Sæt den yderst til venstre i sektionen." : "Din plade står yderst til venstre i sektionen.";
-        var atRightEdge = putBack ? "Sæt den yderst til højre i sektionen." : "Din plade står yderst til højre i sektionen.";
+            : $"{Called(it, first: true)} står lige til højre for din {word}.";
+        var atLeftEdge = putBack ? "Sæt den yderst til venstre i sektionen." : $"Din {word} står yderst til venstre i sektionen.";
+        var atRightEdge = putBack ? "Sæt den yderst til højre i sektionen." : $"Din {word} står yderst til højre i sektionen.";
         const string otherArtist = "Det er en anden kunstner, så den er let at få øje på.";
 
         Reference primary;
@@ -296,11 +303,11 @@ public sealed class Library
                 // (en anden kunstner eller sektionens kant). Det er den eneste tælleinstruktion.
                 countsInPrimary = true;
                 int fromStart = sIdx - blockStart, fromEnd = blockEnd - sIdx;
-                var among = putBack ? $"Din plade skal stå blandt {blockSize} {targetArtist}-plader i træk."
-                                    : $"Din plade står blandt {blockSize} {targetArtist}-plader i træk.";
+                var among = putBack ? $"Din {word} skal stå blandt {blockSize} {targetArtist}-{words} i træk."
+                                    : $"Din {word} står blandt {blockSize} {targetArtist}-{words} i træk.";
                 string Count(int nr, string side, RecordItem it) => putBack
-                    ? $"din plade skal stå som nr. {nr}, lige til {side} for {SentenceEnd(Called(it))}"
-                    : $"din plade er nr. {nr}, lige til {side} for {SentenceEnd(Called(it))}";
+                    ? $"din {word} skal stå som nr. {nr}, lige til {side} for {SentenceEnd(Called(it))}"
+                    : $"din {word} er nr. {nr}, lige til {side} for {SentenceEnd(Called(it))}";
                 if (fromStart <= fromEnd)
                 {
                     var start = blockStart > 0 && Item(shelf[blockStart - 1]) is RecordItem s0
@@ -338,8 +345,8 @@ public sealed class Library
             if (side is not null)
             {
                 blockHint = putBack
-                    ? $"Din plade skal stå længst til {side} blandt {blockSize} {targetArtist}-plader i træk."
-                    : $"Der står {blockSize} {targetArtist}-plader i træk, og din plade er den længst til {side}.";
+                    ? $"Din {word} skal stå længst til {side} blandt {blockSize} {targetArtist}-{words} i træk."
+                    : $"Der står {blockSize} {targetArtist}-{words} i træk, og din {word} er den længst til {side}.";
             }
         }
 
@@ -351,7 +358,7 @@ public sealed class Library
         string? edgeHint = edge.Count == 0 ? null : string.Join(" ", edge);
 
         // Fysiske tal: talt blandt pladerne i reolen, med målpladen selv.
-        var placementHint = $"{(putBack ? "Plads" : "Plade")} {position} af {n.SectionCount} fra venstre";
+        var placementHint = $"{(putBack ? "Plads" : capWord)} {position} af {n.SectionCount} fra venstre";
         return new ReferenceAdvice(primary, secondary, blockHint, placementHint, edgeHint);
     }
 

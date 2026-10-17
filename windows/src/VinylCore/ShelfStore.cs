@@ -167,11 +167,27 @@ public sealed partial class ShelfStore : IDisposable
                 Db.Execute("PRAGMA user_version = 4");
             });
         }
+        if (Db.UserVersion < 5)
+        {
+            // Cd'er: egne reoler (locations.medium) og brugerens eget valg pr. kopi. Kan køres igen.
+            Db.Transaction(() =>
+            {
+                if (!HasColumn("locations", "medium"))
+                    Db.Execute("ALTER TABLE locations ADD COLUMN medium TEXT NOT NULL DEFAULT 'vinyl'");
+                if (!HasColumn("copies", "medium_override"))
+                    Db.Execute("ALTER TABLE copies ADD COLUMN medium_override TEXT");
+                Db.Execute("PRAGMA user_version = 5");
+            });
+        }
     }
+
+    private bool HasColumn(string table, string column) =>
+        Db.Query("SELECT name FROM pragma_table_info(?)", table).Any(r => r.Text("name") == column);
 
     // MARK: Indlæsning
 
-    public Library LoadLibrary()
+    /// Samlingen for én slags hylde: kun plader (standard) eller kun cd'er, med deres egne reoler.
+    public Library LoadLibrary(Medium medium = Medium.Vinyl)
     {
         var releases = new Dictionary<int, Release>();
         foreach (var r in Db.Query("SELECT * FROM releases"))
@@ -183,13 +199,29 @@ public sealed partial class ShelfStore : IDisposable
         foreach (var r in Db.Query("SELECT * FROM copies"))
         {
             var c = CopyFrom(r);
-            copies[c.Id] = c;
+            var m = c.MediumOverride ?? MediumExtensions.Of(releases.TryGetValue(c.ReleaseId, out var rel) ? rel.Format : null);
+            if (m == medium) copies[c.Id] = c;
         }
-        var locations = Db.Query("SELECT * FROM locations").Select(r =>
-            new Location(r.Long("id")!.Value, r.Int("shelf") ?? 0, r.Text("section") ?? "", r.Int("sort_index") ?? 0, r.Text("scan_code"))).ToList();
+        var locations = Db.Query("SELECT * FROM locations WHERE medium = ?", medium.RawValue()).Select(r =>
+            new Location(r.Long("id")!.Value, r.Int("shelf") ?? 0, r.Text("section") ?? "", r.Int("sort_index") ?? 0, r.Text("scan_code"), medium)).ToList();
+        var locationIds = locations.Select(l => l.Id).ToHashSet();
+        // En kopi, der står på en reol af den anden slags (fx efter "Flyt til cd-hylden"), regnes som uplaceret.
         var placements = Db.Query("SELECT * FROM placements").Select(r =>
-            (r.Long("copy_id")!.Value, r.Long("location_id")!.Value, r.Int("position") ?? 0)).ToList();
-        return new Library(releases, copies, locations, placements);
+            (r.Long("copy_id")!.Value, r.Long("location_id")!.Value, r.Int("position") ?? 0))
+            .Where(p => copies.ContainsKey(p.Item1) && locationIds.Contains(p.Item2)).ToList();
+        return new Library(releases, copies, locations, placements, medium);
+    }
+
+    /// Antal kopier pr. slags hylde (til skiftet "Plader / Cd'er", når der er cd'er).
+    public Dictionary<Medium, int> MediumCounts()
+    {
+        var counts = new Dictionary<Medium, int>();
+        foreach (var r in Db.Query("SELECT c.medium_override, r.format FROM copies c JOIN releases r ON r.discogs_release_id = c.release_id"))
+        {
+            var m = MediumExtensions.FromRaw(r.Text("medium_override")) ?? MediumExtensions.Of(r.Text("format"));
+            counts[m] = counts.GetValueOrDefault(m) + 1;
+        }
+        return counts;
     }
 
     private static Release ReleaseFrom(SqlRow r) => new(
@@ -208,7 +240,8 @@ public sealed partial class ShelfStore : IDisposable
         r.Text("sort_artist_override"),
         r.Text("sort_title_override"),
         r.Text("date_added"),
-        r.Int("discogs_rank"));
+        r.Int("discogs_rank"),
+        MediumExtensions.FromRaw(r.Text("medium_override")));
 
     // MARK: Indstillinger
 
@@ -295,10 +328,11 @@ public sealed partial class ShelfStore : IDisposable
     {
         if (id is null) return "ukendt sektion";
         SqlRow? r;
-        try { r = Db.Query("SELECT shelf, section FROM locations WHERE id = ?", id).FirstOrDefault(); }
+        try { r = Db.Query("SELECT shelf, section, medium FROM locations WHERE id = ?", id).FirstOrDefault(); }
         catch (DatabaseException) { r = null; }
         if (r is null) return "ukendt sektion";
-        return $"Reol {r.Long("shelf") ?? 0} · Sektion {r.Text("section") ?? ""}";
+        var medium = MediumExtensions.FromRaw(r.Text("medium")) ?? Medium.Vinyl;
+        return $"{medium.ShelfWord()} {r.Long("shelf") ?? 0} · Sektion {r.Text("section") ?? ""}";
     }
 
     /// Placering til historikken: "Reol 1 · Sektion A, plads 16".
@@ -391,34 +425,53 @@ public sealed partial class ShelfStore : IDisposable
     }
 
     /// Opretter reol-strukturen fra onboarding. `layout` er sektioner i rækkefølge med
-    /// kopier i fysisk rækkefølge. Erstatter eksisterende struktur (kun efter bekræftelse).
-    public void CreateLayout(IReadOnlyList<(int Shelf, string Section, IReadOnlyList<long> Copies)> layout)
+    /// kopier i fysisk rækkefølge. Erstatter eksisterende struktur for samme slags hylde
+    /// (kun efter bekræftelse): pladernes reoler røres ikke, når cd-reolerne oprettes, og omvendt.
+    public void CreateLayout(IReadOnlyList<(int Shelf, string Section, IReadOnlyList<long> Copies)> layout, Medium medium = Medium.Vinyl)
     {
         Db.Transaction(() =>
         {
-            Db.Run("DELETE FROM placements");
-            Db.Run("DELETE FROM locations");
+            Db.Run("DELETE FROM placements WHERE location_id IN (SELECT id FROM locations WHERE medium = ?)", medium.RawValue());
+            Db.Run("DELETE FROM locations WHERE medium = ?", medium.RawValue());
+            long offset = Db.Query("SELECT COALESCE(MAX(sort_index) + 1, 0) AS n FROM locations").FirstOrDefault()?.Long("n") ?? 0;
             for (int i = 0; i < layout.Count; i++)
             {
                 var s = layout[i];
-                var locId = Db.Run("INSERT INTO locations(shelf, section, sort_index) VALUES(?, ?, ?)", s.Shelf, s.Section, i);
+                var locId = Db.Run("INSERT INTO locations(shelf, section, sort_index, medium) VALUES(?, ?, ?, ?)", s.Shelf, s.Section, offset + i, medium.RawValue());
                 WriteSection(locId, s.Copies);
             }
             int total = layout.Sum(s => s.Copies.Count);
+            var what = medium == Medium.Vinyl ? "Reolerne" : "Cd-reolerne";
             Log(HistoryKind.LayoutCreated, null,
-                $"Reolerne er oprettet: {(layout.Count == 1 ? "1 sektion" : $"{layout.Count} sektioner")}, {(total == 1 ? "1 plade" : $"{total} plader")}");
+                $"{what} er oprettet: {(layout.Count == 1 ? "1 sektion" : $"{layout.Count} sektioner")}, {(total == 1 ? $"1 {medium.Singular()}" : $"{total} {medium.Plural()}")}");
         });
     }
 
-    /// Tilføjer en ny tom sektion sidst i en reol (eller i en ny reol).
-    public long AddSection(int shelf, string section) => Db.Transaction(() =>
+    /// "Flyt til cd-hylden" / "Flyt til pladehylden" (null: følg Discogs' format). Står kopien på en
+    /// reol af den gamle slags, fjernes den derfra og venter som ny på den anden hylde.
+    public void SetMedium(long copyId, Medium? medium)
     {
-        var existing = Db.Query("SELECT id, shelf, sort_index FROM locations ORDER BY sort_index");
+        // Unplace kører sin egen transaktion (og skriver i historikken), derfor ingen ydre transaktion her.
+        if (CurrentPlacement(copyId) is { } p
+            && Db.Query("SELECT medium FROM locations WHERE id = ?", p.LocationId).FirstOrDefault() is { } loc)
+        {
+            var fmt = Db.Query("SELECT r.format FROM copies c JOIN releases r ON r.discogs_release_id = c.release_id WHERE c.id = ?", copyId)
+                .FirstOrDefault()?.Text("format");
+            var now = medium ?? MediumExtensions.Of(fmt);
+            if (loc.Text("medium") != now.RawValue()) Unplace(copyId);
+        }
+        Db.Run("UPDATE copies SET medium_override = ? WHERE id = ?", medium?.RawValue(), copyId);
+    }
+
+    /// Tilføjer en ny tom sektion sidst i en reol (eller i en ny reol).
+    public long AddSection(int shelf, string section, Medium medium = Medium.Vinyl) => Db.Transaction(() =>
+    {
+        var existing = Db.Query("SELECT id, shelf, sort_index FROM locations WHERE medium = ? ORDER BY sort_index", medium.RawValue());
         // Indsæt efter den sidste sektion i samme (eller lavere) reol.
         var insertAfter = existing.LastOrDefault(r => (r.Long("shelf") ?? 0) <= shelf);
         long newIndex = insertAfter is null ? 0 : (insertAfter.Long("sort_index") ?? 0) + 1;
         Db.Run("UPDATE locations SET sort_index = sort_index + 1 WHERE sort_index >= ?", newIndex);
-        return Db.Run("INSERT INTO locations(shelf, section, sort_index) VALUES(?, ?, ?)", shelf, section, newIndex);
+        return Db.Run("INSERT INTO locations(shelf, section, sort_index, medium) VALUES(?, ?, ?, ?)", shelf, section, newIndex, medium.RawValue());
     });
 
     public void DeleteEmptySection(long locationId)
