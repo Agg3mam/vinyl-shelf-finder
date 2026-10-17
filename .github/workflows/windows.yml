@@ -6,9 +6,14 @@ name: Windows
 # På et tag v* lægges zip'en også på en GitHub Release.
 on:
   push:
-    branches-ignore: [ci-snapshots, ci-snapshots-windows, design-retning-*]
+    branches-ignore: [ci-snapshots, ci-snapshots-windows, design-retning-*, claude/udgivelse-*]
     tags: ['v*']
   workflow_dispatch:
+  workflow_call:
+    inputs:
+      tag:
+        type: string
+        required: true
 
 # contents: write: Release ved tags + billedet på grenen ci-snapshots-windows.
 permissions:
@@ -46,7 +51,8 @@ jobs:
       # Version fra tagget (v1.2.3 -> 1.2.3); ellers csproj'ens egen. Appens opdatering sammenligner med den.
       - name: Version fra tagget
         run: |
-          $v = if ($env:GITHUB_REF_TYPE -eq 'tag') { $env:GITHUB_REF_NAME -replace '^v', '' } else { '' }
+          $tag = '${{ inputs.tag }}'
+          $v = if ($tag) { $tag -replace '^v', '' } elseif ($env:GITHUB_REF_TYPE -eq 'tag') { $env:GITHUB_REF_NAME -replace '^v', '' } else { '' }
           "APP_VERSION=$v" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
           "Version: $v"
 
@@ -106,7 +112,7 @@ jobs:
       # Billedet lægges også på grenen ci-snapshots-windows (overskrives hver gang),
       # så det kan hentes med git: git clone -b ci-snapshots-windows <repo>
       - name: Læg billede på grenen ci-snapshots-windows
-        if: always() && github.ref_type == 'branch'
+        if: always() && github.ref_type == 'branch' && !inputs.tag
         continue-on-error: true
         working-directory: ${{ github.workspace }}
         shell: bash
@@ -120,9 +126,10 @@ jobs:
           git commit -q -m "Windows-billede fra ${GITHUB_REF_NAME} @ ${GITHUB_SHA::7}"
           git push -q -f "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" ci-snapshots-windows
 
-      - name: Release (kun tags v*)
-        if: startsWith(github.ref, 'refs/tags/v')
+      - name: Release (kun tags v* eller fra udgivelse.yml)
+        if: startsWith(github.ref, 'refs/tags/v') || inputs.tag
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: ${{ inputs.tag || github.ref_name }}
           files: VinylShelfFinder-Windows-x64.zip
           fail_on_unmatched_files: true

@@ -4,7 +4,7 @@ name: Byg og checks
 # uden brugerens egen Mac. Rører aldrig nøglering, Discogs eller rigtige data.
 on:
   push:
-    branches-ignore: [design-retning-*, ci-snapshots]
+    branches-ignore: [design-retning-*, ci-snapshots, claude/udgivelse-*]
   workflow_dispatch:
 
 # contents: write er kun til at lægge snapshots på grenen ci-snapshots (se sidste trin).

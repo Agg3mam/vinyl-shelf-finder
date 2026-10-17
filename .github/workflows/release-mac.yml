@@ -6,6 +6,11 @@ name: Mac-udgivelse
 on:
   push:
     tags: ['v*']
+  workflow_call:
+    inputs:
+      tag:
+        type: string
+        required: true
 
 permissions:
   contents: write
@@ -18,7 +23,8 @@ jobs:
       - uses: actions/checkout@v4
       - name: Version fra tagget
         run: |
-          V="${GITHUB_REF_NAME#v}"
+          TAG="${{ inputs.tag || github.ref_name }}"
+          V="${TAG#v}"
           /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $V" Resources/Info.plist
           /usr/libexec/PlistBuddy -c "Set :CFBundleVersion ${GITHUB_RUN_NUMBER}" Resources/Info.plist
       - name: Byg appen
@@ -30,4 +36,5 @@ jobs:
       - name: Læg på udgivelsen
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: ${{ inputs.tag || github.ref_name }}
           files: VinylShelfFinder-macOS.zip

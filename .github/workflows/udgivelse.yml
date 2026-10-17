@@ -1,0 +1,49 @@
+name: Udgivelse
+
+# Laver en udgivelse uden at skubbe et tag: skub en gren, der hedder claude/udgivelse-v1.2.3.
+# Udgivelsen v1.2.3 oprettes (tagget peger på grenens commit), og Mac- og Windows-appen bygges
+# og lægges på den som VinylShelfFinder-macOS.zip og VinylShelfFinder-Windows-x64.zip.
+# Appernes opdateringsknap henter netop de to filer.
+on:
+  push:
+    branches: ['claude/udgivelse-v*']
+
+permissions:
+  contents: write
+
+jobs:
+  tag:
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.v.outputs.tag }}
+    steps:
+      - name: Version fra grenens navn
+        id: v
+        run: |
+          TAG="${GITHUB_REF_NAME#claude/udgivelse-}"
+          [[ "$TAG" =~ ^v[0-9]+\.[0-9]+(\.[0-9]+)?$ ]] || { echo "::error::Grenen skal hedde claude/udgivelse-v1.2.3 (fik $TAG)"; exit 1; }
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+      - name: Opret udgivelsen og tagget
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.v.outputs.tag }}
+          target_commitish: ${{ github.sha }}
+          name: Vinyl Shelf Finder ${{ steps.v.outputs.tag }}
+          body: |
+            Hent den fil, der passer til din computer:
+            - Mac: VinylShelfFinder-macOS.zip
+            - Windows: VinylShelfFinder-Windows-x64.zip (pak den ud i din egen mappe, fx Dokumenter)
+
+            Har du allerede appen, kan du bruge "Opdatér nu" i appen.
+
+  mac:
+    needs: tag
+    uses: ./.github/workflows/release-mac.yml
+    with:
+      tag: ${{ needs.tag.outputs.tag }}
+
+  windows:
+    needs: tag
+    uses: ./.github/workflows/windows.yml
+    with:
+      tag: ${{ needs.tag.outputs.tag }}
