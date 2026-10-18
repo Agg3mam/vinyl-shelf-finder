@@ -516,8 +516,8 @@ static class DataChecks
             k.ApplyCollection(new[] { It(10, "ABBA", "Arrival", "Vinyl, LP"), It(11, "Moby", "Play", "File, MP3"), It(12, "Zappa", "Hot Rats", "Vinyl, LP") });
             fileId = k.Db.Query("SELECT id FROM copies WHERE release_id = 700011").Single().Long("id")!.Value;
             k.SetMedium(fileId, Medium.Vinyl); // som en gammel version, der regnede filen for en plade
-            var all = k.LoadLibrary().AllItems.Select(i => i.Id).OrderBy(x => x).ToList();
-            k.CreateLayout(new List<(int, string, IReadOnlyList<long>)> { (1, "A", all) });
+            var keepIds = k.LoadLibrary().AllItems.Select(i => i.Id).OrderBy(x => x).ToList();
+            k.CreateLayout(new List<(int, string, IReadOnlyList<long>)> { (1, "A", keepIds) });
             k.Db.Run("UPDATE copies SET medium_override = NULL WHERE id = ?", fileId); // gammel database: intet valg gemt
             before = string.Join(";", k.Db.Query("SELECT copy_id, location_id, position FROM placements ORDER BY copy_id")
                 .Select(r => $"{r.Long("copy_id")}:{r.Long("location_id")}:{r.Long("position")}"));
