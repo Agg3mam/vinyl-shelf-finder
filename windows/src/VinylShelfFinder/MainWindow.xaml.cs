@@ -62,6 +62,14 @@ public sealed partial class MainWindow : Window
         OverlayHost.Child = Find.View;
         DetailHost.Child = Detail.View;
         Body.SizeChanged += (_, e) => ListColumn.Width = new GridLength(Math.Clamp(e.NewSize.Width * 0.4, 260, 360));
+        // Under 1100 px vises sidepanelet kun med ikoner (NavigationView's Auto folder sig ikke ud igen).
+        Nav.SizeChanged += (_, e) =>
+        {
+            var mode = e.NewSize.Width >= 1100 ? NavigationViewPaneDisplayMode.Left : NavigationViewPaneDisplayMode.LeftCompact;
+            if (Nav.PaneDisplayMode == mode) return;
+            Nav.PaneDisplayMode = mode;
+            Nav.IsPaneOpen = mode == NavigationViewPaneDisplayMode.Left;
+        };
         TopBar.Children.Add(BuildToolbar());
         TopBar.Children.Add(_errorBar);
         _errorBar.Closed += (_, _) => Model.ErrorMessage = null;

@@ -28,8 +28,7 @@
         </InfoBar>
 
         <NavigationView x:Name="Nav" Grid.Row="1"
-                        PaneDisplayMode="Auto"
-                        ExpandedModeThresholdWidth="1100"
+                        PaneDisplayMode="Left"
                         IsSettingsVisible="True"
                         IsBackButtonVisible="Collapsed"
                         OpenPaneLength="260"
