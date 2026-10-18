@@ -2148,6 +2148,124 @@ do {
     check(try b.loadPlays().isEmpty, "sletning følger med")
 } catch { check(false, "synkronisering: \(error)") }
 
+// MARK: Kontoen i skyen (falsk Supabase, uden net)
+/// Svarer som Supabase: login med koden 123456, og en tabel med poster, hvor serveren sætter updated_at.
+final class StubCloud: URLProtocol, @unchecked Sendable {
+    nonisolated(unsafe) static var rows: [String: [String: Any]] = [:]
+    nonisolated(unsafe) static var tick = 0
+    nonisolated(unsafe) static var requests: [String] = []
+    static let lock = NSLock()
+    static func reset() { lock.lock(); rows = [:]; tick = 0; requests = []; lock.unlock() }
+    override class func canInit(with request: URLRequest) -> Bool { true }
+    override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
+    private func body() -> Data? {
+        if let b = request.httpBody { return b }
+        guard let s = request.httpBodyStream else { return nil }
+        s.open(); defer { s.close() }
+        var data = Data(); var buf = [UInt8](repeating: 0, count: 65536)
+        while s.hasBytesAvailable { let n = s.read(&buf, maxLength: buf.count); if n <= 0 { break }; data.append(buf, count: n) }
+        return data
+    }
+    override func startLoading() {
+        let url = request.url!, path = url.path
+        let q = Dictionary(uniqueKeysWithValues: (URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems ?? []).map { ($0.name, $0.value ?? "") })
+        let json = body().flatMap { try? JSONSerialization.jsonObject(with: $0) }
+        var status = 200, out: Any = [String: Any]()
+        Self.lock.lock()
+        Self.requests.append("\(request.httpMethod ?? "") \(path)")
+        let session: [String: Any] = ["access_token": "adgang", "refresh_token": "forny", "expires_in": 3600,
+                                      "user": ["id": "00000000-0000-0000-0000-000000000001", "email": "test@example.com"]]
+        switch (request.httpMethod ?? "", path) {
+        case ("POST", "/auth/v1/otp"): out = [String: Any]()
+        case ("POST", "/auth/v1/verify"):
+            if ((json as? [String: Any])?["token"] as? String) == "123456" { out = session }
+            else { status = 403; out = ["code": 403, "error_code": "otp_expired", "msg": "Token has expired or is invalid"] }
+        case ("POST", "/auth/v1/token"): out = session
+        case ("GET", "/rest/v1/sync_records"):
+            if request.value(forHTTPHeaderField: "Authorization") != "Bearer adgang" { status = 401; out = ["code": "PGRST301"]; break }
+            let from = (q["updated_at"] ?? "").replacingOccurrences(of: "gte.", with: "")
+            var list = Self.rows.values.filter { from.isEmpty || ($0["updated_at"] as! String) >= from }
+            list.sort { ($0["updated_at"] as! String) < ($1["updated_at"] as! String) }
+            let offset = Int(q["offset"] ?? "0") ?? 0, limit = Int(q["limit"] ?? "1000") ?? 1000
+            out = Array(list.dropFirst(offset).prefix(limit))
+        case ("POST", "/rest/v1/sync_records"):
+            for var r in (json as? [[String: Any]]) ?? [] {
+                Self.tick += 1
+                r["updated_at"] = String(format: "2026-10-18T12:%02d:%02d.123456+00:00", Self.tick / 60, Self.tick % 60)
+                Self.rows["\(r["kind"]!)|\(r["key"]!)"] = r
+            }
+            status = 201
+        default: status = 404
+        }
+        Self.lock.unlock()
+        let resp = HTTPURLResponse(url: url, statusCode: status, httpVersion: "HTTP/1.1", headerFields: ["Content-Type": "application/json"])!
+        client?.urlProtocol(self, didReceive: resp, cacheStoragePolicy: .notAllowed)
+        client?.urlProtocol(self, didLoad: (try? JSONSerialization.data(withJSONObject: out)) ?? Data())
+        client?.urlProtocolDidFinishLoading(self)
+    }
+    override func stopLoading() {}
+}
+
+/// Kører async kode på hovedtråden færdig (synkroniseringen hører til hovedtråden ligesom databasen).
+@MainActor func onMain<T>(_ op: @escaping @MainActor () async throws -> T) -> Result<T, Error> {
+    var result: Result<T, Error>?
+    Task { @MainActor in do { result = .success(try await op()) } catch { result = .failure(error) } }
+    while result == nil { _ = RunLoop.main.run(mode: .default, before: Date().addingTimeInterval(0.01)) }
+    return result!
+}
+
+do { try MainActor.assumeIsolated {
+    StubCloud.reset()
+    let cfg = URLSessionConfiguration.ephemeral
+    cfg.protocolClasses = [StubCloud.self]
+    let cloud = CloudClient(base: URL(string: "https://stub.supabase.co")!, key: "sb_publishable_test", session: URLSession(configuration: cfg))
+
+    check(CloudClient.date("2026-10-18T15:01:02.123456+00:00") != nil && CloudClient.date("2026-10-18T15:01:02+00:00") != nil,
+          "serverens tidsstempler læses (også med mikrosekunder)")
+    check(errorText(onMain { try await cloud.requestCode(email: "test@example.com") }) == nil, "kode sendes")
+    check(errorText(onMain { try await cloud.verify(email: "test@example.com", code: "000000") }) == "Koden er forkert eller udløbet. Bed om en ny kode.",
+          "forkert kode giver en dansk besked")
+    guard case .success(let session) = onMain({ try await cloud.verify(email: "test@example.com", code: "123456") }) else {
+        throw CloudError("login fejlede i testen")
+    }
+    check(session.userID.hasSuffix("1") && session.accessToken == "adgang" && !session.isExpired, "rigtig kode giver et login")
+
+    func it(_ i: Int, _ artist: String, _ title: String) -> DiscogsCollectionItem {
+        DiscogsCollectionItem(instanceID: 960_000 + i, dateAdded: nil, release: Release(id: 960_000 + i, artist: artist, title: title, format: "Vinyl, LP"))
+    }
+    let (mac, murl) = try freshStore("cloud-mac"); defer { try? FileManager.default.removeItem(at: murl) }
+    _ = try mac.applyCollection([it(1, "ABBA", "Arrival"), it(2, "Bowie", "Low")])
+    try mac.createLayout([(shelf: 1, section: "A", copies: SortRules().sorted(try mac.loadLibrary().allItems).map(\.id))])
+    let up = onMain { try await CloudSync.run(store: mac, client: cloud, session: session, device: "mac") }
+    check((try? up.get())?.sent ?? 0 > 0 && StubCloud.rows.count > 0, "første synkronisering sender systemet op: \(String(describing: try? up.get()))")
+    let again = onMain { try await CloudSync.run(store: mac, client: cloud, session: session, device: "mac") }
+    check((try? again.get()) == CloudSync.Report(received: 0, sent: 0), "intet nyt: intet sendes eller hentes: \(String(describing: try? again.get()))")
+
+    let (phone, purl) = try freshStore("cloud-phone"); defer { try? FileManager.default.removeItem(at: purl) }
+    let down = onMain { try await CloudSync.run(store: phone, client: cloud, session: session, device: "iphone") }
+    let pl = try phone.loadLibrary()
+    check((try? down.get())?.received ?? 0 > 0 && pl.locations.count == 1 && pl.sections.values.first?.count == 2,
+          "en ny enhed henter reolen fra kontoen")
+
+    // Begge har egne reoler første gang: brugeren skal vælge.
+    let (win, wurl) = try freshStore("cloud-win"); defer { try? FileManager.default.removeItem(at: wurl) }
+    _ = try win.applyCollection([it(1, "ABBA", "Arrival"), it(2, "Bowie", "Low")])
+    try win.createLayout([(shelf: 9, section: "Z", copies: try win.loadLibrary().allItems.map(\.id))])
+    let choice = onMain { try await CloudSync.run(store: win, client: cloud, session: session, device: "windows") }
+    var asked = false
+    if case .failure(let e) = choice, e is CloudSync.NeedsChoice { asked = true }
+    check(asked, "konto og enhed har hver deres reoler: brugeren spørges")
+    _ = onMain { try await CloudSync.run(store: win, client: cloud, session: session, device: "windows", firstSync: .useCloud) }
+    let wl = try win.loadLibrary()
+    check(wl.locations.count == 1 && wl.locations[0].shelf == 1 && wl.copies.count == 2, "\"Brug kontoens reoler\" erstatter enhedens reoler, plader bevares")
+
+    // Udløbet login.
+    let bad = CloudSession(accessToken: "forkert", refreshToken: "x", expiresAt: 0, userID: session.userID, email: session.email)
+    var needsLogin = false
+    if case .failure(let e as CloudError) = onMain({ try await cloud.fetch(since: nil, session: bad) }) { needsLogin = e.needsLogin }
+    check(needsLogin, "afvist login: brugeren bedes logge ind igen")
+} } catch { check(false, "kontoen i skyen: \(error)") }
+
 // MARK: Opdatering fra GitHub Releases (uden net)
 do {
     check(AppVersion("v1.2.3")! > AppVersion("1.2")! && AppVersion("1.10")! > AppVersion("1.9")!
