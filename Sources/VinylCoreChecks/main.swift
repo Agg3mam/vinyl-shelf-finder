@@ -5,8 +5,11 @@ import VinylCore
 
 var failures = 0
 var passes = 0
-func check(_ cond: @autoclosure () -> Bool, _ msg: String, line: Int = #line) {
-    if cond() { passes += 1 } else { failures += 1; print("✗ linje \(line): \(msg)") }
+/// En fejl undervejs tæller som et fejlet check (i stedet for at stoppe afsnittet).
+func check(_ cond: @autoclosure () throws -> Bool, _ msg: @autoclosure () -> String, line: Int = #line) {
+    let ok: Bool
+    do { ok = try cond() } catch { failures += 1; print("✗ linje \(line): \(msg()) – fejl: \(error)"); return }
+    if ok { passes += 1 } else { failures += 1; print("✗ linje \(line): \(msg())") }
 }
 
 func item(_ inst: Int, _ rel: Int, _ artist: String, _ title: String, year: Int? = nil, label: String? = nil, cat: String? = nil) -> DiscogsCollectionItem {
@@ -565,7 +568,7 @@ do {
     check(SQLValue.double(.nan).int == nil && SQLValue.double(1e300).int == nil && SQLValue.double(3.9).int == 3, "REAL→Int crasher ikke")
     let (s, url) = try freshStore("schema")
     defer { try? FileManager.default.removeItem(at: url) }
-    check(s.db.userVersion == 5, "skema v5")
+    check(s.db.userVersion == 6, "skema v6")
     _ = try s.applyCollection([item(1, 1, "O'Brien", "Robert'); DROP TABLE copies;--")])
     let reopened = try ShelfStore(path: url.path)
     check((try? reopened.loadLibrary())?.allItems.first?.title == "Robert'); DROP TABLE copies;--", "genåbning + strenge bindes sikkert")
@@ -579,7 +582,7 @@ do {
     try s.db.execute("DROP TABLE plays; PRAGMA user_version = 3;")
     let up = try ShelfStore(path: url.path)
     let cid = try up.loadLibrary().copies.keys.first!
-    check(up.db.userVersion == 5 && (try? up.logPlay(copyID: cid)) != nil, "migration v3→v5 opretter plays og bevarer kopier")
+    check(up.db.userVersion == 6 && (try? up.logPlay(copyID: cid)) != nil, "migration v3→v6 opretter plays og bevarer kopier")
 }
 
 // Søgning: Unicode og grænsetilfælde
@@ -2082,6 +2085,68 @@ do {
     DataTransfer.cancelPending(dbPath: dbPath)
     check((try? DataTransfer.applyPending(dbPath: dbPath)) == .unchanged && FileManager.default.fileExists(atPath: dbPath), "bestilt nulstilling kan fortrydes")
 } catch { check(false, "eksport/import: \(error)") }
+
+// MARK: Synkronisering mellem enheder (poster, uden net)
+do {
+    func it(_ i: Int, _ artist: String, _ title: String) -> DiscogsCollectionItem {
+        DiscogsCollectionItem(instanceID: 2_400_000_000 + i, dateAdded: nil,
+                              release: Release(id: 950_000 + i, artist: artist, title: title, format: "Vinyl, LP"))
+    }
+    var cloud: [String: SyncDoc] = [:]
+    func push(_ s: ShelfStore) throws -> Int {
+        let p = try s.pendingSyncDocs()
+        for d in p { cloud["\(d.kind.rawValue)|\(d.key)"] = d }
+        try s.markSynced(p)
+        return p.count
+    }
+    let items = [it(1, "ABBA", "Arrival"), it(2, "Bowie", "Low"), it(3, "Cohen", "Songs")]
+
+    // A har hele systemet: reol, placeringer, en afspilning, et flueben og et sorteringsnavn.
+    let (a, aurl) = try freshStore("sync-a"); defer { try? FileManager.default.removeItem(at: aurl) }
+    _ = try a.applyCollection(items)
+    let aIDs = SortRules().sorted(try a.loadLibrary().allItems).map(\.id)
+    try a.createLayout([(shelf: 1, section: "A", copies: Array(aIDs.prefix(2))), (shelf: 1, section: "B", copies: Array(aIDs.dropFirst(2)))])
+    _ = try a.logPlay(copyID: aIDs[0])
+    a.setSortChecked(.vinyl, copyID: aIDs[1], checked: true)
+    var r = a.loadSortRules(); r.artistOverrides["Cohen"] = "Cohen, Leonard"; try a.saveSortRules(r)
+    let first = try push(a)
+    let afterFirst = try a.pendingSyncDocs()
+    check(first > 0 && afterFirst.isEmpty, "første synkronisering sender alt, derefter intet")
+
+    // B er en ny enhed: henter alt.
+    let (b, burl) = try freshStore("sync-b"); defer { try? FileManager.default.removeItem(at: burl) }
+    try b.applySyncDocs(Array(cloud.values))
+    let la = try a.loadLibrary(), lb = try b.loadLibrary()
+    func order(_ l: Library) -> [[String]] { l.locations.map { loc in (l.sections[loc.id] ?? []).compactMap { l.item($0)?.title } } }
+    check(order(lb) == order(la) && lb.copies.count == 3, "ny enhed får samme reoler og rækkefølge: \(order(lb))")
+    check(try b.loadPlays().count == 1 && b.sortChecked(.vinyl).count == 1 && b.loadSortRules().artistOverrides["Cohen"] == "Cohen, Leonard",
+          "afspilning, flueben og sorteringsnavne følger med")
+    check((try b.pendingSyncDocs()).isEmpty, "det hentede sendes ikke tilbage igen")
+    check(try b.applySyncDocs(Array(cloud.values)) == 0, "samme poster igen ændrer intet")
+
+    // B flytter en plade; A får flytningen.
+    let low = lb.allItems.first { $0.title == "Low" }!.id
+    let secB = lb.locations[1].id
+    try b.move(copyID: low, to: secB, index: 0)
+    let moved = try b.pendingSyncDocs()
+    check(moved.allSatisfy { $0.kind == .section }, "en flytning sendes som sektionernes rækkefølge: \(moved.map(\.kind.rawValue))")
+    _ = try push(b)
+    try a.applySyncDocs(Array(cloud.values))
+    let oa = order(try a.loadLibrary()), ob = order(try b.loadLibrary())
+    check(oa == ob, "flytningen er nået frem: \(oa)")
+
+    // C har selv hentet samlingen fra Discogs, før den logger ind: ingen dubletter.
+    let (c, curl) = try freshStore("sync-c"); defer { try? FileManager.default.removeItem(at: curl) }
+    _ = try c.applyCollection(items)
+    try c.applySyncDocs(Array(cloud.values))
+    check(try c.loadLibrary().copies.count == 3 && c.loadLibrary().locations.count == 2, "samme Discogs-plader bliver ikke dobbelte")
+
+    // En slettet afspilning forsvinder også på de andre enheder.
+    try a.db.run("DELETE FROM plays")
+    _ = try push(a)
+    try b.applySyncDocs(Array(cloud.values))
+    check(try b.loadPlays().isEmpty, "sletning følger med")
+} catch { check(false, "synkronisering: \(error)") }
 
 // MARK: Opdatering fra GitHub Releases (uden net)
 do {

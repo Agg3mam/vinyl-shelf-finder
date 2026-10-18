@@ -159,6 +159,27 @@ public final class ShelfStore {
             try db.execute("PRAGMA user_version = 5")
             }
         }
+        if db.userVersion < 6 {
+            // Synkronisering mellem enheder: fælles ID'er (`uid`) og det, der sidst blev synkroniseret.
+            // Samme skema på Windows. Kan køres igen uden fejl.
+            try db.transaction {
+            for table in ["copies", "locations", "plays"] where !(try hasColumn(table, "uid")) {
+                try db.execute("ALTER TABLE \(table) ADD COLUMN uid TEXT")
+            }
+            try db.execute("""
+            CREATE UNIQUE INDEX IF NOT EXISTS copies_uid ON copies(uid) WHERE uid IS NOT NULL;
+            CREATE UNIQUE INDEX IF NOT EXISTS locations_uid ON locations(uid) WHERE uid IS NOT NULL;
+            CREATE UNIQUE INDEX IF NOT EXISTS plays_uid ON plays(uid) WHERE uid IS NOT NULL;
+            CREATE TABLE IF NOT EXISTS sync_state (
+                kind TEXT NOT NULL,
+                key TEXT NOT NULL,
+                data TEXT,
+                PRIMARY KEY (kind, key)
+            );
+            """)
+            try db.execute("PRAGMA user_version = 6")
+            }
+        }
     }
 
     private func hasColumn(_ table: String, _ column: String) throws -> Bool {

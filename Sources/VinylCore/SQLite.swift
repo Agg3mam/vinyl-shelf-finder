@@ -43,6 +43,7 @@ extension Int64: SQLConvertible { public var sqlValue: SQLValue { .int(self) } }
 extension Double: SQLConvertible { public var sqlValue: SQLValue { .double(self) } }
 extension String: SQLConvertible { public var sqlValue: SQLValue { .text(self) } }
 extension Bool: SQLConvertible { public var sqlValue: SQLValue { .int(self ? 1 : 0) } }
+extension SQLValue: SQLConvertible { public var sqlValue: SQLValue { self } }
 extension Optional: SQLConvertible where Wrapped: SQLConvertible {
     public var sqlValue: SQLValue { self?.sqlValue ?? .null }
 }
