@@ -1105,8 +1105,8 @@ do {
     // PUT-forespørgsel bygges uden netværk; tokenet sendes, men vises aldrig
     let fakeToken = "TEST-token-ikke-rigtig-123"
     let client = DiscogsClient(token: fakeToken)
-    let put = client.wantlistRequest(username: "holger", releaseID: 249504)
-    check(put.httpMethod == "PUT" && put.url?.absoluteString == "https://api.discogs.com/users/holger/wants/249504", "PUT: metode og sti: \(put.url?.absoluteString ?? "")")
+    let put = client.wantlistRequest(username: "testbruger", releaseID: 249504)
+    check(put.httpMethod == "PUT" && put.url?.absoluteString == "https://api.discogs.com/users/testbruger/wants/249504", "PUT: metode og sti: \(put.url?.absoluteString ?? "")")
     check(put.value(forHTTPHeaderField: "Authorization") == "Discogs token=\(fakeToken)"
           && put.value(forHTTPHeaderField: "User-Agent") == DiscogsClient.userAgent, "PUT: Authorization og User-Agent sættes")
     var dumped = ""
@@ -1128,8 +1128,8 @@ do {
     cfg.protocolClasses = [StubDiscogs.self]
     let stub = DiscogsClient(token: fakeToken, session: URLSession(configuration: cfg), limiter: fastLimiter)
     StubDiscogs.routes = [
-        "PUT /users/holger/wants/249504": (201, #"{"id":249504,"rating":0}"#),
-        "PUT /users/holger/wants/1": (404, #"{"message":"Release not found."}"#),
+        "PUT /users/testbruger/wants/249504": (201, #"{"id":249504,"rating":0}"#),
+        "PUT /users/testbruger/wants/1": (404, #"{"message":"Release not found."}"#),
         "PUT /users/andre/wants/249504": (401, #"{"message":"You must authenticate to access this resource."}"#),
         "GET /database/search?type=master": (200, mastersJSON),
         "GET /database/search?type=release": (200, releasesJSON),
@@ -1137,11 +1137,11 @@ do {
         "GET /releases/249504": (200, fxRelease249504),
         "GET /masters/999/versions": (0, ""),
     ]
-    let added = blocking { try await stub.addToWantlist(username: "holger", releaseID: 249504) }
+    let added = blocking { try await stub.addToWantlist(username: "testbruger", releaseID: 249504) }
     let sentPut = StubDiscogs.seen.last
-    check(errorText(added) == nil && sentPut?.httpMethod == "PUT" && sentPut?.url?.path == "/users/holger/wants/249504"
+    check(errorText(added) == nil && sentPut?.httpMethod == "PUT" && sentPut?.url?.path == "/users/testbruger/wants/249504"
           && sentPut?.value(forHTTPHeaderField: "Authorization") == "Discogs token=\(fakeToken)", "addToWantlist sender PUT med token")
-    check(errorText(blocking { try await stub.addToWantlist(username: "holger", releaseID: 1) }) == "Pladen findes ikke længere på Discogs.", "PUT 404 → dansk tekst")
+    check(errorText(blocking { try await stub.addToWantlist(username: "testbruger", releaseID: 1) }) == "Pladen findes ikke længere på Discogs.", "PUT 404 → dansk tekst")
     check(errorText(blocking { try await stub.addToWantlist(username: "andre", releaseID: 249504) })?.hasPrefix("Discogs-tokenet blev afvist") == true, "PUT 401 → dansk tekst")
     check(errorText(blocking { try await stub.versions(of: DiscogsAlbum(id: 999, isMaster: true, title: "", artist: "", year: nil, thumbURL: nil, coverURL: nil, formats: [], inCollection: false, inWantlist: false)) })?
             .hasPrefix("Kunne ikke få forbindelse til Discogs") == true, "ingen forbindelse → offline på dansk")
@@ -1292,13 +1292,13 @@ do {
 
     let uc1 = try DiscogsClient.parseUserCurrency(Data(fxUserNoCurrency.utf8))
     check(uc1 == nil, "brugerens valuta: tom curr_abbr → nil (ukendt)")
-    let uc2 = try DiscogsClient.parseUserCurrency(Data(#"{"username":"holger","curr_abbr":"EUR"}"#.utf8))
+    let uc2 = try DiscogsClient.parseUserCurrency(Data(#"{"username":"testbruger","curr_abbr":"EUR"}"#.utf8))
     check(uc2 == "EUR", "brugerens valuta: EUR")
-    let uc3 = try DiscogsClient.parseUserCurrency(Data(#"{"username":"holger","curr_abbr":" usd"}"#.utf8))
+    let uc3 = try DiscogsClient.parseUserCurrency(Data(#"{"username":"testbruger","curr_abbr":" usd"}"#.utf8))
     check(uc3 == "USD", "brugerens valuta: renses til USD")
-    let uc4 = try DiscogsClient.parseUserCurrency(Data(#"{"username":"holger"}"#.utf8))
+    let uc4 = try DiscogsClient.parseUserCurrency(Data(#"{"username":"testbruger"}"#.utf8))
     check(uc4 == nil, "brugerens valuta: mangler → nil")
-    let uc5 = try DiscogsClient.parseUserCurrency(Data(#"{"username":"holger","curr_abbr":"€"}"#.utf8))
+    let uc5 = try DiscogsClient.parseUserCurrency(Data(#"{"username":"testbruger","curr_abbr":"€"}"#.utf8))
     check(uc5 == nil, "brugerens valuta: ugyldig kode → nil")
 
     check(DiscogsClient.marketplaceURL(masterID: 10362, format: "Vinyl").absoluteString == "https://www.discogs.com/sell/list?master_id=10362&format=Vinyl",
@@ -1333,15 +1333,15 @@ do {
     let stub = DiscogsClient(token: "TEST-token", session: URLSession(configuration: cfg), limiter: fastLimiter)
     StubDiscogs.routes = [
         "GET /masters/10362": (200, fxMaster10362),
-        "GET /users/holger": (200, #"{"username":"holger","curr_abbr":"EUR"}"#),
+        "GET /users/testbruger": (200, #"{"username":"testbruger","curr_abbr":"EUR"}"#),
         "GET /masters/10362/versions": (200, fxVersionsP1),
     ]
     StubDiscogs.seen = []
     let mo = blocking { try await stub.masterOffer(id: 10362) }
     check((try? mo.get().mainRelease) == 1873013 && StubDiscogs.seen.last?.url?.path == "/masters/10362" && StubDiscogs.seen.last?.httpMethod == "GET",
           "masterOffer henter GET /masters/{id}")
-    let uc = blocking { try await stub.userCurrency(username: "holger") }
-    check((try? uc.get()) == "EUR" && StubDiscogs.seen.last?.url?.path == "/users/holger", "userCurrency henter GET /users/{username}")
+    let uc = blocking { try await stub.userCurrency(username: "testbruger") }
+    check((try? uc.get()) == "EUR" && StubDiscogs.seen.last?.url?.path == "/users/testbruger", "userCurrency henter GET /users/{username}")
     let master = DiscogsAlbum(id: 10362, isMaster: true, title: "", artist: "", year: nil, thumbURL: nil, coverURL: nil, formats: [], inCollection: false, inWantlist: false)
     check((try? blocking { try await stub.versions(of: master) }.get().total) == 1542, "versions: samlet antal udgaver fra pagination.items")
 }

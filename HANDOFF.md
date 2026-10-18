@@ -6,7 +6,8 @@
 arbejde videre på projektet, uanset hvad opgaven er. Giv den videre som den første besked,
 fx: *"Læs HANDOFF.md, og hjælp mig med …"*. Opdatér filen, når der er lavet noget nyt.
 
-Projektet ligger i `/Users/holgerskov/Claude code/VinylShelfFinder`. `README.md` er brugervejledningen.
+`README.md` er brugervejledningen. Personlige oplysninger (om brugeren, netværk og computere) står kun i
+`HANDOFF-privat.md`, som ligger lokalt og aldrig lægges på GitHub. Læs den, hvis den findes.
 Gamle handoffs ligger kun som arkiv i `../design-work/` og skal ikke læses.
 
 ---
@@ -34,27 +35,24 @@ Genveje: ⌘K søg, ↑↓ vælg, ↩/⌘F Find i reolen, ⇧⌘M flyt, ⌘L spi
 
 ---
 
-## 2. Om brugeren, og hvordan man arbejder med dem
+## 2. Sådan arbejdes der
 
-- **Dansk** og almindeligt sprog uden unødvendig teknik. Brugeren har ikke Xcode-erfaring.
-- **Spørg, før du bygger.** Stil få konkrete spørgsmål og giv en anbefaling. Brief brugeren om planen, og fortæl hvorfor.
-- Brugeren vil gerne have **flere forslag at vælge imellem** og helst se dem **visuelt**,
-  fx som widget-mockups eller skærmbilleder.
+- **Dansk** og almindeligt sprog uden unødvendig teknik.
+- **Spørg, før du bygger.** Stil få konkrete spørgsmål og giv en anbefaling. Fortæl om planen, og hvorfor.
+- Giv gerne **flere forslag at vælge imellem**, helst **visuelt** (mockups eller skærmbilleder).
 - Appen skal være **simpel**. Undgå at den virker "vibecoded": tilfældige gradienter, emoji,
   glas overalt eller uens afstande.
-- **Store opgaver deles gerne ud på parallelle agenter.** Hver agent arbejder i sin egen kopi
-  (`../design-work/<navn>`) med sine egne filer, og kun én agent redigerer en given fil.
-  Brugeren har ramt sin forbrugsgrænse flere gange, så hold agenterne effektive.
-- Når brugeren siger "tjek det selv", mener de det. Verificér selv i stedet for at bede brugeren teste.
-- Appen er **installeret i Programmer**. Afslut altid med `./build-app.sh --install`, og sig til brugeren:
-  *"Tryk ⌘Q og åbn appen igen fra Programmer."*
+- **Store opgaver kan deles ud på parallelle agenter.** Hver agent arbejder i sin egen kopi
+  med sine egne filer, og kun én agent redigerer en given fil. Hold agenterne effektive.
+- "Tjek det selv" betyder: verificér selv i stedet for at bede brugeren teste.
+- Afslut Mac-ændringer med `./build-app.sh --install`, og sig: *"Tryk ⌘Q og åbn appen igen fra Programmer."*
 
 ---
 
 ## 3. Regler, der ikke må brydes
 
 1. **Brugerens rigtige database må ikke røres:** `~/Library/Application Support/VinylShelfFinder/vinyl.sqlite`.
-   Den indeholder ca. 114 plader og 2 sektioner. Test altid med `--demo` og en isoleret hjemmemappe:
+   Test altid med `--demo` og en isoleret hjemmemappe:
    `CFFIXED_USER_HOME=<tom mappe i scratchpad> .build/debug/VinylShelfFinder --demo …`
 2. **iMusic-feed-URL'en** (Daisycon) indeholder brugerens media_id. Den ligger kun i nøgleringen
    (service `dk.vinylshelffinder.imusicfeed`) og må aldrig logges, vises eller hentes i test.
@@ -70,9 +68,10 @@ Genveje: ⌘K søg, ↑↓ vælg, ↩/⌘F Find i reolen, ⇧⌘M flyt, ⌘L spi
    hele skærmen. Der er ingen Tilgængeligheds-tilladelse og derfor ingen tastetryk. Handlinger
    udløses inde fra appen med testkode.
 6. Sikkerhedsindstillinger, nøglering og certifikater ændrer brugeren selv.
-7. Projektet er et **git-repo** og ligger privat på GitHub: `https://github.com/Agg3mam/vinyl-shelf-finder`
-   (brugerens konto er `Agg3mam`, og `gh` ligger i `/opt/homebrew/bin/gh`).
-   - Commits bruger GitHubs skjulte e-mail. Brug aldrig brugerens rigtige e-mail eller Mac'ens navn.
+7. Projektet er et **git-repo** og ligger **offentligt** på GitHub: `https://github.com/Agg3mam/vinyl-shelf-finder`.
+   - Commits bruger GitHubs skjulte e-mail. Brug aldrig brugerens rigtige e-mail eller computerens navn.
+   - **Skriv aldrig personlige oplysninger i repoet** (navne, mapper, computernavne, IP-adresser, samlingens
+     størrelse, brugerens vaner). De hører til i `HANDOFF-privat.md`.
    - Commit og push kun, når brugeren beder om det.
    - Byggefiler (`.build/`, `build/`, `*.app`) er udeladt via `.gitignore`.
    - Tag stadig en sikkerhedskopi i `../design-work/` før større eksperimenter.
@@ -214,7 +213,7 @@ Sources/VinylCoreChecks/      selvtest (305 checks)
 
 ### 17. okt: cd'er, Windows-version og opdatering (status ved overdragelse)
 
-Arbejdet blev stoppet midt i, fordi brugeren var ved at løbe tør for forbrug i skyen. Alt er
+Arbejdet blev stoppet midt i. Alt er
 skubbet til GitHub. Projektet er nu **offentligt** (brugerens eget valg, så appen kan hente
 opdateringer uden adgangskode). Ingen af grenene er merget; PR #1 (iMusic) er stadig åben.
 
@@ -292,13 +291,10 @@ pakken QRCoder 1.6.0) og daglig sikkerhedskopi.
 - Ingen af grenene er merget. Første udgivelse (v1.0.0) venter på, at brugeren laver den på GitHub
   (sessionen må ikke skubbe tags).
 
-### 17.–18. okt (session 3, på brugerens Windows-pc): rettelser og nye funktioner (gren `claude/ret-tokenfelt`)
+### 17.–18. okt (session 3, på en Windows-pc): rettelser og nye funktioner (gren `claude/ret-tokenfelt`)
 
-Bygger på v1.0.0 (= `claude/windows-skaerme`). Lavet og testet på en rigtig Windows 11-pc (Git, .NET 8 SDK
-installeret; projektet ligger i `C:\Users\perhj\Documents\Claude Code\vinyl-shelf-finder`). Appen er installeret
-til brugeren i `%LOCALAPPDATA%\Programs\Vinyl Shelf Finder` (genvej i Start-menuen, version stadig 1.0.0) og er
-forbundet til Discogs med ca. 767 plader og 1086 cd'er, men **ingen reoler endnu**. **Kun Windows; Mac-appen har
-ikke fået noget af det nedenfor.** Windows-kernen har nu **584 checks**, alle grønne.
+Bygger på v1.0.0 (= `claude/windows-skaerme`). Lavet og testet på en rigtig Windows 11-pc (Git og .NET 8 SDK
+installeret). **Kun Windows; Mac-appen har ikke fået noget af det nedenfor.** Windows-kernen har nu **584 checks**, alle grønne.
 
 - **Rettede nedbrud:** "Forbind" lukkede appen (OnboardingView genbrugte tokenfeltet i en ny forælder,
   WinUI 0x800F1000), og sync fejlede ("samlingen kunne ikke læses"), fordi Discogs' `instance_id` nu er større
@@ -332,9 +328,8 @@ ikke fået noget af det nedenfor.** Windows-kernen har nu **584 checks**, alle g
 
 ### Ikke færdigt / næste skridt (spørg brugeren om rækkefølgen)
 
-1. **Mobilside via iPhone-hotspot (opgave 1)**, så QR-koderne virker. Det er det største åbne punkt.
-   - Brugeren har **intet wifi**. Mac'en er på internettet via iPhonens hotspot, hvor iPhonen er `172.20.10.1` og Mac'en
-     senest var `172.20.10.2`. Navnet `Mclovin-7.local` er uafprøvet. Firewallen er slået til.
+1. **Mobilside på det lokale netværk (opgave 1)**, så QR-koderne virker. Det er det største åbne punkt.
+   - Netværket, mobilsiden skal virke på, er beskrevet i `HANDOFF-privat.md`.
    - Beslutninger, der er taget:
      - Serveren skal altid køre, når appen er åben, med en kontakt i Indstillinger til at slå den fra.
      - Mobilsiden har **én "Spillet"-knap**. Ellers er den kun til at læse.
@@ -348,7 +343,7 @@ ikke fået noget af det nedenfor.** Windows-kernen har nu **584 checks**, alle g
      - nye QR-koder (`http://…:port/section/<id>`). Den gamle `vinylshelf://` skal stadig kunne læses,
      - en indikator i appen med adresse og QR-kode,
      - restyling til Liquid Glass.
-   - Skal testes sammen med brugeren på iPhonen: virker `.local` eller kun IP-adressen? Firewall-dialogen
+   - Skal testes sammen med brugeren på telefonen: virker `.local` eller kun IP-adressen? Firewall-dialogen
      kan dukke op efter hver build ved ad-hoc-signering. Fortæl det på forhånd. Skiltene skal printes igen.
 2. **Find nye plader, resten:**
    - kø, cache og ét kald pr. søgning er lavet (se ovenfor); mangler afprøvning mod det rigtige Discogs,

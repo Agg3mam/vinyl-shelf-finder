@@ -290,8 +290,8 @@ static class NetChecks
         // PUT-forespørgsel bygges uden netværk; tokenet sendes, men vises aldrig
         const string fakeToken = "TEST-token-ikke-rigtig-123";
         var client = new DiscogsClient(fakeToken);
-        var put = client.WantlistRequest("holger", 249504);
-        Check.That(put.Method == HttpMethod.Put && put.Url.AbsoluteUri == "https://api.discogs.com/users/holger/wants/249504",
+        var put = client.WantlistRequest("testbruger", 249504);
+        Check.That(put.Method == HttpMethod.Put && put.Url.AbsoluteUri == "https://api.discogs.com/users/testbruger/wants/249504",
                    $"PUT: metode og sti: {put.Url.AbsoluteUri}");
         Check.That(put.Header("Authorization") == $"Discogs token={fakeToken}" && put.Header("User-Agent") == DiscogsClient.UserAgent
                    && put.Header("Accept") == "application/vnd.discogs.v2.discogs+json", "PUT: Authorization, User-Agent og Accept sættes");
@@ -321,8 +321,8 @@ static class NetChecks
         {
             Routes = new()
             {
-                ["PUT /users/holger/wants/249504"] = (201, """{"id":249504,"rating":0}"""),
-                ["PUT /users/holger/wants/1"] = (404, """{"message":"Release not found."}"""),
+                ["PUT /users/testbruger/wants/249504"] = (201, """{"id":249504,"rating":0}"""),
+                ["PUT /users/testbruger/wants/1"] = (404, """{"message":"Release not found."}"""),
                 ["PUT /users/andre/wants/249504"] = (401, """{"message":"You must authenticate to access this resource."}"""),
                 ["GET /database/search?type=master"] = (200, mastersJson),
                 ["GET /database/search?type=release"] = (200, releasesJson),
@@ -332,12 +332,12 @@ static class NetChecks
             },
         };
         var stub = StubClient(stubNet, fakeToken);
-        var added = Blocking(() => stub.AddToWantlistAsync("holger", 249504));
+        var added = Blocking(() => stub.AddToWantlistAsync("testbruger", 249504));
         var sentPut = stubNet.SeenRequests.LastOrDefault();
-        Check.That(added == null && sentPut?.Method == "PUT" && sentPut.Url.AbsolutePath == "/users/holger/wants/249504"
+        Check.That(added == null && sentPut?.Method == "PUT" && sentPut.Url.AbsolutePath == "/users/testbruger/wants/249504"
                    && sentPut.Header("Authorization") == $"Discogs token={fakeToken}" && sentPut.Header("User-Agent") == DiscogsClient.UserAgent
                    && sentPut.ContentLength == 0, "AddToWantlistAsync sender PUT med token og tom krop");
-        var e404 = Blocking(() => stub.AddToWantlistAsync("holger", 1));
+        var e404 = Blocking(() => stub.AddToWantlistAsync("testbruger", 1));
         Check.That(ErrorText(e404) == "Pladen findes ikke længere på Discogs." && (e404 as DiscogsException)?.IsNotFound == true, "PUT 404 → dansk tekst");
         var e401 = Blocking(() => stub.AddToWantlistAsync("andre", 249504));
         Check.That(ErrorText(e401)?.StartsWith("Discogs-tokenet blev afvist") == true && !ErrorText(e401)!.Contains(fakeToken), "PUT 401 → dansk tekst");
@@ -360,7 +360,7 @@ static class NetChecks
         Check.That(none.Value?.Albums.Count == 0 && stubNet.SeenRequests.Count == 0, "tom søgning → intet kald");
         var noToken = Blocking(() => StubClient(stubNet, "").SearchAlbumsAsync("abba"));
         Check.That(ErrorText(noToken.Error) == DiscogsException.MissingToken().Message, "søgning uden token → MissingToken");
-        Check.That(ErrorText(Blocking(() => StubClient(stubNet, "").AddToWantlistAsync("holger", 1))) == DiscogsException.MissingToken().Message,
+        Check.That(ErrorText(Blocking(() => StubClient(stubNet, "").AddToWantlistAsync("testbruger", 1))) == DiscogsException.MissingToken().Message,
                    "ønskeliste uden token → MissingToken");
 
         var master = Album(10362, true, "The Dark Side Of The Moon", "Pink Floyd", 1973);
@@ -391,17 +391,17 @@ static class NetChecks
 
         // Samlingen: alle sider hentes, og fremskridtet meldes
         var page1Json = """{"pagination":{"page":1,"pages":1,"items":1},"releases":[{"id":5,"instance_id":50,"basic_information":{"id":5,"title":"T","artists":[{"name":"A"}]}}]}""";
-        stubNet.Routes["GET /users/holger/collection/folders/0/releases"] = (200, page1Json);
-        stubNet.Routes["GET /oauth/identity"] = (200, """{"id":1,"username":"holger","resource_url":"x"}""");
+        stubNet.Routes["GET /users/testbruger/collection/folders/0/releases"] = (200, page1Json);
+        stubNet.Routes["GET /oauth/identity"] = (200, """{"id":1,"username":"testbruger","resource_url":"x"}""");
         stubNet.ClearSeen();
         var progress = new List<(int, int)>();
-        var coll = Blocking(() => stub.FetchCollectionAsync("holger", (n, t) => progress.Add((n, t))));
+        var coll = Blocking(() => stub.FetchCollectionAsync("testbruger", (n, t) => progress.Add((n, t))));
         var collQuery = stubNet.SeenRequests.LastOrDefault()?.Query ?? new();
         Check.That(coll.Value?.Count == 1 && coll.Value[0].InstanceId == 50 && coll.Value[0].Release.Artist == "A" && progress.SequenceEqual(new[] { (1, 1) })
                    && collQuery.Contains(("sort", "artist")) && collQuery.Contains(("per_page", "100")), "FetchCollectionAsync henter samlingen sorteret efter kunstner");
-        Check.That(Blocking(() => stub.IdentityAsync()).Value == "holger", "IdentityAsync giver brugernavnet");
-        stubNet.Routes["GET /users/holger/collection/folders/0/releases"] = (200, """{"pagination":{"pages":1,"items":1}}""");
-        Check.That(ErrorText(Blocking(() => stub.FetchCollectionAsync("holger")).Error) == "Svaret fra Discogs kunne ikke læses (samlingen, side 1).",
+        Check.That(Blocking(() => stub.IdentityAsync()).Value == "testbruger", "IdentityAsync giver brugernavnet");
+        stubNet.Routes["GET /users/testbruger/collection/folders/0/releases"] = (200, """{"pagination":{"pages":1,"items":1}}""");
+        Check.That(ErrorText(Blocking(() => stub.FetchCollectionAsync("testbruger")).Error) == "Svaret fra Discogs kunne ikke læses (samlingen, side 1).",
                    "samling, der ikke kan læses → dansk fejl med sidetal");
         stubNet.Routes["GET /oauth/identity"] = (500, "{}");
         Check.That(ErrorText(Blocking(() => stub.IdentityAsync()).Error) == "Discogs svarede med en fejl (kode 500). Prøv igen senere.", "500 → dansk tekst");
@@ -448,7 +448,7 @@ static class NetChecks
             {
                 ["GET /marketplace/stats/6496"] = (200, FxStats6496DKK),
                 ["GET /releases/6496"] = (200, """{"id":6496,"lowest_price":3.36,"num_for_sale":36,"community":{"have":900,"want":40}}"""),
-                ["GET /users/holger/collection/value"] = (200, """{"maximum":"2.310,40 kr.","median":"1.105,00 kr.","minimum":"512,30 kr."}"""),
+                ["GET /users/testbruger/collection/value"] = (200, """{"maximum":"2.310,40 kr.","median":"1.105,00 kr.","minimum":"512,30 kr."}"""),
             },
         };
         var stub = StubClient(net, "TEST-ikke-rigtig");
@@ -470,8 +470,8 @@ static class NetChecks
         net.ClearSeen();
         var vu = Blocking(() => stub.ReleaseMarketInfoAsync(6496, null, "DKK")).Value!;
         Check.That(vu.LowestPrice == 3.36 && vu.Currency == "DKK" && net.SeenRequests.Count == 2, "Værdi: ukendt Discogs-valuta → pris fra stats");
-        var cv = Blocking(() => stub.CollectionValueAsync("holger"));
-        Check.That(cv.Value?.Median == "1.105,00 kr." && net.SeenRequests.LastOrDefault()?.Url.AbsolutePath == "/users/holger/collection/value",
+        var cv = Blocking(() => stub.CollectionValueAsync("testbruger"));
+        Check.That(cv.Value?.Median == "1.105,00 kr." && net.SeenRequests.LastOrDefault()?.Url.AbsolutePath == "/users/testbruger/collection/value",
                    "CollectionValueAsync henter /users/{name}/collection/value");
     });
 
@@ -518,10 +518,10 @@ static class NetChecks
         catch (DiscogsException e) { Check.That(e.Message == "Svaret fra Discogs kunne ikke læses (albummets priser).", "master: fejl på dansk"); }
 
         Check.That(DiscogsClient.ParseUserCurrency(B(FxUserNoCurrency)) == null, "brugerens valuta: tom curr_abbr → null (ukendt)");
-        Check.That(DiscogsClient.ParseUserCurrency(B("""{"username":"holger","curr_abbr":"EUR"}""")) == "EUR", "brugerens valuta: EUR");
-        Check.That(DiscogsClient.ParseUserCurrency(B("""{"username":"holger","curr_abbr":" usd"}""")) == "USD", "brugerens valuta: renses til USD");
-        Check.That(DiscogsClient.ParseUserCurrency(B("""{"username":"holger"}""")) == null, "brugerens valuta: mangler → null");
-        Check.That(DiscogsClient.ParseUserCurrency(B("""{"username":"holger","curr_abbr":"€"}""")) == null, "brugerens valuta: ugyldig kode → null");
+        Check.That(DiscogsClient.ParseUserCurrency(B("""{"username":"testbruger","curr_abbr":"EUR"}""")) == "EUR", "brugerens valuta: EUR");
+        Check.That(DiscogsClient.ParseUserCurrency(B("""{"username":"testbruger","curr_abbr":" usd"}""")) == "USD", "brugerens valuta: renses til USD");
+        Check.That(DiscogsClient.ParseUserCurrency(B("""{"username":"testbruger"}""")) == null, "brugerens valuta: mangler → null");
+        Check.That(DiscogsClient.ParseUserCurrency(B("""{"username":"testbruger","curr_abbr":"€"}""")) == null, "brugerens valuta: ugyldig kode → null");
         try { DiscogsClient.ParseUserCurrency(B("ikke json")); Check.That(false, "ugyldig bruger-JSON skal fejle"); }
         catch (DiscogsException e) { Check.That(e.Message == "Svaret fra Discogs kunne ikke læses (din valuta).", "brugerens valuta: fejl på dansk"); }
 
@@ -557,7 +557,7 @@ static class NetChecks
             Routes = new()
             {
                 ["GET /masters/10362"] = (200, FxMaster10362),
-                ["GET /users/holger"] = (200, """{"username":"holger","curr_abbr":"EUR"}"""),
+                ["GET /users/testbruger"] = (200, """{"username":"testbruger","curr_abbr":"EUR"}"""),
                 ["GET /masters/10362/versions"] = (200, FxVersionsP1),
             },
         };
@@ -565,8 +565,8 @@ static class NetChecks
         var mo = Blocking(() => stub.MasterOfferAsync(10362));
         Check.That(mo.Value?.MainRelease == 1873013 && net.SeenRequests.LastOrDefault()?.Url.AbsolutePath == "/masters/10362"
                    && net.SeenRequests.LastOrDefault()?.Method == "GET", "MasterOfferAsync henter GET /masters/{id}");
-        var uc = Blocking(() => stub.UserCurrencyAsync("holger"));
-        Check.That(uc.Value == "EUR" && net.SeenRequests.LastOrDefault()?.Url.AbsolutePath == "/users/holger", "UserCurrencyAsync henter GET /users/{username}");
+        var uc = Blocking(() => stub.UserCurrencyAsync("testbruger"));
+        Check.That(uc.Value == "EUR" && net.SeenRequests.LastOrDefault()?.Url.AbsolutePath == "/users/testbruger", "UserCurrencyAsync henter GET /users/{username}");
         Check.That(Blocking(() => stub.VersionsAsync(Album(10362, true))).Value?.Total == 1542, "versions: samlet antal udgaver fra pagination.items");
     });
 
