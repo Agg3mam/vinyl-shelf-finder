@@ -132,7 +132,7 @@ public sealed class ValuePane : IPane
                 row.Children.Add(Ui.Btn("Prøv igen", async (_, _) => await _model.RefreshValuesAsync()));
                 break;
             default:
-                var fetch = Ui.Btn(_model.Market.Count == 0 ? "Hent værdier" : "Opdater værdier", async (_, _) => await _model.RefreshValuesAsync(), "", accent: true);
+                var fetch = Ui.Btn(_model.Market.Count == 0 ? "Hent værdier" : "Opdater værdier", async (_, _) => await _model.RefreshValuesAsync(), Ui.Glyph.Refresh, accent: true);
                 fetch.IsEnabled = _model.HasToken;
                 row.Children.Add(fetch);
                 var cur = new ComboBox { ItemsSource = MarketCurrency.AllCases, SelectedItem = _model.Currency };

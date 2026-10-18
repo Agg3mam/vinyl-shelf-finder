@@ -69,6 +69,7 @@ public partial class App : Application
                 throw new InvalidOperationException("Hovedvinduet blev ikke oprettet.");
             var m = _window.Model;
             var errors = new List<string>();
+            _window.ResizeForSmoke(1280, 820);
             async Task Shot(string name)
             {
                 await Task.Delay(700);
@@ -125,6 +126,18 @@ public partial class App : Application
                 await Shot("10-vaerdi.png");
                 m.Sidebar = new SidebarItem(SidebarKind.History);
                 await Shot("09-historik.png");
+                // Lille vindue: plade-detaljen og Find skal kunne bruges ved 800×600.
+                _window.ResizeForSmoke(800, 600);
+                m.Sidebar = SidebarItem.Search;
+                m.Query = "beatles";
+                await Shot("13-smal-plade.png");
+                if (m.Selection is long small)
+                {
+                    m.FindModeCopy = small;
+                    await Shot("13b-smal-find.png");
+                    m.FindModeCopy = null;
+                }
+                _window.ResizeForSmoke(1280, 820);
                 _window.OpenSettings();
                 await Shot("11-indstillinger.png");
             }

@@ -46,6 +46,20 @@ public static class Ui
         public const string Back = "";
         public const string Forward = "";
         public const string Checklist = "\uE9D5";
+        public const string Refresh = "\uE72C";
+        public const string Lock = "\uE72E";
+        public const string Download = "\uE896";
+        public const string Heart = "\uEB51";
+        public const string Cancel = "\uE711";
+        public const string Add = "\uE710";
+        public const string QrCode = "\uED14";
+        public const string ChevronDown = "\uE70D";
+        public const string OpenInWindow = "\uE8A7";
+        public const string Calendar = "\uE787";
+        public const string Sync = "\uE895";
+        public const string Tag = "\uE8EC";
+        public const string Edit = "\uE70F";
+        public const string Info = "\uE946";
     }
 
     public static string StatusGlyph(this CopyStatus s) => s switch

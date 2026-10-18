@@ -31,7 +31,7 @@ public sealed partial class MainWindow : Window
     private IPane? _listPane;
     private IPane? _fullPane;
     private readonly InfoBar _errorBar = new() { Severity = InfoBarSeverity.Error, IsClosable = true, Margin = new Thickness(12, 8, 12, 0) };
-    private readonly NavigationViewItem _updateItem = new() { Content = "Opdatering", Tag = "update", SelectsOnInvoked = false, Icon = new FontIcon { Glyph = "" } };
+    private readonly NavigationViewItem _updateItem = new() { Content = "Opdatering", Tag = "update", SelectsOnInvoked = false, Icon = new FontIcon { Glyph = Ui.Glyph.Download } };
     private bool _buildingSidebar;
     private readonly SelectorBar _mediumBar = new();
     private readonly Button _syncButton = new();
@@ -53,7 +53,7 @@ public sealed partial class MainWindow : Window
         InitializeComponent();
         Title = "Vinyl Shelf Finder";
         AppWindow.SetIcon(System.IO.Path.Combine(AppContext.BaseDirectory, "Assets", "AppIcon.ico"));
-        AppWindow.Resize(new Windows.Graphics.SizeInt32(1280, 820));
+        FitToScreen();
         Hwnd = WinRT.Interop.WindowNative.GetWindowHandle(this);
 
         Search = new SearchPane(model);
@@ -61,6 +61,7 @@ public sealed partial class MainWindow : Window
         Find = new FindOverlay(model);
         OverlayHost.Child = Find.View;
         DetailHost.Child = Detail.View;
+        Body.SizeChanged += (_, e) => ListColumn.Width = new GridLength(Math.Clamp(e.NewSize.Width * 0.4, 260, 360));
         TopBar.Children.Add(BuildToolbar());
         TopBar.Children.Add(_errorBar);
         _errorBar.Closed += (_, _) => Model.ErrorMessage = null;
@@ -193,9 +194,9 @@ public sealed partial class MainWindow : Window
         _syncButton.IsEnabled = Model.HasToken && s.Phase != SyncPhase.Running;
         _syncButton.Content = s.Phase switch
         {
-            SyncPhase.Running => Ui.Label("", s.Total > 0 ? $"{s.Done}/{s.Total}" : "Henter…"),
+            SyncPhase.Running => Ui.Label(Ui.Glyph.Sync, s.Total > 0 ? $"{s.Done}/{s.Total}" : "Henter…"),
             SyncPhase.Failed => Ui.Label(Ui.Glyph.Warning, "Synkronisering fejlede"),
-            _ => Ui.Label("", "Synkronisér"),
+            _ => Ui.Label(Ui.Glyph.Sync, "Synkronisér"),
         };
         ToolTipService.SetToolTip(_syncButton, s.Phase == SyncPhase.Failed ? s.Message
             : Model.HasToken ? "Synkronisér med Discogs (Ctrl+R)" : "Forbind til Discogs for at synkronisere");
@@ -558,6 +559,20 @@ public sealed partial class MainWindow : Window
     // MARK: Skærmbillede
 
     /// <summary>Gemmer et PNG-billede af vinduets indhold (bruges af --smoke i CI). Mica-baggrunden kommer ikke med.</summary>
+    /// <summary>
+    /// Startstørrelse: så stor, at plade-detaljen kan ses uden at rulle (op til 1440×1000),
+    /// men aldrig større end skærmen. Vinduet lægges midt på skærmen.
+    /// </summary>
+    private void FitToScreen()
+    {
+        var area = Microsoft.UI.Windowing.DisplayArea.GetFromWindowId(AppWindow.Id, Microsoft.UI.Windowing.DisplayAreaFallback.Primary).WorkArea;
+        int w = Math.Min(1440, area.Width * 9 / 10), h = Math.Min(1000, area.Height * 9 / 10);
+        AppWindow.MoveAndResize(new Windows.Graphics.RectInt32(area.X + (area.Width - w) / 2, area.Y + (area.Height - h) / 2, w, h));
+    }
+
+    /// <summary>Fast vinduesstørrelse til smoke-testens billeder.</summary>
+    internal void ResizeForSmoke(int width, int height) => AppWindow.Resize(new Windows.Graphics.SizeInt32(width, height));
+
     internal async Task SaveScreenshotAsync(string path)
     {
         var rtb = new RenderTargetBitmap();

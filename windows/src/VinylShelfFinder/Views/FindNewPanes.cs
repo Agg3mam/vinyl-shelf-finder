@@ -154,7 +154,7 @@ public sealed class FindNewSearchPane : IPane
             foreach (var a in _shop.Albums) _list.Items.Add(Row(a));
             if (_shop.HasMore)
             {
-                var more = Ui.Btn(_shop.LoadingMore ? "Henter flere …" : "Vis flere", (_, _) => _shop.LoadMore(), "");
+                var more = Ui.Btn(_shop.LoadingMore ? "Henter flere …" : "Vis flere", (_, _) => _shop.LoadMore(), Ui.Glyph.ChevronDown);
                 more.IsEnabled = !_shop.LoadingMore;
                 more.HorizontalAlignment = HorizontalAlignment.Stretch;
                 more.Margin = new Thickness(0, 4, 0, 8);
@@ -203,7 +203,7 @@ public sealed class FindNewSearchPane : IPane
         {
             var badges = Ui.HStack(4);
             if (owned) badges.Children.Add(FindNewPanes.Badge("I din samling", Ui.Glyph.Check));
-            if (a.InWantlist) badges.Children.Add(FindNewPanes.Badge("På ønskelisten", ""));
+            if (a.InWantlist) badges.Children.Add(FindNewPanes.Badge("På ønskelisten", Ui.Glyph.Heart));
             t.Children.Add(badges);
         }
         Grid.SetColumn(t, 1);
@@ -285,7 +285,7 @@ public sealed class FindNewDetailPane
         p.Children.Add(panel);
         if (VersionList() is FrameworkElement list) p.Children.Add(list);
 
-        var offers = Ui.Btn(album.IsMaster ? "Se alle tilbud på Discogs" : "Se tilbud på Discogs", (_, _) => _shop.OpenInBrowser(_shop.OffersUrl(album)), "",
+        var offers = Ui.Btn(album.IsMaster ? "Se alle tilbud på Discogs" : "Se tilbud på Discogs", (_, _) => _shop.OpenInBrowser(_shop.OffersUrl(album)), Ui.Glyph.OpenInWindow,
             tooltip: album.IsMaster && _shop.Format != FormatFilter.All
                 ? $"Åbner Discogs' markedsplads med albummets {_shop.Format.Label()}-udgaver i et vindue her i appen"
                 : "Åbner Discogs' markedsplads i et vindue her i appen");
@@ -319,7 +319,7 @@ public sealed class FindNewDetailPane
         {
             var badges = Ui.HStack(4);
             if (owned) badges.Children.Add(FindNewPanes.Badge("I din samling", Ui.Glyph.Check));
-            if (a.InWantlist) badges.Children.Add(FindNewPanes.Badge("På ønskelisten", ""));
+            if (a.InWantlist) badges.Children.Add(FindNewPanes.Badge("På ønskelisten", Ui.Glyph.Heart));
             badges.Margin = new Thickness(0, 4, 0, 0);
             t.Children.Add(badges);
         }
@@ -417,7 +417,7 @@ public sealed class FindNewDetailPane
                 foreach (var v in _shop.OtherVersions) p.Children.Add(PricedRow(v, autoPriced: false));
                 if (_shop.VersionsHasMore)
                 {
-                    var more = Ui.Btn(_shop.LoadingMoreVersions ? "Henter flere …" : "Vis flere udgaver", (_, _) => _shop.LoadMoreVersions(), "");
+                    var more = Ui.Btn(_shop.LoadingMoreVersions ? "Henter flere …" : "Vis flere udgaver", (_, _) => _shop.LoadMoreVersions(), Ui.Glyph.ChevronDown);
                     more.IsEnabled = !_shop.LoadingMoreVersions;
                     more.Margin = new Thickness(12);
                     p.Children.Add(more);

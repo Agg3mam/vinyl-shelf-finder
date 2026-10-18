@@ -236,7 +236,7 @@ public sealed class CheckShelf
         if (r.ReturnedCopies.Count > 0)
             p.Children.Add(Ui.Label(Ui.Glyph.Undo, $"{Ui.Plader(r.ReturnedCopies.Count)} er tilbage i Discogs Collection."));
         if (r.UpdatedReleases > 0)
-            p.Children.Add(Ui.Label("", $"Oplysninger fra Discogs er opdateret for {Ui.Plader(r.UpdatedReleases)}. Ingen plader er flyttet."));
+            p.Children.Add(Ui.Label(Ui.Glyph.Edit, $"Oplysninger fra Discogs er opdateret for {Ui.Plader(r.UpdatedReleases)}. Ingen plader er flyttet."));
         var d = new ContentDialog
         {
             XamlRoot = root,

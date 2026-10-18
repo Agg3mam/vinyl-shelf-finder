@@ -25,6 +25,9 @@ public sealed class DetailPane
     };
     private long? _shownCopy;
     private bool _sortOpen;
+    // Smal kolonne (lille vindue): mindre cover og luft, knapperne fordelt over bredden.
+    private const double NarrowWidth = 560;
+    private bool _narrow;
     private int _toastToken;
 
     public FrameworkElement View => _root;
@@ -37,6 +40,13 @@ public sealed class DetailPane
         _model = model;
         _root.Children.Add(_scroll);
         _root.Children.Add(_toast);
+        _root.SizeChanged += (_, e) =>
+        {
+            bool narrow = e.NewSize.Width < NarrowWidth;
+            if (narrow == _narrow) return;
+            _narrow = narrow;
+            Rebuild();
+        };
         Rebuild();
     }
 
@@ -76,14 +86,14 @@ public sealed class DetailPane
     private FrameworkElement Page(Neighbors n)
     {
         var it = n.Target;
-        var p = new StackPanel { Spacing = 20, Padding = new Thickness(24), MaxWidth = 640, HorizontalAlignment = HorizontalAlignment.Stretch };
+        var p = new StackPanel { Spacing = _narrow ? 16 : 20, Padding = new Thickness(_narrow ? 16 : 24), MaxWidth = 640, HorizontalAlignment = HorizontalAlignment.Stretch };
         p.Children.Add(Header(it));
         foreach (var notice in Notices(it)) p.Children.Add(notice);
         if (n.Location is Location loc && n.Position is int pos)
         {
             bool away = !it.Copy.Status.IsOnShelf();
             p.Children.Add(RecordParts.LocationPanel(away ? "Plejer at stå i" : "Står i", loc, pos, n.SectionCount,
-                $"{(away ? "Plads" : Cap(loc.Medium.Singular()))} {pos} af {n.SectionCount} fra venstre"));
+                $"{(away ? "Plads" : Cap(loc.Medium.Singular()))} {pos} af {n.SectionCount} fra venstre", _narrow ? 22 : 28));
             p.Children.Add(Neighbors(n));
             p.Children.Add(Actions(it));
         }
@@ -111,10 +121,10 @@ public sealed class DetailPane
 
     private FrameworkElement Header(RecordItem it)
     {
-        var grid = new Grid { ColumnSpacing = 20 };
+        var grid = new Grid { ColumnSpacing = _narrow ? 14 : 20 };
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        var cover = Ui.Cover(it.Release, 132);
+        var cover = Ui.Cover(it.Release, _narrow ? 88 : 132);
         cover.VerticalAlignment = VerticalAlignment.Top;
         grid.Children.Add(cover);
         var text = new StackPanel { Spacing = 2 };
@@ -137,7 +147,7 @@ public sealed class DetailPane
         var parts = new List<string> { m.LowestPrice is double p ? $"Fra {ValuePane.Money(p, m.Currency)}" : "Ikke til salg lige nu" };
         if (m.NumForSale is int n) parts.Add($"{n} til salg");
         if (m.Have is int h && m.Want is int w) parts.Add($"{h} har / {w} ønsker");
-        var l = Ui.Label("", string.Join(" · ", parts), "CaptionTextBlockStyle", Ui.Secondary, 12);
+        var l = Ui.Label(Ui.Glyph.Tag, string.Join(" · ", parts), "CaptionTextBlockStyle", Ui.Secondary, 12);
         ToolTipService.SetToolTip(l, $"Discogs-markedsdata hentet {DanishDate.DateTime(m.FetchedAt)}");
         return l;
     }
@@ -220,10 +230,12 @@ public sealed class DetailPane
 
     private FrameworkElement Actions(RecordItem it)
     {
-        var buttons = Ui.HStack(8,
-            Ui.Btn("Rediger placering", (_, _) => _model.MoveCopy = it.Id, Ui.Glyph.Swap, tooltip: "Flyt pladen (Ctrl+Skift+M)"),
-            Ui.Btn("Spillet", (_, _) => LogPlay(it.Id), Ui.Glyph.Play, tooltip: "Registrér i lyttelog (Ctrl+L)"),
-            Ui.Btn("Find i reolen", (_, _) => _model.FindModeCopy = it.Id, Ui.Glyph.Pin, accent: true, tooltip: "Find i reolen (Enter)"));
+        Button[] actions =
+        {
+            Ui.Btn("Rediger placering", (_, _) => _model.MoveCopy = it.Id, _narrow ? null : Ui.Glyph.Swap, tooltip: "Flyt pladen (Ctrl+Skift+M)"),
+            Ui.Btn("Spillet", (_, _) => LogPlay(it.Id), _narrow ? null : Ui.Glyph.Play, tooltip: "Registrér i lyttelog (Ctrl+L)"),
+            Ui.Btn("Find i reolen", (_, _) => _model.FindModeCopy = it.Id, _narrow ? null : Ui.Glyph.Pin, accent: true, tooltip: "Find i reolen (Enter)"),
+        };
 
         var picker = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8 };
         picker.Children.Add(new TextBlock { Text = "Naboer", VerticalAlignment = VerticalAlignment.Center, Foreground = Ui.Secondary });
@@ -232,10 +244,24 @@ public sealed class DetailPane
         seg.SelectionChanged += (_, _) => { if (seg.SelectedItem is int v) _model.NeighborCount = v; };
         picker.Children.Add(seg);
 
+        if (_narrow)
+        {
+            // Knapperne deler bredden ligeligt, og Naboer står på linjen under.
+            var row = new Grid { ColumnSpacing = 8 };
+            for (int i = 0; i < actions.Length; i++)
+            {
+                row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+                actions[i].HorizontalAlignment = HorizontalAlignment.Stretch;
+                Grid.SetColumn(actions[i], i);
+                row.Children.Add(actions[i]);
+            }
+            return Ui.VStack(8, row, picker);
+        }
+
         var wrap = new Grid { ColumnSpacing = 8, RowSpacing = 8 };
         wrap.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         wrap.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        wrap.Children.Add(buttons);
+        wrap.Children.Add(Ui.HStack(8, actions));
         Grid.SetColumn(picker, 1);
         wrap.Children.Add(picker);
         return wrap;

@@ -21,9 +21,9 @@ public sealed class DiscogsBrowserWindow : Window
     private readonly WebView2 _web = new();
     private readonly Button _back = new() { Content = Ui.Icon(Ui.Glyph.Back, 14) };
     private readonly Button _forward = new() { Content = Ui.Icon(Ui.Glyph.Forward, 14) };
-    private readonly Button _reload = new() { Content = Ui.Icon("", 14) };
+    private readonly Button _reload = new() { Content = Ui.Icon(Ui.Glyph.Refresh, 14) };
     private readonly TextBlock _host = new() { VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis };
-    private readonly FontIcon _lock = new() { Glyph = "", FontSize = 12 };
+    private readonly FontIcon _lock = new() { Glyph = Ui.Glyph.Lock, FontSize = 12 };
     private readonly ProgressRing _loading = new() { Width = 16, Height = 16, IsActive = false };
     private readonly Grid _failure = new() { Visibility = Visibility.Collapsed };
     private Uri? _pending;

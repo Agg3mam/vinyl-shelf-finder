@@ -35,14 +35,14 @@ public sealed class FindOverlay
         _root.Children.Add(dim);
         _card = new Border
         {
-            Width = 640,
+            MaxWidth = 640,
             MaxHeight = 900,
             Margin = new Thickness(24),
             CornerRadius = new CornerRadius(12),
             Background = Ui.ThemeBrush("SolidBackgroundFillColorBaseBrush"),
             BorderBrush = Ui.CardStroke,
             BorderThickness = new Thickness(1),
-            HorizontalAlignment = HorizontalAlignment.Center,
+            HorizontalAlignment = HorizontalAlignment.Stretch,
             VerticalAlignment = VerticalAlignment.Center,
             Child = _scroll,
         };

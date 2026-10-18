@@ -164,7 +164,7 @@ public sealed class IMusicModel : INotifyPropertyChanged
             if (LastFetched is DateTimeOffset d) p.Children.Add(Ui.Text($"Sidst hentet: {Views.DanishDate.DateTime(d)}"));
             if (Updating) p.Children.Add(Ui.HStack(8, new ProgressRing { IsActive = true, Width = 16, Height = 16 }, Ui.Text("Henter iMusic-feedet …", color: Ui.Secondary)));
             if (Error is string err) p.Children.Add(Ui.Label(Ui.Glyph.Warning, err, color: Ui.Secondary));
-            var box = new PasswordBox { PlaceholderText = "https://daisycon.io/datafeed/?…", MaxWidth = 480, HorizontalAlignment = HorizontalAlignment.Left };
+            var box = new PasswordBox { PlaceholderText = "https://daisycon.io/datafeed/?…", MinWidth = 360, MaxWidth = 480, HorizontalAlignment = HorizontalAlignment.Left };
             Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(box, "iMusic-feed (Daisycon)");
             p.Children.Add(box);
             var msg = Ui.Text("", "CaptionTextBlockStyle", Ui.Secondary);

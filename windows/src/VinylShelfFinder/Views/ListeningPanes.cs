@@ -79,7 +79,7 @@ public sealed class ListenPane : IPane
         p.Children.Add(pick);
 
         if (candidates.Count == 0)
-            p.Children.Add(Ui.Label("", NoMatchMessage(items), color: Ui.Secondary));
+            p.Children.Add(Ui.Label(Ui.Glyph.Info, NoMatchMessage(items), color: Ui.Secondary));
         else
             p.Children.Add(Ui.Text($"{_model.Medium.Count(candidates.Count)} matcher · {_model.Medium.Plural()} du ikke har hørt længe foreslås oftere · mellemrum = nyt forslag",
                 "CaptionTextBlockStyle", Ui.Secondary));
@@ -198,9 +198,9 @@ public sealed class PlaysPane : IPane
         (string Label, string Value, string Glyph)[] cells =
         {
             ("Afspilninger", stats.Plays.Count.ToString(), Ui.Glyph.Play),
-            ("Sidste 30 dage", stats.PlaysSince(DateTimeOffset.Now.AddDays(-30)).ToString(), ""),
+            ("Sidste 30 dage", stats.PlaysSince(DateTimeOffset.Now.AddDays(-30)).ToString(), Ui.Glyph.Calendar),
             ("Forskellige plader", stats.Count.Count.ToString(), Ui.Glyph.Disc),
-            ("Aldrig spillet", neverPlayed.ToString(), ""),
+            ("Aldrig spillet", neverPlayed.ToString(), Ui.Glyph.Dashed),
         };
         for (int i = 0; i < cells.Length; i++)
         {

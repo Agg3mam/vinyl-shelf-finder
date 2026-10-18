@@ -17,7 +17,7 @@ public sealed class SettingsPane : IPane
     // Felterne har deres egen tekst, så et komma ikke forsvinder midt i skrivningen.
     private readonly TextBox _artistArticles = new() { Header = "Ignorerede artikler i kunstnernavne", PlaceholderText = "The, Die, Les" };
     private readonly TextBox _titleArticles = new() { Header = "Ignorerede artikler i titler", PlaceholderText = "(ingen)" };
-    private readonly PasswordBox _token = new() { Header = "Nyt token", MaxWidth = 420, HorizontalAlignment = HorizontalAlignment.Left };
+    private readonly PasswordBox _token = new() { Header = "Nyt token", PlaceholderText = "Indsæt dit Discogs-token", MinWidth = 320, MaxWidth = 420, HorizontalAlignment = HorizontalAlignment.Left };
     private bool _building;
 
     /// <summary>Ekstra faner, som andre dele af appen lægger ind (fx iMusic).</summary>
@@ -176,7 +176,7 @@ public sealed class SettingsPane : IPane
         foreach (var artist in rules.ArtistOverrides.Keys.OrderBy(k => k, StringComparer.CurrentCulture))
         {
             var a = artist;
-            var remove = new Button { Content = Ui.Icon("", 12), Background = null, BorderThickness = new Thickness(0) };
+            var remove = new Button { Content = Ui.Icon(Ui.Glyph.Cancel, 12), Background = null, BorderThickness = new Thickness(0) };
             ToolTipService.SetToolTip(remove, "Fjern");
             Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(remove, $"Fjern sorteringsnavn for {a}");
             remove.Click += (_, _) => UpdateRules(r => r.ArtistOverrides.Remove(a));
@@ -244,15 +244,15 @@ public sealed class SettingsPane : IPane
             Grid.SetColumn(names, 1);
             g.Children.Add(names);
             int s = shelf;
-            var addSec = Ui.Btn("Sektion", (_, _) => _model.AddSection(s), "");
+            var addSec = Ui.Btn("Sektion", (_, _) => _model.AddSection(s), Ui.Glyph.Add);
             Grid.SetColumn(addSec, 2);
             g.Children.Add(addSec);
             structure.Add(g);
         }
-        structure.Add(Ui.Btn(_model.Medium == Medium.Vinyl ? "Ny reol" : "Ny cd-reol", (_, _) => _model.AddSection((shelves.Count == 0 ? 0 : shelves.Max()) + 1), ""));
+        structure.Add(Ui.Btn(_model.Medium == Medium.Vinyl ? "Ny reol" : "Ny cd-reol", (_, _) => _model.AddSection((shelves.Count == 0 ? 0 : shelves.Max()) + 1), Ui.Glyph.Add));
         p.Children.Add(Group(structure.ToArray()));
 
-        var labels = Ui.Btn("Udskriv reolskilte med QR-kode… (Ctrl+P)", async (_, _) => await Safe(() => LabelsPrint.ExportAsync(_model)), "");
+        var labels = Ui.Btn("Udskriv reolskilte med QR-kode… (Ctrl+P)", async (_, _) => await Safe(() => LabelsPrint.ExportAsync(_model)), Ui.Glyph.QrCode);
         labels.IsEnabled = lib.Locations.Count > 0;
         p.Children.Add(Group(labels, Footer("Ét skilt pr. sektion med første og sidste kunstner. Skiltene åbnes i browseren, hvor de kan udskrives.")));
 
