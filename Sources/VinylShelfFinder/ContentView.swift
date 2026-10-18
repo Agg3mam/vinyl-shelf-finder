@@ -27,6 +27,14 @@ struct ContentView: View {
                  ? "Du starter helt forfra. Det gamle system ligger som en kopi i mappen med sikkerhedskopier og kan importeres igen."
                  : "Reoler, placeringer og historik er hentet fra filen. Det tidligere system ligger som en kopi i mappen med sikkerhedskopier.")
         }
+        .alert("Hvilke reoler skal bruges?", isPresented: Binding(get: { model.cloudChoice != nil }, set: { if !$0 { model.cloudChoice = nil } }),
+               presenting: model.cloudChoice) { _ in
+            Button("Brug kontoens reoler") { model.resolveCloudChoice(.useCloud) }
+            Button("Brug denne Macs reoler") { model.resolveCloudChoice(.useThisDevice) }
+            Button("Senere", role: .cancel) {}
+        } message: { c in
+            Text("Kontoen har \(c.cloudSections) sektioner, og denne Mac har \(c.localSections) andre. Pladerne, lyttelog og flueben flettes, men reolerne skal komme ét sted fra. Det, der ikke bruges, gemmes ikke. Tag evt. en eksport først (Indstillinger › Sikkerhedskopi og data).")
+        }
         .alert("Der opstod en fejl", isPresented: Binding(
             get: { model.errorMessage != nil },
             set: { if !$0 { model.errorMessage = nil } })) {

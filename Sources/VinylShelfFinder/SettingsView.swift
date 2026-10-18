@@ -4,6 +4,7 @@ import VinylCore
 struct SettingsView: View {
     var body: some View {
         TabView {
+            CloudSettings().tabItem { Label("Konto", systemImage: "icloud") }
             AccountSettings().tabItem { Label("Discogs", systemImage: "person.crop.circle") }
             SortSettings().tabItem { Label("Sortering", systemImage: "textformat.abc") }
             ShelfSettings().tabItem { Label("Reol", systemImage: "books.vertical") }
@@ -313,5 +314,90 @@ struct BackupSettings: View {
         panel.directoryURL = model.backupFolder
         guard panel.runModal() == .OK, let url = panel.url else { return }
         if let s = model.prepareImport(url) { pendingImport = (url.lastPathComponent, s) }
+    }
+}
+
+/// Kontoen i skyen: samme reoler, placeringer, flueben og lyttelog på Mac, Windows og iPhone.
+struct CloudSettings: View {
+    @Environment(AppModel.self) private var model
+    @ViewState private var email = ""
+    @ViewState private var code = ""
+    @ViewState private var codeSent = false
+    @ViewState private var busy = false
+
+    var body: some View {
+        Form {
+            if !model.cloudEnabled {
+                Section { Text("Kontoen er slået fra i demo-tilstand.").foregroundStyle(.secondary) }
+            } else if model.cloudLoggedIn {
+                loggedIn
+            } else {
+                login
+            }
+        }
+        .formStyle(.grouped)
+        .onAppear { if email.isEmpty { email = model.cloudEmail ?? "" } }
+    }
+
+    @ViewBuilder private var loggedIn: some View {
+        Section {
+            LabeledContent("Logget ind som", value: model.cloudEmail ?? "")
+            LabeledContent("Senest synkroniseret") {
+                switch model.cloudPhase {
+                case .syncing: Text("Synkroniserer …").foregroundStyle(.secondary)
+                default: Text(model.cloudLastSync.map { $0.formatted(date: .abbreviated, time: .shortened) } ?? "Ikke endnu")
+                }
+            }
+            if case .failed(let message) = model.cloudPhase {
+                Label(message, systemImage: "exclamationmark.triangle").foregroundStyle(.secondary)
+            }
+            HStack {
+                Button("Synkronisér nu") { Task { await model.syncCloud() } }
+                    .disabled(model.cloudPhase == .syncing)
+                Button("Log ud") { model.logOutCloud() }
+            }
+        } footer: {
+            Text("Reoler, placeringer, flueben, lyttelog og sorteringsregler er de samme på alle dine enheder. Appen synkroniserer selv ved start, kort efter hver ændring og hvert 5. minut. Discogs-tokenet og iMusic-adressen bliver på denne Mac.")
+        }
+    }
+
+    @ViewBuilder private var login: some View {
+        Section {
+            TextField("E-mail", text: $email, prompt: Text("dig@eksempel.dk"))
+                .textContentType(.emailAddress)
+                .disabled(codeSent)
+            if codeSent {
+                TextField("Kode fra mailen", text: $code, prompt: Text("6 cifre"))
+                    .textContentType(.oneTimeCode)
+            }
+            if case .failed(let message) = model.cloudPhase {
+                Label(message, systemImage: "exclamationmark.triangle").foregroundStyle(.secondary)
+            }
+            HStack {
+                if codeSent {
+                    Button("Log ind") {
+                        busy = true
+                        Task { _ = await model.verifyCloudCode(email: email, code: code); busy = false }
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .disabled(busy || code.filter(\.isNumber).count < 6)
+                    Button("Ny kode") { codeSent = false; code = "" }
+                } else {
+                    Button("Send kode") {
+                        busy = true
+                        Task { codeSent = await model.requestCloudCode(email: email); busy = false }
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .disabled(busy || !email.contains("@"))
+                }
+                if busy { ProgressView().controlSize(.small) }
+            }
+        } header: {
+            Text("Log ind på din konto")
+        } footer: {
+            Text(codeSent
+                 ? "Vi har sendt en kode til \(email). Den kan tage et minut om at komme. Tjek også uønsket post."
+                 : "Brug den samme e-mail på Mac, Windows og iPhone. Du får en kode på mail – ingen adgangskode. Første gang oprettes kontoen.")
+        }
     }
 }

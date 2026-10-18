@@ -92,6 +92,21 @@ final class AppModel {
     private(set) var justApplied: DataTransfer.Applied = .unchanged
     var showAppliedNotice: Bool = true
 
+    // Kontoen i skyen (se AppModel+Cloud.swift). Slået fra i demo- og snapshot-tilstand.
+    let cloud = CloudClient()
+    var cloudEnabled: Bool { !isDemo && !CommandLine.arguments.contains("--snapshot") }
+    /// Logget ind? Læses fra nøgleringens egenskaber ved start (ingen dialog).
+    var cloudLoggedIn = false
+    var cloudEmail: String?
+    var cloudPhase: CloudPhase = .idle
+    var cloudLastSync: Date?
+    /// Første gang: kontoen og denne Mac har hver deres reoler.
+    var cloudChoice: CloudSync.NeedsChoice?
+    @ObservationIgnored var cloudSession: CloudSession?
+    @ObservationIgnored var cloudDebounce: Task<Void, Never>?
+    @ObservationIgnored var cloudTimer: Task<Void, Never>?
+    @ObservationIgnored var cloudApplying = false
+
     // Ark/overlays
     var findModeCopy: Int64?
     /// "Sæt tilbage"-guiden: viser præcis, hvor en plade, der har været ude, skal stå.
@@ -170,6 +185,7 @@ final class AppModel {
         startBackups()
         imusic.start()
         updater.start()
+        startCloud()
     }
 
     // MARK: - Data
@@ -187,6 +203,7 @@ final class AppModel {
         } catch {
             errorMessage = error.localizedDescription
         }
+        if !cloudApplying { cloudChanged() }
     }
 
     /// Plader fra Discogs mangler Discogs' rækkefølge (fx efter opdatering af appen).
@@ -196,7 +213,8 @@ final class AppModel {
     }
 
     var needsOnboarding: Bool {
-        if forceOnboarding || (!hasToken && !isDemo) { return true }
+        // Uden Discogs-token kan reolerne også komme fra kontoen i skyen.
+        if forceOnboarding || (!hasToken && !isDemo && !cloudLoggedIn) { return true }
         // Sorteringslisten kan ses, før reolerne er lavet (så man kan se rækkefølgen først).
         if sidebar == .sortList && !library.copies.isEmpty { return false }
         return library.locations.isEmpty
@@ -210,11 +228,13 @@ final class AppModel {
     func setSortChecked(_ copyID: Int64, _ checked: Bool) {
         store.setSortChecked(medium, copyID: copyID, checked: checked)
         if checked { sortChecked.insert(copyID) } else { sortChecked.remove(copyID) }
+        cloudChanged()
     }
 
     func clearSortChecked() {
         store.clearSortChecked(medium)
         sortChecked = []
+        cloudChanged()
     }
 
     var lastSync: Date? {
@@ -443,9 +463,16 @@ final class AppModel {
         perform { try store.deleteEmptySection(id) }
     }
 
+    /// Efter en synkronisering: regler og indstillinger kan være ændret på en anden enhed.
+    func reloadSettingsFromStore() {
+        rules = store.loadSortRules()
+        neighborCount = Int(store.setting("neighbor_count") ?? "") ?? neighborCount
+    }
+
     func updateRules(_ new: SortRules) {
         rules = new
         do { try store.saveSortRules(new) } catch { errorMessage = error.localizedDescription }
+        cloudChanged()
     }
 
     func undo(_ entry: HistoryEntry) {
