@@ -1,0 +1,31 @@
+# Paritet: Mac og Windows
+
+Hvad hver app kan. Målet er ✅ i begge kolonner. Opdatér tabellen i samme commit som ændringen (se `CLAUDE.md`).
+
+✅ = findes · ❌ = mangler · — = giver ikke mening på platformen (med begrundelse)
+
+| Funktion | Mac | Windows | Bemærkning |
+|---|---|---|---|
+| Søg, plade-detalje, Find i reolen, Sæt tilbage, Flyt | ✅ | ✅ | |
+| Sektioner, Kontrollér sektion, sektionsgrænser (⇄) | ✅ | ✅ | |
+| Nye / Fjernet fra Discogs / Ude af reolen | ✅ | ✅ | |
+| Cover Flow | ✅ | ✅ | |
+| Historik med Fortryd | ✅ | ✅ | |
+| Hvad skal jeg høre? / Lyttelog | ✅ | ✅ | |
+| Værdi (estimat og markedsdata) | ✅ | ✅ | |
+| Find nye plader, Discogs-vindue, ønskeliste | ✅ | ✅ | |
+| iMusic som købssted | ✅ | ✅ | |
+| Cd'er som egen hylde, skiftet Plader / Cd'er | ✅ | ✅ | |
+| Kom i gang (forbind, hent, opret reol) | ✅ | ✅ | |
+| Reolskilte med QR-kode | ✅ | ✅ | Mac: PDF. Windows: HTML til udskrift |
+| Daglig sikkerhedskopi | ✅ | ✅ | |
+| Opdatering fra GitHub ("Opdatér nu") | ✅ | ✅ | |
+| Søg efter opdatering manuelt | ✅ | ✅ | Mac: appmenuen. Windows: "Opdatering" i sidepanelet |
+| Sorteringsliste med flueben | ✅ | ✅ | |
+| instance_id over 32 bit | ✅ | ✅ | Mac havde aldrig fejlen (Swift `Int` er 64 bit) |
+| Digitale filer står ikke på en hylde | ❌ | ✅ | Skal flyttes til Mac uden at ændre placeringer |
+| Sortering: "Tal sidst" | ❌ | ✅ | Windows: standard til. Mac: skal være fra (sorteringen må ikke ændre sig) |
+| Sortering: "Efternavn først" | ❌ | ✅ | |
+| Eksport / import / nulstil | ❌ | ✅ | |
+| `vinylshelf://`-adresser (QR åbner appen) | ✅ | ❌ | |
+| Mobilside på lokalnettet | ❌ | ❌ | Halvt lavet (kun ruter), ingen server endnu |

@@ -37,6 +37,8 @@ Genveje: ⌘K søg, ↑↓ vælg, ↩/⌘F Find i reolen, ⇧⌘M flyt, ⌘L spi
 
 ## 2. Sådan arbejdes der
 
+- **Mac og Windows følges ad** (brugerens krav, 18. okt): en ændring i den ene app laves også i den anden i samme
+  opgave. Se `CLAUDE.md` og tabellen i `PARITET.md`.
 - **Dansk** og almindeligt sprog uden unødvendig teknik.
 - **Spørg, før du bygger.** Stil få konkrete spørgsmål og giv en anbefaling. Fortæl om planen, og hvorfor.
 - Giv gerne **flere forslag at vælge imellem**, helst **visuelt** (mockups eller skærmbilleder).

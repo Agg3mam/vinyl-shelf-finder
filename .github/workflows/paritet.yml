@@ -1,0 +1,40 @@
+name: Paritet
+
+# Mac- og Windows-appen skal følges ad (se CLAUDE.md). Advarer, når et push ændrer den ene app
+# uden den anden eller uden PARITET.md. Advarslen stopper intet; den vises på kørslen på GitHub.
+on:
+  push:
+    branches-ignore: [ci-snapshots, ci-snapshots-windows, design-retning-*]
+
+permissions:
+  contents: read
+
+jobs:
+  paritet:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Ændrer pushet begge apps?
+        env:
+          BEFORE: ${{ github.event.before }}
+          AFTER: ${{ github.sha }}
+        run: |
+          if [ -z "$BEFORE" ] || [ "$BEFORE" = "0000000000000000000000000000000000000000" ] || ! git cat-file -e "$BEFORE" 2>/dev/null; then
+            echo "Ny gren eller omskrevet historik: intet at sammenligne med."; exit 0
+          fi
+          files=$(git diff --name-only "$BEFORE" "$AFTER")
+          mac=$(echo "$files" | grep -E '^Sources/(VinylCore|VinylShelfFinder)/' || true)
+          win=$(echo "$files" | grep -E '^windows/src/(VinylCore|VinylShelfFinder)/' || true)
+          par=$(echo "$files" | grep -E '^PARITET\.md$' || true)
+          if [ -n "$mac" ] && [ -z "$win" ]; then
+            echo "::warning title=Kun Mac-appen er ændret::Lav det samme i windows/, eller skriv i PARITET.md hvorfor det kun gælder Mac."
+          fi
+          if [ -n "$win" ] && [ -z "$mac" ]; then
+            echo "::warning title=Kun Windows-appen er ændret::Lav det samme i Sources/, eller skriv i PARITET.md hvorfor det kun gælder Windows."
+          fi
+          if { [ -n "$mac" ] || [ -n "$win" ]; } && [ -z "$par" ]; then
+            echo "::notice title=PARITET.md er ikke opdateret::Tjek om tabellen stadig passer."
+          fi
+          echo "Mac-filer: $(echo "$mac" | grep -c . || true), Windows-filer: $(echo "$win" | grep -c . || true)"
