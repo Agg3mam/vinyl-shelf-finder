@@ -9,6 +9,7 @@ ModelChecks.Run();
 DataChecks.Run();
 NetChecks.Run();
 UpdateChecks.Run();
+SyncChecks.Run();
 
 Console.WriteLine(Check.Failures == 0
     ? $"✓ Alle {Check.Passes} checks bestået"

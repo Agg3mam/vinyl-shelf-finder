@@ -198,6 +198,28 @@ public sealed partial class ShelfStore : IDisposable
                 Db.Execute("PRAGMA user_version = 5");
             });
         }
+        if (Db.UserVersion < 6)
+        {
+            // Synkronisering mellem enheder: fælles ID'er (uid) og det, der sidst blev synkroniseret.
+            // Samme skema på Mac. Kan køres igen.
+            Db.Transaction(() =>
+            {
+                foreach (var table in new[] { "copies", "locations", "plays" })
+                    if (!HasColumn(table, "uid")) Db.Execute($"ALTER TABLE {table} ADD COLUMN uid TEXT");
+                Db.Execute("""
+                    CREATE UNIQUE INDEX IF NOT EXISTS copies_uid ON copies(uid) WHERE uid IS NOT NULL;
+                    CREATE UNIQUE INDEX IF NOT EXISTS locations_uid ON locations(uid) WHERE uid IS NOT NULL;
+                    CREATE UNIQUE INDEX IF NOT EXISTS plays_uid ON plays(uid) WHERE uid IS NOT NULL;
+                    CREATE TABLE IF NOT EXISTS sync_state (
+                        kind TEXT NOT NULL,
+                        key TEXT NOT NULL,
+                        data TEXT,
+                        PRIMARY KEY (kind, key)
+                    );
+                    """);
+                Db.Execute("PRAGMA user_version = 6");
+            });
+        }
     }
 
     private bool HasColumn(string table, string column) =>
