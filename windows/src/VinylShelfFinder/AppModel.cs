@@ -477,7 +477,8 @@ public sealed class AppModel : INotifyPropertyChanged
             // Først nu (efter ja og sikkerhedskopi) bliver ændringen aktiv for næste start.
             if (reset) DataTransfer.RequestReset(Store.Db.Path);
             else DataTransfer.CommitImport(Store.Db.Path);
-            var args = IsDemo ? "--demo" : "";
+            // --restart: den nye udgave venter, til denne er lukket (kun ét vindue ad gangen).
+            var args = IsDemo ? "--demo" : "--restart";
             // Den nye udgave venter selv på, at denne lukker databasen (DataTransfer.ApplyPending).
             System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(Environment.ProcessPath!, args) { UseShellExecute = false });
         }

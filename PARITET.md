@@ -27,5 +27,5 @@ Hvad hver app kan. Målet er ✅ i begge kolonner. Opdatér tabellen i samme com
 | Sortering: "Tal sidst" | ✅ | ✅ | Standard: til på Windows, fra på Mac (en opdatering må ikke ændre Mac-sorteringen) |
 | Sortering: "Efternavn først" | ✅ | ✅ | |
 | Eksport / import / nulstil | ✅ | ✅ | Samme filformat: en eksport fra den ene kan importeres i den anden |
-| `vinylshelf://`-adresser (QR åbner appen) | ✅ | ❌ | |
+| `vinylshelf://`-adresser (QR åbner appen) | ✅ | ✅ | Windows registrerer adressen for brugeren og kører kun ét vindue |
 | Mobilside på lokalnettet | ❌ | ❌ | Halvt lavet (kun ruter), ingen server endnu |

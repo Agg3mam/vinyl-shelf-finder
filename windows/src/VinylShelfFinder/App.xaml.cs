@@ -41,6 +41,14 @@ public partial class App : Application
             _smokeDir = i + 1 < cmd.Length && !cmd[i + 1].StartsWith("--") ? cmd[i + 1] : AppContext.BaseDirectory;
 
         bool demo = cmd.Contains("--demo");
+        // vinylshelf://-adresser (QR-koderne på reolskiltene): kun ét vindue ad gangen. Et nyt eksemplar
+        // sender adressen videre til det kørende og lukker. Ikke i demo og smoke-test (rører ikke systemet).
+        Microsoft.Windows.AppLifecycle.AppInstance? main = null;
+        if (!demo && _smokeDir is null)
+        {
+            main = SingleInstance(restarting: cmd.Contains("--restart"));
+            if (main is null) return;
+        }
         // Demo og CI's smoke-test henter hverken covers eller opdateringer fra nettet.
         Ui.AllowNetworkCovers = !demo && _smokeDir is null;
         var updater = new Updater(enabled: _smokeDir is null && !demo);
@@ -48,6 +56,12 @@ public partial class App : Application
         var imusic = new IMusicModel(enabled: !demo && _smokeDir is null);
         _window = new MainWindow(updater, model, imusic);
         _window.Activate();
+        if (main is not null)
+        {
+            main.Activated += (_, e) => _window.DispatcherQueue.TryEnqueue(() => _window.OpenScanCode(ScanCodeFrom(e)));
+            RegisterProtocol();
+            _window.OpenScanCode(ScanCodeFrom(Microsoft.Windows.AppLifecycle.AppInstance.GetCurrent().GetActivatedEventArgs()));
+        }
 
         if (_smokeDir is not null)
             _ = RunSmokeAsync(_smokeDir);
@@ -57,6 +71,47 @@ public partial class App : Application
             imusic.Start();
             _ = _window.CheckForUpdateOnLaunchAsync();
         }
+    }
+
+    /// <summary>
+    /// Det kørende eksemplar, eller null, hvis et andet allerede kører (så har det fået aktiveringen).
+    /// Efter en genstart (import, nulstilling) venter det nye eksemplar på, at det gamle er lukket.
+    /// </summary>
+    private static Microsoft.Windows.AppLifecycle.AppInstance? SingleInstance(bool restarting)
+    {
+        var key = Microsoft.Windows.AppLifecycle.AppInstance.FindOrRegisterForKey("vinylshelffinder");
+        for (int i = 0; restarting && !key.IsCurrent && i < 60; i++)
+        {
+            Thread.Sleep(250);
+            key = Microsoft.Windows.AppLifecycle.AppInstance.FindOrRegisterForKey("vinylshelffinder");
+        }
+        if (key.IsCurrent) return key;
+        var args = Microsoft.Windows.AppLifecycle.AppInstance.GetCurrent().GetActivatedEventArgs();
+        Task.Run(async () => await key.RedirectActivationToAsync(args)).Wait();
+        Environment.Exit(0);
+        return null;
+    }
+
+    /// <summary>Registrerer vinylshelf:// for denne bruger (ingen administrator), så Windows åbner appen.</summary>
+    private static void RegisterProtocol()
+    {
+        try
+        {
+            var exe = Environment.ProcessPath!;
+            Microsoft.Windows.AppLifecycle.ActivationRegistrationManager.RegisterForProtocolActivation(
+                "vinylshelf", exe + ",0", "Vinyl Shelf Finder", exe);
+        }
+        catch { /* Uden registrering virker alt andet stadig. */ }
+    }
+
+    /// <summary>Adressen fra en aktivering: vinylshelf://… som protokol eller som argument.</summary>
+    internal static string? ScanCodeFrom(Microsoft.Windows.AppLifecycle.AppActivationArguments e)
+    {
+        if (e.Data is Windows.ApplicationModel.Activation.IProtocolActivatedEventArgs p) return p.Uri?.AbsoluteUri;
+        if (e.Data is Windows.ApplicationModel.Activation.ILaunchActivatedEventArgs l)
+            return l.Arguments?.Split(' ', StringSplitOptions.RemoveEmptyEntries).Select(a => a.Trim('"'))
+                    .FirstOrDefault(a => a.StartsWith("vinylshelf://", StringComparison.OrdinalIgnoreCase));
+        return null;
     }
 
     private async Task RunSmokeAsync(string dir)
@@ -90,7 +145,9 @@ public partial class App : Application
                 }
                 if (m.Library.Locations.FirstOrDefault() is Location loc)
                 {
-                    m.Sidebar = SidebarItem.ForSection(loc.Id);
+                    m.Sidebar = SidebarItem.Search;
+                    _window.OpenScanCode(ShelfLabel.Labels(m.Library)[0].ScanCode);
+                    if (m.Sidebar != SidebarItem.ForSection(loc.Id)) throw new InvalidOperationException("vinylshelf://-adressen åbnede ikke sektionen");
                     await Shot("04-sektion.png");
                     m.ShowCoverFlow = true;
                     await Shot("04b-cover-flow.png");

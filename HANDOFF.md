@@ -343,6 +343,17 @@ installeret). **Kun Windows; Mac-appen har ikke fået noget af det nedenfor.** W
 - Menupunktet "Søg efter opdatering…" i appmenuen (`Updater.checkFromMenu`).
 - Stadig kun på Windows: "Efternavn først", "Tal sidst", eksport/import/nulstil.
 
+### 18. okt: Mac og Windows ens (gren `claude/ret-tokenfelt`)
+
+Brugeren vil have, at appsene følges ad (`CLAUDE.md`, `PARITET.md`, workflowet "Paritet").
+- Mac fik: "Tal sidst" (**fra** som standard på Mac), "Efternavn først" (`SurnameSort.swift`, `SurnameSheet.swift`),
+  digitale filer uden hylde, eksport/import/nulstil (`DataTransfer.swift`, samme filformat som Windows; genstart
+  via `/bin/sh` der venter på, at appen lukker). 500 checks.
+- Begge: en digital fil, der allerede har en plads, bliver stående (`keepPlacedDigitalFiles` ved åbning).
+- Windows fik `vinylshelf://`: `ActivationRegistrationManager.RegisterForProtocolActivation` (HKCU), ét eksemplar
+  (`AppInstance.FindOrRegisterForKey`, ny start sender adressen videre), `--restart` efter import/nulstilling.
+  Ikke i `--demo`/`--smoke`. Smoke-testen tjekker `OpenScanCode`.
+
 ### Ikke færdigt / næste skridt (spørg brugeren om rækkefølgen)
 
 1. **Mobilside på det lokale netværk (opgave 1)**, så QR-koderne virker. Det er det største åbne punkt.

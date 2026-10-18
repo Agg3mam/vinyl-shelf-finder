@@ -325,6 +325,18 @@ public sealed partial class MainWindow : Window
         ShowFull(_settings);
     }
 
+    /// <summary>
+    /// vinylshelf://section/&lt;id&gt; (QR-koden på et reolskilt): viser sektionen med første plade valgt
+    /// og lægger vinduet forrest. Ukendte adresser ignoreres (som på Mac).
+    /// </summary>
+    internal void OpenScanCode(string? code)
+    {
+        if (code is null || ShelfLabel.LocationIdFromScanCode(code) is not long id || Model.Library.LocationById(id) is null) return;
+        Model.Sidebar = SidebarItem.ForSection(id);
+        Model.Selection = Model.Library.Sections.TryGetValue(id, out var ids) && ids.Count > 0 ? ids[0] : null;
+        Activate();
+    }
+
     /// <summary>Åbner Indstillinger (fx fra "Opdatering" i sidepanelet).</summary>
     internal void OpenSettings() => Nav.SelectedItem = Nav.SettingsItem;
 
