@@ -122,6 +122,7 @@ public sealed partial class ShelfStore
             docs.Add(new SyncDoc(SyncKind.Location, uid, new JsonObject
             {
                 ["shelf"] = V(r, "shelf"), ["section"] = V(r, "section"), ["sortIndex"] = V(r, "sort_index"), ["medium"] = V(r, "medium"),
+                ["code"] = V(r, "scan_code"),
             }));
         }
 
@@ -303,14 +304,19 @@ public sealed partial class ShelfStore
             }
 
             case SyncKind.Location:
+            {
                 if (d.Data is null) return true; // slettes til sidst (se ApplySyncDocs)
+                // QR-koden på det trykte skilt følger sektionen, så skiltet virker på alle enheder.
+                var code = Text(v, "code");
+                if (code is not null) Db.Run("UPDATE locations SET scan_code = NULL WHERE scan_code = ? AND (uid IS NULL OR uid != ?)", code, d.Key);
                 if (LocalId("locations", d.Key) is long lid)
-                    Db.Run("UPDATE locations SET shelf = ?, section = ?, sort_index = ?, medium = ? WHERE id = ?",
-                           Long(v, "shelf") ?? 1, Text(v, "section") ?? "A", Long(v, "sortIndex") ?? 0, Text(v, "medium") ?? "vinyl", lid);
+                    Db.Run("UPDATE locations SET shelf = ?, section = ?, sort_index = ?, medium = ?, scan_code = ? WHERE id = ?",
+                           Long(v, "shelf") ?? 1, Text(v, "section") ?? "A", Long(v, "sortIndex") ?? 0, Text(v, "medium") ?? "vinyl", code, lid);
                 else
-                    Db.Run("INSERT INTO locations(shelf, section, sort_index, medium, uid) VALUES(?, ?, ?, ?, ?)",
-                           Long(v, "shelf") ?? 1, Text(v, "section") ?? "A", Long(v, "sortIndex") ?? 0, Text(v, "medium") ?? "vinyl", d.Key);
+                    Db.Run("INSERT INTO locations(shelf, section, sort_index, medium, scan_code, uid) VALUES(?, ?, ?, ?, ?, ?)",
+                           Long(v, "shelf") ?? 1, Text(v, "section") ?? "A", Long(v, "sortIndex") ?? 0, Text(v, "medium") ?? "vinyl", code, d.Key);
                 break;
+            }
 
             case SyncKind.Section:
             {

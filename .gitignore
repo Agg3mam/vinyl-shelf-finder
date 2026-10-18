@@ -3,3 +3,5 @@
 *.app
 build/
 HANDOFF-privat.md
+xcuserdata/
+*.xcuserstate

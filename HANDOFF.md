@@ -437,6 +437,23 @@ projektet med egen konto (RLS adskiller data), men hver skal have sit eget Disco
    `git checkout Resources/Info.plist`.
 3. Brugeren lukker appen med ⌘Q og åbner den igen.
 
+### 18.–19. okt: iPhone-appen (gren `claude/iphone-app`)
+
+- **Projekt:** `ios/VinylShelfiOS.xcodeproj` (mål og skema `VinylShelfiOS`, bundle-id `dk.vinylshelffinder.ios`,
+  iOS 26+, viser navnet "Vinyl Shelf"). Kilderne ligger i `ios/VinylShelfiOS/` (mappen synkroniseres af Xcode, så nye
+  filer kommer automatisk med). Projektet bruger `VinylCore` fra Swift-pakken i roden (`.library(name: "VinylCore")`).
+  Målet må ikke hedde `VinylShelfFinder`, for så kolliderer det med Mac-appens produkt.
+- **Skærme:** Reol (sektioner pr. reol, plader/cd'er), Scan (VisionKit-QR), Konto (login/synk), Søg (søgefane).
+  Pladeskærmen er "Find i reolen" med `referenceAdvice`, pladerygge og knappen **Spillet**. `PhoneModel.swift` har
+  samme login- og synk-forløb som `AppModel+Cloud.swift` (enhed `iphone`).
+- **QR-koder:** sektionens post har nu feltet `code` (= `locations.scan_code`), så et skilt trykt på Mac'en virker på
+  telefonen. `Library.location(forScanCode:)` / `LocationForScanCode` finder sektionen (begge platforme).
+- **Afprøvning:** byg til simulatoren og læg demo-databasen ind i appens mappe (`xcrun simctl get_app_container booted
+  dk.vinylshelffinder.ios data` › `Library/Application Support/VinylShelfFinder/vinyl.sqlite`). Log aldrig simulatoren ind
+  på brugerens konto uden at spørge. GitHub bygger også iPhone-appen (`checks.yml`, trinnet "Byg iPhone-appen").
+- **På brugerens egen iPhone:** kræver, at brugeren selv tilføjer sit Apple-id i Xcode (Indstillinger › Konti) og
+  vælger det som Team under Signing. Med et gratis Apple-id skal appen installeres igen efter 7 dage.
+
 ### Ikke færdigt / næste skridt (spørg brugeren om rækkefølgen)
 
 1. **Mobilside på det lokale netværk (opgave 1)**, så QR-koderne virker. Det er det største åbne punkt.

@@ -146,7 +146,7 @@ extension ShelfStore {
             uidOfLocation[r["id"]!.int!] = uid
             docs.append(SyncDoc(kind: .location, key: uid, data: [
                 "shelf": .from(r["shelf"]), "section": .from(r["section"]), "sortIndex": .from(r["sort_index"]),
-                "medium": .from(r["medium"]),
+                "medium": .from(r["medium"]), "code": .from(r["scan_code"]),
             ]))
         }
 
@@ -316,12 +316,15 @@ extension ShelfStore {
 
         case .location:
             guard d.data != nil else { return true } // slettes til sidst (se applySyncDocs)
+            // QR-koden på det trykte skilt følger sektionen, så skiltet virker på alle enheder.
+            let code = text("code")
+            if let code { try db.run("UPDATE locations SET scan_code = NULL WHERE scan_code = ? AND (uid IS NULL OR uid != ?)", code, d.key) }
             if let id = try localID("locations", uid: d.key) {
-                try db.run("UPDATE locations SET shelf = ?, section = ?, sort_index = ?, medium = ? WHERE id = ?",
-                           int("shelf") ?? 1, text("section") ?? "A", int("sortIndex") ?? 0, text("medium") ?? "vinyl", id)
+                try db.run("UPDATE locations SET shelf = ?, section = ?, sort_index = ?, medium = ?, scan_code = ? WHERE id = ?",
+                           int("shelf") ?? 1, text("section") ?? "A", int("sortIndex") ?? 0, text("medium") ?? "vinyl", code, id)
             } else {
-                try db.run("INSERT INTO locations(shelf, section, sort_index, medium, uid) VALUES(?, ?, ?, ?, ?)",
-                           int("shelf") ?? 1, text("section") ?? "A", int("sortIndex") ?? 0, text("medium") ?? "vinyl", d.key)
+                try db.run("INSERT INTO locations(shelf, section, sort_index, medium, scan_code, uid) VALUES(?, ?, ?, ?, ?, ?)",
+                           int("shelf") ?? 1, text("section") ?? "A", int("sortIndex") ?? 0, text("medium") ?? "vinyl", code, d.key)
             }
 
         case .section:

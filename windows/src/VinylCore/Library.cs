@@ -125,6 +125,14 @@ public sealed class Library
 
     public Location? LocationOf(long copyId) => LocationOfCopy.TryGetValue(copyId, out var l) ? LocationById(l) : null;
 
+    /// Sektionen bag en scannet QR-kode. Koden på et trykt skilt følger sektionen til alle enheder;
+    /// ellers er tallet i koden enhedens eget sektionsnummer.
+    public Location? LocationForScanCode(string code)
+    {
+        if (Locations.FirstOrDefault(l => l.ScanCode == code) is Location byCode) return byCode;
+        return ShelfLabel.LocationIdFromScanCode(code) is long id && LocationById(id) is Location l && l.ScanCode is null ? l : null;
+    }
+
     public List<RecordItem> ItemsIn(long locationId) => SectionIds(locationId).Select(Item).OfType<RecordItem>().ToList();
 
     public List<int> Shelves => Locations.Select(l => l.Shelf).Distinct().OrderBy(s => s).ToList();

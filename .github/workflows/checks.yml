@@ -22,6 +22,7 @@ jobs:
           sparse-checkout: |
             Sources
             Resources
+            ios
       - name: Vis værktøjer
         run: |
           sw_vers
@@ -30,6 +31,13 @@ jobs:
         run: swift build
       - name: Checks
         run: swift run VinylCoreChecks
+      # iPhone-appen (ios/) bygges til simulatoren, så kernen også altid kan bruges på iPhone.
+      - name: Byg iPhone-appen
+        run: |
+          xcodebuild -project ios/VinylShelfiOS.xcodeproj -scheme VinylShelfiOS \
+            -destination 'generic/platform=iOS Simulator' -derivedDataPath .build/ios \
+            CODE_SIGNING_ALLOWED=NO build | tail -20
+          test "${PIPESTATUS[0]}" -eq 0
       # Billeder af demo-appens skærme (offscreen, ingen rigtige data), så designet kan ses uden en Mac.
       - name: Snapshots (demo)
         continue-on-error: true

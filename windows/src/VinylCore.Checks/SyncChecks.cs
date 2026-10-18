@@ -132,6 +132,17 @@ static class SyncChecks
         a.ApplySyncDocs(cloud.Values.ToList());
         Check.That(Same(Order(a.LoadLibrary()), Order(b.LoadLibrary())), "flytningen er nået frem");
 
+        // QR-koden fra et trykt skilt på A virker også på B, hvor sektionen har et andet nummer.
+        var printed = a.LoadLibrary().Locations[1];
+        a.SetScanCode(printed.Id, "vinylshelf://section/999");
+        Push(a);
+        b.ApplySyncDocs(cloud.Values.ToList());
+        var lbq = b.LoadLibrary();
+        var hit = lbq.LocationForScanCode("vinylshelf://section/999");
+        Check.That(hit is not null && hit.Shelf == printed.Shelf && hit.Section == printed.Section
+                   && ShelfLabel.Labels(lbq).First(l => l.Location.Id == hit.Id).ScanCode == "vinylshelf://section/999",
+                   "QR-koden på et trykt skilt følger sektionen til en anden enhed");
+
         using var c = new ShelfStore(TempDb("sync-c"));
         c.ApplyCollection(items);
         c.ApplySyncDocs(cloud.Values.ToList());

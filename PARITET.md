@@ -28,5 +28,22 @@ Hvad hver app kan. Målet er ✅ i begge kolonner. Opdatér tabellen i samme com
 | Sortering: "Efternavn først" | ✅ | ✅ | |
 | Eksport / import / nulstil | ✅ | ✅ | Samme filformat: en eksport fra den ene kan importeres i den anden |
 | `vinylshelf://`-adresser (QR åbner appen) | ✅ | ✅ | Windows registrerer adressen for brugeren og kører kun ét vindue |
-| Konto i skyen (Supabase): log ind med e-mail, synkronisering | ✅ | ✅ | Samme poster og felter, sikkerhedskopi før reoler slettes; iPhone-app kommer |
+| Konto i skyen (Supabase): log ind med e-mail, synkronisering | ✅ | ✅ | Samme poster og felter, sikkerhedskopi før reoler slettes. iPhone-appen bruger samme konto (se nedenfor) |
+| QR-koden på et trykt skilt følger sektionen til andre enheder | ✅ | ✅ | Feltet `code` i sektionens post (`locations.scan_code`). Mac gemmer koden, når skiltene laves; Windows bruger sektionens nummer, som før |
 | Mobilside på lokalnettet | ❌ | ❌ | Halvt lavet (kun ruter), ingen server endnu |
+
+## iPhone-appen (`ios/`)
+
+En tredje app, ikke en kopi af Mac/Windows: den viser og finder, men ændrer ikke reolerne. Den bruger
+`VinylCore` direkte (Swift-pakkens bibliotek), så søgning, naboer og Find-teksterne er præcis de samme som på Mac.
+Data kommer kun fra kontoen i skyen (ingen Discogs-forbindelse på telefonen).
+
+| Funktion | iPhone | Bemærkning |
+|---|---|---|
+| Log ind (link eller kode fra mailen) og automatisk synkronisering | ✅ | Linket i mailen åbner appen direkte (`vinylshelf://auth`) |
+| Søg (tåler stavefejl), Find i reolen, naboer | ✅ | Samme tekster som Mac (`referenceAdvice`) |
+| Reoler og sektioner (plader og cd'er) | ✅ | Kun visning |
+| Scan QR-koden på et reolskilt | ✅ | I appen (VisionKit) eller med Kamera-appen |
+| "Spillet" | ✅ | Synkroniseres til Mac og Windows |
+| Flytte plader, sektioner, Discogs, Værdi, Find nye plader | ❌ | Laves på computeren |
+

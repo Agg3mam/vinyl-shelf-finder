@@ -336,7 +336,7 @@ public sealed partial class MainWindow : Window
     {
         // Linket i login-mailen (vinylshelf://auth#…) logger ind på kontoen.
         if (code is not null && Model.CompleteCloudLink(code)) { Activate(); return; }
-        if (code is null || ShelfLabel.LocationIdFromScanCode(code) is not long id || Model.Library.LocationById(id) is null) return;
+        if (code is null || Model.Library.LocationForScanCode(code)?.Id is not long id) return;
         Model.Sidebar = SidebarItem.ForSection(id);
         Model.Selection = Model.Library.Sections.TryGetValue(id, out var ids) && ids.Count > 0 ? ids[0] : null;
         Activate();

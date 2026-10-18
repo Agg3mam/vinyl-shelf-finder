@@ -146,7 +146,8 @@ public struct ShelfLabel: Identifiable, Equatable {
     public var id: Int64 { location.id }
 
     /// Kode på QR-skiltet. Appen åbner sektionen, når koden scannes eller klikkes.
-    public var scanCode: String { "vinylshelf://section/\(location.id)" }
+    /// Et skilt, der allerede er trykt (evt. på en anden enhed), beholder sin kode.
+    public var scanCode: String { location.scanCode ?? "vinylshelf://section/\(location.id)" }
 
     /// Ét skilt pr. sektion. Antal og første/sidste kunstner tæller kun plader, der står
     /// i reolen – en plade på væggen eller udlånt er ikke med.

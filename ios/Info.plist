@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- vinylshelf:// åbner appen: QR-koderne på reolskiltene (fx fra Kamera-appen) og linket i login-mailen. -->
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLName</key>
+			<string>dk.vinylshelffinder.ios</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>vinylshelf</string>
+			</array>
+		</dict>
+	</array>
+</dict>
+</plist>

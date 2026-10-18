@@ -2135,6 +2135,16 @@ do {
     let oa = order(try a.loadLibrary()), ob = order(try b.loadLibrary())
     check(oa == ob, "flytningen er nået frem: \(oa)")
 
+    // QR-koden fra et trykt skilt på A virker også på B, hvor sektionen har et andet nummer.
+    let printed = try a.loadLibrary().locations[1]
+    try a.setScanCode(locationID: printed.id, code: "vinylshelf://section/999")
+    _ = try push(a)
+    try b.applySyncDocs(Array(cloud.values))
+    let lbq = try b.loadLibrary()
+    let hit = lbq.location(forScanCode: "vinylshelf://section/999")
+    check(hit?.shortName == printed.shortName && ShelfLabel.labels(for: lbq).first { $0.location.id == hit?.id }?.scanCode == "vinylshelf://section/999",
+          "QR-koden på et trykt skilt følger sektionen til en anden enhed")
+
     // C har selv hentet samlingen fra Discogs, før den logger ind: ingen dubletter.
     let (c, curl) = try freshStore("sync-c"); defer { try? FileManager.default.removeItem(at: curl) }
     _ = try c.applyCollection(items)

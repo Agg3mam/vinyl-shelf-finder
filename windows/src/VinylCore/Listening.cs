@@ -141,7 +141,8 @@ public sealed record ShelfLabel(Location Location, string? FirstArtist, string? 
     public long Id => Location.Id;
 
     /// Kode på QR-skiltet. Appen åbner sektionen, når koden scannes eller klikkes.
-    public string ScanCode => $"vinylshelf://section/{Location.Id}";
+    /// Et skilt, der allerede er trykt (evt. på en anden enhed), beholder sin kode.
+    public string ScanCode => Location.ScanCode ?? $"vinylshelf://section/{Location.Id}";
 
     /// Ét skilt pr. sektion. Antal og første/sidste kunstner tæller kun plader, der står
     /// i reolen – en plade på væggen eller udlånt er ikke med.

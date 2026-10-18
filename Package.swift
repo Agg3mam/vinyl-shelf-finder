@@ -3,9 +3,11 @@ import PackageDescription
 
 let package = Package(
     name: "VinylShelfFinder",
-    platforms: [.macOS("26.0")],
+    platforms: [.macOS("26.0"), .iOS("26.0")],
     products: [
         .executable(name: "VinylShelfFinder", targets: ["VinylShelfFinder"]),
+        // Kernen bruges også af iPhone-appen (ios/VinylShelfiOS.xcodeproj).
+        .library(name: "VinylCore", targets: ["VinylCore"]),
     ],
     targets: [
         // Al forretningslogik: database, sortering, naboer, søgning, Discogs-sync.

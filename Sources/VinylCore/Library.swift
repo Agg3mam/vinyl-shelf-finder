@@ -66,6 +66,14 @@ public struct Library {
 
     public func location(of copyID: Int64) -> Location? { location(locationOfCopy[copyID]) }
 
+    /// Sektionen bag en scannet QR-kode. Koden på et trykt skilt følger sektionen til alle enheder;
+    /// ellers er tallet i koden enhedens eget sektionsnummer.
+    public func location(forScanCode code: String) -> Location? {
+        if let l = locations.first(where: { $0.scanCode == code }) { return l }
+        guard let id = ShelfLabel.locationID(fromScanCode: code), let l = location(id), l.scanCode == nil else { return nil }
+        return l
+    }
+
     public func items(in locationID: Int64) -> [RecordItem] {
         (sections[locationID] ?? []).compactMap(item)
     }

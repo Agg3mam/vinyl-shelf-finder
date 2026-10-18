@@ -12,7 +12,11 @@ public enum DatabaseBackup {
     /// Mappen til kopierne: iCloud Drive, hvis den findes (så kopien også overlever, at Mac'en
     /// går i stykker), ellers Dokumenter.
     public static func defaultFolder(fileManager fm: FileManager = .default) -> URL {
+        #if os(macOS)
         let home = fm.homeDirectoryForCurrentUser
+        #else
+        let home = URL(fileURLWithPath: NSHomeDirectory(), isDirectory: true) // iPhone: appens egen mappe
+        #endif
         let iCloud = home.appendingPathComponent("Library/Mobile Documents/com~apple~CloudDocs", isDirectory: true)
         var isDir: ObjCBool = false
         let base = fm.fileExists(atPath: iCloud.path, isDirectory: &isDir) && isDir.boolValue
