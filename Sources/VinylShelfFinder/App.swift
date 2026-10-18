@@ -27,6 +27,12 @@ struct VinylShelfFinderApp: App {
         }
         .windowToolbarStyle(.unified)
         .commands {
+            CommandGroup(after: .appInfo) {
+                Button("Søg efter opdatering…") {
+                    Task { await model.updater.checkFromMenu() }
+                }
+                .disabled(!model.updater.isEnabled)
+            }
             CommandGroup(replacing: .newItem) {}
             CommandGroup(replacing: .printItem) {
                 Button("Udskriv reolskilte…") { model.exportLabels() }

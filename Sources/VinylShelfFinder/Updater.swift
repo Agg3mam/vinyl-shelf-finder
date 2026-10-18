@@ -22,6 +22,8 @@ final class Updater {
     private(set) var phase: Phase = .idle
     /// Den udgave, der spørges om ved start (nulstilles af "Senere").
     var prompt: UpdateRelease?
+    /// Svar på "Søg efter opdatering…" i menuen, når der ikke er en ny version.
+    var notice: String?
     private(set) var lastChecked: Date?
 
     /// Versionen, der kører nu (fra Info.plist).
@@ -69,6 +71,17 @@ final class Updater {
             if askUser, defaults.string(forKey: "update_skipped") != release.tag { prompt = release }
         } catch {
             phase = .failed("Kunne ikke tjekke for en ny version. Tjek internetforbindelsen, og prøv igen.")
+        }
+    }
+
+    /// "Søg efter opdatering…" i appens menu: tjekker nu og svarer altid, også når der ikke er noget nyt.
+    func checkFromMenu() async {
+        await check()
+        switch phase {
+        case .available(let release): prompt = release
+        case .upToDate: notice = "Du har den nyeste version (\(currentVersion))."
+        case .failed(let message): notice = message
+        default: break
         }
     }
 
@@ -187,6 +200,10 @@ struct UpdatePrompt: ViewModifier {
             Button("Senere", role: .cancel) { updater.postpone(release) }
         } message: { release in
             Text(Self.message(release, current: updater.currentVersion))
+        }
+        .alert(updater.notice ?? "",
+               isPresented: Binding(get: { updater.notice != nil }, set: { if !$0 { updater.notice = nil } })) {
+            Button("OK", role: .cancel) {}
         }
     }
 

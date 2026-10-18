@@ -53,8 +53,8 @@ public sealed partial class MainWindow : Window
         InitializeComponent();
         Title = "Vinyl Shelf Finder";
         AppWindow.SetIcon(System.IO.Path.Combine(AppContext.BaseDirectory, "Assets", "AppIcon.ico"));
-        FitToScreen();
         Hwnd = WinRT.Interop.WindowNative.GetWindowHandle(this);
+        FitToScreen();
 
         Search = new SearchPane(model);
         Detail = new DetailPane(model);
@@ -561,14 +561,19 @@ public sealed partial class MainWindow : Window
     // MARK: Skærmbillede
 
     /// <summary>Gemmer et PNG-billede af vinduets indhold (bruges af --smoke i CI). Mica-baggrunden kommer ikke med.</summary>
+    [System.Runtime.InteropServices.DllImport("user32.dll")]
+    private static extern uint GetDpiForWindow(IntPtr hwnd);
+
     /// <summary>
-    /// Startstørrelse: så stor, at plade-detaljen kan ses uden at rulle (op til 1440×1000),
-    /// men aldrig større end skærmen. Vinduet lægges midt på skærmen.
+    /// Startstørrelse: så stor, at plade-detaljen kan ses uden at rulle (op til 1440×1000 ved 100 %,
+    /// tilsvarende større ved skalering), men aldrig større end skærmen. Vinduet lægges midt på skærmen.
     /// </summary>
     private void FitToScreen()
     {
         var area = Microsoft.UI.Windowing.DisplayArea.GetFromWindowId(AppWindow.Id, Microsoft.UI.Windowing.DisplayAreaFallback.Primary).WorkArea;
-        int w = Math.Min(1440, area.Width * 9 / 10), h = Math.Min(1000, area.Height * 9 / 10);
+        uint dpi = GetDpiForWindow(Hwnd);
+        double scale = dpi == 0 ? 1 : dpi / 96.0;
+        int w = Math.Min((int)(1440 * scale), area.Width * 9 / 10), h = Math.Min((int)(1000 * scale), area.Height * 9 / 10);
         AppWindow.MoveAndResize(new Windows.Graphics.RectInt32(area.X + (area.Width - w) / 2, area.Y + (area.Height - h) / 2, w, h));
     }
 
@@ -583,9 +588,6 @@ public sealed partial class MainWindow : Window
         if (Nav.PaneDisplayMode != mode) Nav.PaneDisplayMode = mode;
         if (wide && !Nav.IsPaneOpen) DispatcherQueue.TryEnqueue(() => { if (Nav.PaneDisplayMode == NavigationViewPaneDisplayMode.Left) Nav.IsPaneOpen = true; });
     }
-
-    /// <summary>Til smoke-testen: sidepanelets tilstand.</summary>
-    internal string PaneState => $"{Nav.ActualWidth:0} px, {Nav.PaneDisplayMode}, open={Nav.IsPaneOpen}";
 
     /// <summary>Fast vinduesstørrelse til smoke-testens billeder.</summary>
     internal void ResizeForSmoke(int width, int height) => AppWindow.Resize(new Windows.Graphics.SizeInt32(width, height));
