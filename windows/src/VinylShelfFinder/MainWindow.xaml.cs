@@ -125,6 +125,9 @@ public sealed partial class MainWindow : Window
             case nameof(AppModel.SyncState):
                 UpdateToolbar();
                 break;
+            case nameof(AppModel.CloudChoice):
+                if (Model.CloudChoice is NeedsChoiceException choice) _ = AskCloudChoiceAsync(choice);
+                break;
             case nameof(AppModel.HasToken):
                 FindNew.ResetClient();
                 UpdateToolbar();
@@ -331,10 +334,35 @@ public sealed partial class MainWindow : Window
     /// </summary>
     internal void OpenScanCode(string? code)
     {
+        // Linket i login-mailen (vinylshelf://auth#…) logger ind på kontoen.
+        if (code is not null && Model.CompleteCloudLink(code)) { Activate(); return; }
         if (code is null || ShelfLabel.LocationIdFromScanCode(code) is not long id || Model.Library.LocationById(id) is null) return;
         Model.Sidebar = SidebarItem.ForSection(id);
         Model.Selection = Model.Library.Sections.TryGetValue(id, out var ids) && ids.Count > 0 ? ids[0] : null;
         Activate();
+    }
+
+    /// <summary>Første gang: kontoen og denne pc har hver deres reoler. Hvilke skal bruges?</summary>
+    private async Task AskCloudChoiceAsync(NeedsChoiceException c)
+    {
+        var d = new ContentDialog
+        {
+            XamlRoot = Root.XamlRoot,
+            Title = "Hvilke reoler skal bruges?",
+            Content = Ui.Text($"Kontoen har {c.CloudSections} sektioner, og denne pc har {c.LocalSections} andre. Pladerne, lyttelog og flueben flettes, men reolerne skal komme ét sted fra. Det, der ikke bruges, gemmes ikke. Tag evt. en eksport først (Indstillinger › Sikkerhedskopi og data)."),
+            PrimaryButtonText = "Brug kontoens reoler",
+            SecondaryButtonText = "Brug denne pc's reoler",
+            CloseButtonText = "Senere",
+            DefaultButton = ContentDialogButton.Close,
+        };
+        try
+        {
+            var r = await d.ShowAsync();
+            if (r == ContentDialogResult.Primary) Model.ResolveCloudChoice(FirstSync.UseCloud);
+            else if (r == ContentDialogResult.Secondary) Model.ResolveCloudChoice(FirstSync.UseThisDevice);
+            else Model.CloudChoice = null;
+        }
+        catch (System.Runtime.InteropServices.COMException) { Model.CloudChoice = null; } // en anden dialog er åben
     }
 
     /// <summary>Åbner Indstillinger (fx fra "Opdatering" i sidepanelet).</summary>

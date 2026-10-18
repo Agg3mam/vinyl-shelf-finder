@@ -68,6 +68,7 @@ public partial class App : Application
         else
         {
             model.StartBackups();
+            model.StartCloud();
             imusic.Start();
             _ = _window.CheckForUpdateOnLaunchAsync();
         }

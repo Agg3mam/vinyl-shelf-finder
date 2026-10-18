@@ -27,7 +27,7 @@ public sealed record SyncState(SyncPhase Phase, int Done = 0, int Total = 0, str
 /// Appens tilstand. Svarer til Sources/VinylShelfFinder/AppModel.swift (de dele, Windows-versionen har indtil videre).
 /// Alle ændringer sker på UI-tråden; skærmene lytter på <see cref="PropertyChanged"/>.
 /// </summary>
-public sealed class AppModel : INotifyPropertyChanged
+public sealed partial class AppModel : INotifyPropertyChanged
 {
     public event PropertyChangedEventHandler? PropertyChanged;
 
@@ -180,7 +180,8 @@ public sealed class AppModel : INotifyPropertyChanged
     public int FocusSearchRequest { get => _focusSearchRequest; private set => Set(ref _focusSearchRequest, value); }
     public void RequestSearchFocus() => FocusSearchRequest++;
 
-    public bool NeedsOnboarding => ForceOnboarding || (!HasToken && !IsDemo) || Library.Locations.Count == 0;
+    // Uden Discogs-token kan reolerne også komme fra kontoen i skyen.
+    public bool NeedsOnboarding => ForceOnboarding || (!HasToken && !IsDemo && !CloudLoggedIn) || Library.Locations.Count == 0;
 
     // MARK: Data
 
@@ -197,6 +198,7 @@ public sealed class AppModel : INotifyPropertyChanged
             OnChanged(nameof(NeedsOnboarding));
             // Efter en handling må valget kun skifte, når man står i søgningen.
             RunSearch(autoSelect: Sidebar.Kind == SidebarKind.Search);
+            if (!_cloudApplying) CloudChanged();
         }
         catch (Exception ex)
         {
@@ -511,13 +513,14 @@ public sealed class AppModel : INotifyPropertyChanged
             Store.SetSortChecked(Medium, copyId, isChecked);
             if (isChecked) _sortChecked.Add(copyId); else _sortChecked.Remove(copyId);
             OnChanged(nameof(SortChecked));
+            CloudChanged();
         }
         catch (Exception ex) { ErrorMessage = Describe(ex); }
     }
 
     public void ClearSortChecked()
     {
-        try { Store.ClearSortChecked(Medium); _sortChecked = new(); OnChanged(nameof(SortChecked)); }
+        try { Store.ClearSortChecked(Medium); _sortChecked = new(); OnChanged(nameof(SortChecked)); CloudChanged(); }
         catch (Exception ex) { ErrorMessage = Describe(ex); }
     }
 
@@ -660,6 +663,14 @@ public sealed class AppModel : INotifyPropertyChanged
     {
         Rules = rules;
         try { Store.SaveSortRules(rules); } catch (Exception ex) { ErrorMessage = Describe(ex); }
+        CloudChanged();
+    }
+
+    /// Efter en synkronisering: regler og indstillinger kan være ændret på en anden enhed.
+    internal void ReloadSettingsFromStore()
+    {
+        Rules = Store.LoadSortRules();
+        if (int.TryParse(Store.Setting("neighbor_count"), out var n) && n > 0) NeighborCount = n;
     }
 
     public void CreateLayout(IReadOnlyList<LayoutPlanner.SectionPlan> plan)

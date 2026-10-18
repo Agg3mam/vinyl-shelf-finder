@@ -359,6 +359,26 @@ Brugeren vil have, at appsene følges ad (`CLAUDE.md`, `PARITET.md`, workflowet 
   (`AppInstance.FindOrRegisterForKey`, ny start sender adressen videre), `--restart` efter import/nulstilling.
   Ikke i `--demo`/`--smoke`. Smoke-testen tjekker `OpenScanCode`.
 
+### 18. okt: konto i skyen (gren `claude/sky-synk`)
+
+Brugeren ville have én konto på Mac, Windows og iPhone. Valgt: **Supabase** (gratis, EU/Frankfurt), projekt-URL og
+offentlig nøgle i `CloudConfig` (Swift og C#). Databasen i skyen: `supabase/schema.sql` (én tabel `sync_records`,
+RLS: kun ejeren). Send aldrig `service_role`/secret-nøglen eller database-adgangskoden nogen steder.
+- **Skema v6** (begge): `uid` på copies/locations/plays, tabellen `sync_state`.
+- **SyncDocs** (`.swift`/`.cs`): hele systemet som poster (release, copy, location, section = hele rækkefølgen,
+  play, setting). Ændringer findes ved at sammenligne med `sync_state`. Poster fra skyen lægges ind; egne poster,
+  der kommer tilbage, springes over. Ved samtidig ændring vinder skyen. Historik synkroniseres ikke (endnu).
+- **Cloud** (`.swift`/`.cs`): login med e-mail. Mail-skabeloner kan ikke redigeres på gratisplanen uden egen SMTP,
+  så login sker via **linket i mailen** (`redirect_to=vinylshelf://auth`, står under Redirect URLs i Supabase).
+  Ender linket på `localhost`, kan adressen indsættes i appen. Koden virker også, hvis skabelonen en dag viser den.
+  Den indbyggede mail sender **højst 2 mails i timen** for hele projektet → egen SMTP (fx Resend) senere.
+- Første gang med reoler både i skyen og lokalt spørges der (`NeedsChoice`: brug kontoens / denne enheds).
+- Apps: fanen **Konto** i Indstillinger, synkronisering ved start, 4 s efter ændringer og hvert 5. minut.
+  Login gemmes i nøgleringen / Legitimationsadministrator (`dk.vinylshelffinder.cloud`).
+- Lokal Windows-test på Mac: `~/.dotnet/dotnet run --project windows/src/VinylCore.Checks -c Release` (.NET 8 i
+  hjemmemappen). Mac: 525 checks, Windows: 611 checks.
+- **Mangler:** iPhone-appen, at brugeren logger ind første gang (afventede mailgrænsen), merge til `main`.
+
 ### Ikke færdigt / næste skridt (spørg brugeren om rækkefølgen)
 
 1. **Mobilside på det lokale netværk (opgave 1)**, så QR-koderne virker. Det er det største åbne punkt.

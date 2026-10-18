@@ -13,7 +13,7 @@ public sealed class SettingsPane : IPane
     private readonly Grid _root = new();
     private readonly SelectorBar _tabs = new() { Margin = new Thickness(24, 12, 24, 0) };
     private readonly ScrollViewer _scroll = new() { HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled };
-    private string _tab = "discogs";
+    private string _tab = "cloud";
     // Felterne har deres egen tekst, så et komma ikke forsvinder midt i skrivningen.
     private readonly TextBox _artistArticles = new() { Header = "Ignorerede artikler i kunstnernavne", PlaceholderText = "The, Die, Les" };
     private readonly TextBox _titleArticles = new() { Header = "Ignorerede artikler i titler", PlaceholderText = "(ingen)" };
@@ -31,7 +31,7 @@ public sealed class SettingsPane : IPane
         _updater = updater;
         _root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         _root.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
-        foreach (var (tag, text) in new[] { ("discogs", "Discogs"), ("sort", "Sortering"), ("shelf", "Reol"), ("imusic", "iMusic"), ("backup", "Sikkerhedskopi og data"), ("update", "Opdatering") })
+        foreach (var (tag, text) in new[] { ("cloud", "Konto"), ("discogs", "Discogs"), ("sort", "Sortering"), ("shelf", "Reol"), ("imusic", "iMusic"), ("backup", "Sikkerhedskopi og data"), ("update", "Opdatering") })
             _tabs.Items.Add(new SelectorBarItem { Text = text, Tag = tag });
         _tabs.SelectedItem = _tabs.Items[0];
         _tabs.SelectionChanged += (_, _) => { if (_tabs.SelectedItem?.Tag is string t) { _tab = t; Rebuild(); } };
@@ -51,6 +51,9 @@ public sealed class SettingsPane : IPane
     {
         if (property is nameof(AppModel.HasToken) or nameof(AppModel.Username) or nameof(AppModel.Library) or nameof(AppModel.Medium)
             or nameof(AppModel.LastBackup) or nameof(AppModel.BackupError) or nameof(AppModel.SyncState))
+            Rebuild();
+        else if (_tab == "cloud" && property is nameof(AppModel.CloudLoggedIn) or nameof(AppModel.CloudEmail) or nameof(AppModel.CloudSyncing)
+                 or nameof(AppModel.CloudMessage) or nameof(AppModel.CloudLastSync))
             Rebuild();
         else if (property == nameof(AppModel.Rules) && _tab == "sort" && !_building)
             Rebuild();
@@ -75,6 +78,7 @@ public sealed class SettingsPane : IPane
         var p = new StackPanel { Spacing = 16, Padding = new Thickness(24), MaxWidth = 760, HorizontalAlignment = HorizontalAlignment.Left };
         switch (_tab)
         {
+            case "cloud": Cloud(p); break;
             case "discogs": Account(p); break;
             case "sort": Sort(p); break;
             case "shelf": Shelf(p); break;
@@ -108,6 +112,66 @@ public sealed class SettingsPane : IPane
     private static void Detach(FrameworkElement e)
     {
         if (e.Parent is Panel panel) panel.Children.Remove(e);
+    }
+
+    // MARK: Konto i skyen
+
+    private readonly TextBox _cloudEmail = new() { Header = "E-mail", PlaceholderText = "dig@eksempel.dk", MinWidth = 320, MaxWidth = 420, HorizontalAlignment = HorizontalAlignment.Left };
+    private readonly TextBox _cloudCode = new() { Header = "Kode fra mailen (hvis der er en)", PlaceholderText = "6 cifre", MinWidth = 200, MaxWidth = 260, HorizontalAlignment = HorizontalAlignment.Left };
+    private readonly TextBox _cloudPaste = new() { Header = "Eller indsæt adressen fra browseren", PlaceholderText = "http://localhost:3000/#access_token=…", MinWidth = 320, MaxWidth = 520, HorizontalAlignment = HorizontalAlignment.Left };
+    private bool _cloudSent;
+
+    private void Cloud(StackPanel p)
+    {
+        if (!_model.CloudEnabled)
+        {
+            p.Children.Add(Group(Ui.Text("Kontoen er slået fra i demo-tilstand.", color: Ui.Secondary)));
+            return;
+        }
+        var rows = new List<UIElement>();
+        if (_model.CloudLoggedIn)
+        {
+            rows.Add(Row("Logget ind som", _model.CloudEmail ?? ""));
+            rows.Add(Row("Senest synkroniseret", _model.CloudSyncing ? "Synkroniserer …" : _model.CloudLastSync is DateTimeOffset d ? DanishDate.DateTime(d) : "Ikke endnu"));
+            if (_model.CloudMessage is string m) rows.Add(Ui.Label(Ui.Glyph.Warning, m, color: Ui.Secondary));
+            var now = Ui.Btn("Synkronisér nu", async (_, _) => await _model.SyncCloudAsync(), Ui.Glyph.Sync);
+            now.IsEnabled = !_model.CloudSyncing;
+            rows.Add(Ui.HStack(8, now, Ui.Btn("Log ud", (_, _) => _model.LogOutCloud())));
+            rows.Add(Footer("Reoler, placeringer, flueben, lyttelog og sorteringsregler er de samme på alle dine enheder. Appen synkroniserer selv ved start, kort efter hver ændring og hvert 5. minut. Discogs-tokenet og iMusic-adressen bliver på denne pc."));
+            p.Children.Add(Group(rows.ToArray()));
+            return;
+        }
+        rows.Add(Ui.Text("Log ind på din konto", "BodyStrongTextBlockStyle"));
+        Detach(_cloudEmail); Detach(_cloudCode); Detach(_cloudPaste);
+        if (_cloudEmail.Text.Length == 0) _cloudEmail.Text = _model.CloudEmail ?? "";
+        _cloudEmail.IsEnabled = !_cloudSent;
+        rows.Add(_cloudEmail);
+        if (_cloudSent)
+        {
+            rows.Add(_cloudCode);
+            var login = Ui.Btn("Log ind", async (b, _) =>
+            {
+                ((Button)b).IsEnabled = false;
+                if (!await _model.VerifyCloudCodeAsync(_cloudEmail.Text, _cloudCode.Text)) ((Button)b).IsEnabled = true;
+            }, accent: true);
+            rows.Add(Ui.HStack(8, login, Ui.Btn("Ny mail", (_, _) => { _cloudSent = false; _cloudCode.Text = ""; Rebuild(); })));
+            rows.Add(_cloudPaste);
+            rows.Add(Ui.Btn("Brug adressen", (_, _) => { if (_model.CompleteCloudLink(_cloudPaste.Text)) _cloudPaste.Text = ""; }));
+        }
+        else
+        {
+            rows.Add(Ui.Btn("Send mail", async (b, _) =>
+            {
+                ((Button)b).IsEnabled = false;
+                _cloudSent = await _model.RequestCloudCodeAsync(_cloudEmail.Text);
+                if (_cloudSent) Rebuild(); else ((Button)b).IsEnabled = true;
+            }, accent: true));
+        }
+        if (_model.CloudMessage is string msg) rows.Add(Ui.Label(Ui.Glyph.Warning, msg, color: Ui.Secondary));
+        rows.Add(Footer(_cloudSent
+            ? $"Vi har sendt en mail til {_cloudEmail.Text}. Åbn den på denne pc, og klik på linket – så logger appen ind. Står der en kode i mailen, kan du også skrive den her. Tjek uønsket post, hvis mailen ikke kommer."
+            : "Brug den samme e-mail på Mac, Windows og iPhone. Du får en mail med et link – ingen adgangskode. Første gang oprettes kontoen."));
+        p.Children.Add(Group(rows.ToArray()));
     }
 
     // MARK: Discogs
