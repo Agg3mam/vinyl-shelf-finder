@@ -391,7 +391,7 @@ projektet med egen konto (RLS adskiller data), men hver skal have sit eget Disco
   Appen sender selv `POST /auth/v1/verify {type, token_hash}`. Brugeren prøvede og fik "Koden er forkert eller
   udløbet". Serveren svarer `otp_expired` for et ukendt/brugt token (afprøvet med curl og falsk token). Mulige
   årsager: linket var allerede klikket/brugt, det var ikke den nyeste mail, eller linket blev sat i kodefeltet.
-- Løsning 2 (**ikke committet, ikke installeret endnu**): ét felt "Linket fra mailen" + én "Log ind"-knap
+- Løsning 2 (commit `00512b5`, installeret på Mac, CI grøn): ét felt "Linket fra mailen" + én "Log ind"-knap
   (`completeCloudInput` / `CompleteCloudInputAsync` vælger selv kode eller link). Et brugt link giver nu sin egen
   besked (`CloudClient.usedLink` / `UsedLink`). Checks består på begge, og Mac-appen kompilerer
   (`swift build --product VinylShelfFinder`). Windows-UI er kun tjekket af CI, når grenen er pushet.
@@ -400,7 +400,7 @@ projektet med egen konto (RLS adskiller data), men hver skal have sit eget Disco
   konto) så skabelonen kan vise en 6-cifret kode (`{{ .Token }}`). Det fjerner også mailgrænsen.
 
 **Næste skridt (i rækkefølge)**
-1. Commit løsning 2 på `claude/sky-synk`, installér Mac-appen (se nedenfor), push grenen (CI bygger Windows).
+1. Gennemgå hele grenen `claude/sky-synk` mod `main` (se "Gennemgang" nedenfor).
 2. Få brugeren logget ind på Mac (husk mailgrænsen: vent ~1 time efter sidste mail). Tjek at "Senest
    synkroniseret" får et tidspunkt.
 3. Merge `claude/sky-synk` til `main` og lav en ny udgivelse (push `claude/udgivelse-vX.Y.Z`), så Windows kan
@@ -408,6 +408,13 @@ projektet med egen konto (RLS adskiller data), men hver skal have sit eget Disco
 4. iPhone-appen (Xcode og iOS 27-simulatoren er installeret; iPhone 18 Pro-simulator findes): login, søgning,
    Find i reolen, sektioner, QR-scanning, Spillet. Genbrug `VinylCore`.
 5. Senere: egen SMTP, synk af historik.
+
+**Gennemgang (gør dette først)**
+- `git diff main...claude/sky-synk`: læs alt. Fokus: sikkerhed (ingen hemmelige nøgler, token/iMusic aldrig i skyen
+  eller logs, RLS i `supabase/schema.sql`), datatab (sletninger, `NeedsChoice`, at en opdatering aldrig ændrer
+  sorteringen), v6-migreringen på en kopi af en ældre database, fejlbeskeder på dansk, og at Mac og Windows gør
+  præcis det samme (`PARITET.md`).
+- Kør begge check-suiter og byg Mac-appen. Ret fund på begge platforme. Rør aldrig den rigtige database i test.
 
 **Installation på Mac (brugerens rigtige app)**
 1. Sikkerhedskopi først: `sqlite3 "~/Library/Application Support/VinylShelfFinder/vinyl.sqlite" ".backup '…/vinyl-før-<navn>.sqlite'"`.
