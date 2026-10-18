@@ -131,6 +131,10 @@ Sources/VinylCoreChecks/      selvtest (305 checks)
 - En sync flytter eller sletter aldrig fysiske placeringer.
 - Plader, der er ude af reolen, beholder deres placering i databasen, men tæller ikke med i den fysiske nummerering.
 - Sorteringen følger **præcis Discogs' rækkefølge** (`SortRules.useDiscogsOrder`, `copies.discogs_rank`).
+- **En opdatering må aldrig ændre rækkefølgen på Mac'en** (brugerens krav, 18. okt). Placeringerne flyttes aldrig af
+  en opdatering, men sorteringsreglerne bestemmer forslag og ⇄-markeringer. Nye sorteringsvalg (fx "Tal sidst" og
+  "Efternavn først" fra Windows) skal derfor være **slået fra**, når de mangler i den gemte `sort_rules`, og må kun
+  slås til af brugeren selv. Windows har "Tal sidst" slået til som standard; det må ikke kopieres til Mac.
 
 ---
 
