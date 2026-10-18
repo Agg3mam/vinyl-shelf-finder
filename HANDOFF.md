@@ -87,6 +87,11 @@ Appen starter uden data. Forbind til Discogs i appen, eller prøv den med eksemp
 
 ---
 
+**Grene (18. okt):** Alt er samlet i `main` (v1.1.0), og de gamle `claude/`-grene er slettet. Afsnittene nedenfor
+nævner gamle grennavne som historik. Nyt arbejde laves i en ny gren fra `main`. En udgivelse laves ved at skubbe
+grenen `claude/udgivelse-vX.Y.Z` (se `.github/workflows/udgivelse.yml`). `ci-snapshots` og `ci-snapshots-windows`
+skrives af GitHub Actions og skal blive stående.
+
 ## 4. Teknik
 
 - **Kun Command Line Tools, ingen Xcode.** Det er Swift 6.x med macOS 27 SDK, og brugerens Mac kører macOS 27.
