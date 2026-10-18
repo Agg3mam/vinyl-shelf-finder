@@ -31,6 +31,7 @@ public enum SurnameSort {
         "silver", "dead", "dire", "new", "pink", "rolling", "soft", "sonic", "talking", "velvet", "grateful",
         "steely", "thin", "def", "daft", "massive", "simple", "primal", "king", "blast", "heavy", "hot", "cold",
         "dark", "wild", "lucky", "dream", "magic", "mad", "crazy", "young", "savage", "spirit", "flying", "cream",
+        "sort", "hvid", "rød", "blå", "grøn",
     ]
 
     private static let suffixes: Set<String> = ["jr", "jr.", "sr", "sr.", "ii", "iii", "iv"]

@@ -37,8 +37,27 @@ public sealed partial class ShelfStore : IDisposable
     public ShelfStore(string path)
     {
         Db = new Database(path);
-        try { Migrate(); }
+        try { Migrate(); KeepPlacedDigitalFiles(); }
         catch { Db.Dispose(); throw; }
+    }
+
+    /// Digitale filer står ikke på en hylde. Men en fil, der allerede har en plads (fra før appen
+    /// kendte forskel), bliver stående: den får den hylde, den står på, som brugerens valg. Ellers
+    /// ville pladerne efter den skifte nummer ved en opdatering. Samme regel på Mac.
+    internal void KeepPlacedDigitalFiles()
+    {
+        var rows = Db.Query("""
+            SELECT c.id, r.format, l.medium FROM copies c
+            JOIN placements p ON p.copy_id = c.id
+            JOIN locations l ON l.id = p.location_id
+            JOIN releases r ON r.discogs_release_id = c.release_id
+            WHERE c.medium_override IS NULL
+            """);
+        foreach (var r in rows)
+        {
+            if (!MediumExtensions.IsDigital(r.Text("format")) || r.Long("id") is not long id || r.Text("medium") is not string m) continue;
+            Db.Run("UPDATE copies SET medium_override = ? WHERE id = ?", m, id);
+        }
     }
 
     public void Dispose() => Db.Dispose();

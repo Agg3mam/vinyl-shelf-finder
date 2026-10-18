@@ -23,7 +23,7 @@ Hvad hver app kan. Målet er ✅ i begge kolonner. Opdatér tabellen i samme com
 | Søg efter opdatering manuelt | ✅ | ✅ | Mac: appmenuen. Windows: "Opdatering" i sidepanelet |
 | Sorteringsliste med flueben | ✅ | ✅ | |
 | instance_id over 32 bit | ✅ | ✅ | Mac havde aldrig fejlen (Swift `Int` er 64 bit) |
-| Digitale filer står ikke på en hylde | ❌ | ✅ | Skal flyttes til Mac uden at ændre placeringer |
+| Digitale filer står ikke på en hylde | ✅ | ✅ | En fil, der allerede har en plads, bliver stående (begge apps) |
 | Sortering: "Tal sidst" | ✅ | ✅ | Standard: til på Windows, fra på Mac (en opdatering må ikke ændre Mac-sorteringen) |
 | Sortering: "Efternavn først" | ✅ | ✅ | |
 | Eksport / import / nulstil | ❌ | ✅ | |

@@ -15,6 +15,24 @@ public final class ShelfStore {
     public init(path: String) throws {
         db = try SQLiteDatabase(path: path)
         try migrate()
+        try keepPlacedDigitalFiles()
+    }
+
+    /// Digitale filer står ikke på en hylde. Men en fil, der allerede har en plads (fra før appen
+    /// kendte forskel), bliver stående: den får den hylde, den står på, som brugerens valg. Ellers
+    /// ville pladerne efter den skifte nummer ved en opdatering. Samme regel på Windows.
+    func keepPlacedDigitalFiles() throws {
+        let rows = try db.query("""
+            SELECT c.id, r.format, l.medium FROM copies c
+            JOIN placements p ON p.copy_id = c.id
+            JOIN locations l ON l.id = p.location_id
+            JOIN releases r ON r.discogs_release_id = c.release_id
+            WHERE c.medium_override IS NULL
+            """)
+        for r in rows where Medium.isDigital(format: r["format"]?.text) {
+            guard let id = r["id"]?.int, let m = r["medium"]?.text else { continue }
+            try db.run("UPDATE copies SET medium_override = ? WHERE id = ?", m, id)
+        }
     }
 
     // MARK: - Skema
@@ -178,16 +196,19 @@ public final class ShelfStore {
         return Library(releases: releases, copies: copies, locations: locations, placements: placements, medium: medium)
     }
 
-    private static func medium(of c: Copy, _ releases: [Int: Release]) -> Medium {
-        c.mediumOverride ?? Medium.of(format: releases[c.releaseID]?.format)
+    /// nil = ingen hylde (digitale filer kommer hverken på plade- eller cd-hylden).
+    private static func medium(of c: Copy, _ releases: [Int: Release]) -> Medium? {
+        Medium.shelfOf(override: c.mediumOverride, format: releases[c.releaseID]?.format)
     }
 
     /// Antal kopier pr. slags hylde (bruges til at vise skiftet "Plader / Cd'er", når der er cd'er).
     public func mediumCounts() throws -> [Medium: Int] {
         var counts: [Medium: Int] = [:]
         for r in try db.query("SELECT c.medium_override, r.format FROM copies c JOIN releases r ON r.discogs_release_id = c.release_id") {
-            let m = r["medium_override"]?.text.flatMap(Medium.init(rawValue:)) ?? Medium.of(format: r["format"]?.text)
-            counts[m, default: 0] += 1
+            // Digitale filer tælles ikke med på nogen hylde.
+            if let m = Medium.shelfOf(override: r["medium_override"]?.text.flatMap(Medium.init(rawValue:)), format: r["format"]?.text) {
+                counts[m, default: 0] += 1
+            }
         }
         return counts
     }
@@ -396,8 +417,9 @@ public final class ShelfStore {
         if let p = try currentPlacement(copyID),
            let r = try db.query("SELECT medium FROM locations WHERE id = ?", p.0).first {
             let fmt = try db.query("SELECT r.format FROM copies c JOIN releases r ON r.discogs_release_id = c.release_id WHERE c.id = ?", copyID).first?["format"]?.text
-            let new = medium ?? Medium.of(format: fmt)
-            if r["medium"]?.text != new.rawValue { try unplace(copyID: copyID) }
+            // nil = ingen hylde (en digital fil tilbage til "Følg Discogs"): pladsen fjernes også.
+            let new = Medium.shelfOf(override: medium, format: fmt)
+            if new == nil || r["medium"]?.text != new?.rawValue { try unplace(copyID: copyID) }
         }
         try db.run("UPDATE copies SET medium_override = ? WHERE id = ?", medium?.rawValue, copyID)
     }
@@ -503,7 +525,8 @@ public final class ShelfStore {
                         INSERT INTO copies(discogs_instance_id, release_id, status, in_discogs, date_added, created_at, discogs_rank)
                         VALUES(?, ?, 'home', 1, ?, ?, ?)
                         """, it.instanceID, it.release.id, it.dateAdded, now, rank)
-                    report.newCopies.append(id)
+                    // Digitale filer gemmes (så de ikke ser "fjernet" ud), men meldes ikke som nye plader.
+                    if !Medium.isDigital(format: it.release.format) { report.newCopies.append(id) }
                     try log(.addedFromDiscogs, copyID: id, "Ny i Discogs: \(it.release.artist) – \(it.release.title)")
                 }
             }
@@ -511,7 +534,8 @@ public final class ShelfStore {
             for (instance, c) in copyByInstance where !seen.contains(instance) && c["in_discogs"]?.int != 0 {
                 let id = c["id"]!.int!
                 try db.run("UPDATE copies SET in_discogs = 0, removed_from_discogs_at = ? WHERE id = ?", now, id)
-                report.removedCopies.append(id)
+                let fmt = try db.query("SELECT format FROM releases WHERE discogs_release_id = ?", c["release_id"]?.int).first?["format"]?.text
+                if !Medium.isDigital(format: fmt) { report.removedCopies.append(id) }
                 try log(.removedFromDiscogs, copyID: id, "\(recordName(id)) er ikke længere i din Discogs-samling. Pladsen i reolen er bevaret.")
             }
             if report.updatedReleases > 0 {

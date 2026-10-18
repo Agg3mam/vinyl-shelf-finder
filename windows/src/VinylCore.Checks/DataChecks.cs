@@ -507,6 +507,30 @@ static class DataChecks
         var gone = f.ApplyCollection(withFile.Where(i => i.Release.Title != "Play").ToList());
         Check.That(gone.RemovedCopies.Count == 0, "en fil, der forsvinder fra Discogs, meldes ikke som fjernet plade");
 
+        // En fil, der allerede står i reolen (fra før appen kendte forskel), bliver stående med samme nummer.
+        var keepPath = TempDb("digital-keep");
+        long fileId;
+        string before;
+        using (var k = new ShelfStore(keepPath))
+        {
+            k.ApplyCollection(new[] { It(10, "ABBA", "Arrival", "Vinyl, LP"), It(11, "Moby", "Play", "File, MP3"), It(12, "Zappa", "Hot Rats", "Vinyl, LP") });
+            fileId = k.Db.Query("SELECT id FROM copies WHERE release_id = 700011").Single().Long("id")!.Value;
+            k.SetMedium(fileId, Medium.Vinyl); // som en gammel version, der regnede filen for en plade
+            var all = k.LoadLibrary().AllItems.Select(i => i.Id).OrderBy(x => x).ToList();
+            k.CreateLayout(new List<(int, string, IReadOnlyList<long>)> { (1, "A", all) });
+            k.Db.Run("UPDATE copies SET medium_override = NULL WHERE id = ?", fileId); // gammel database: intet valg gemt
+            before = string.Join(";", k.Db.Query("SELECT copy_id, location_id, position FROM placements ORDER BY copy_id")
+                .Select(r => $"{r.Long("copy_id")}:{r.Long("location_id")}:{r.Long("position")}"));
+        }
+        using (var k = new ShelfStore(keepPath))
+        {
+            var after = string.Join(";", k.Db.Query("SELECT copy_id, location_id, position FROM placements ORDER BY copy_id")
+                .Select(r => $"{r.Long("copy_id")}:{r.Long("location_id")}:{r.Long("position")}"));
+            var lib = k.LoadLibrary();
+            Check.That(after == before && lib.Copies[fileId].MediumOverride == Medium.Vinyl && lib.Sections.Values.First().Count == 3,
+                       "en fil med en plads bliver stående efter opdateringen (ingen numre flytter sig)");
+        }
+
         using var d = new ShelfStore(TempDb("cd-demo"));
         DemoData.SeedIfEmpty(d);
         var dcd = d.LoadLibrary(Medium.Cd);
@@ -573,7 +597,8 @@ static class DataChecks
         Check.That(SurnameSort.LooksLikePerson("Leonard Cohen") && !SurnameSort.LooksLikePerson("Pink Floyd") && !SurnameSort.LooksLikePerson("Massive Attack")
                    && !SurnameSort.LooksLikePerson("The Allman Brothers Band"), "gættet: person eller band");
         Check.That(!SurnameSort.LooksLikePerson("Black Stone Cherry") && !SurnameSort.LooksLikePerson("Blue Cheer") && SurnameSort.Reverse("A Perfect Circle") is null
-                   && SurnameSort.Reverse("Beethoven - Schubert") is null && SurnameSort.LooksLikePerson("B.B. King") && SurnameSort.LooksLikePerson("Alice Cooper"),
+                   && SurnameSort.Reverse("Beethoven - Schubert") is null && SurnameSort.LooksLikePerson("B.B. King") && SurnameSort.LooksLikePerson("Alice Cooper")
+                   && !SurnameSort.LooksLikePerson("Sort Sol"),
                    "typiske bandnavne gættes som bands; B.B. King er stadig en person");
 
         var cands = SurnameSort.Candidates(new[] { "Bob Dylan", "Pink Floyd", "Bob Dylan", "Kim Larsen", "ABBA" });

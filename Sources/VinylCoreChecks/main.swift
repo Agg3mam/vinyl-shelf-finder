@@ -1926,7 +1926,8 @@ do {
     check(SurnameSort.looksLikePerson("Leonard Cohen") && !SurnameSort.looksLikePerson("Pink Floyd") && !SurnameSort.looksLikePerson("Massive Attack")
           && !SurnameSort.looksLikePerson("The Allman Brothers Band"), "gættet: person eller band")
     check(!SurnameSort.looksLikePerson("Black Stone Cherry") && !SurnameSort.looksLikePerson("Blue Cheer") && SurnameSort.reverse("A Perfect Circle") == nil
-          && SurnameSort.reverse("Beethoven - Schubert") == nil && SurnameSort.looksLikePerson("B.B. King") && SurnameSort.looksLikePerson("Alice Cooper"),
+          && SurnameSort.reverse("Beethoven - Schubert") == nil && SurnameSort.looksLikePerson("B.B. King") && SurnameSort.looksLikePerson("Alice Cooper")
+          && !SurnameSort.looksLikePerson("Sort Sol"),
           "typiske bandnavne gættes som bands; B.B. King er stadig en person")
 
     let cands = SurnameSort.candidates(["Bob Dylan", "Pink Floyd", "Bob Dylan", "Kim Larsen", "ABBA"])
@@ -1955,6 +1956,56 @@ do {
     s.setSetting("surname_not_persons", "ødelagt")
     check(s.surnameNotPersons().isEmpty, "ødelagt gemt liste → tom, ingen fejl")
 } catch { check(false, "efternavn først: \(error)") }
+
+// MARK: Digitale filer (samme checks som på Windows)
+do {
+    check(Medium.isDigital(format: "File, MP3, Album") && Medium.isDigital(format: "8×File, FLAC")
+          && !Medium.isDigital(format: "Vinyl, LP") && !Medium.isDigital(format: "Box Set, CD") && !Medium.isDigital(format: nil),
+          "digitale filer genkendes (kun første format)")
+    func it(_ i: Int, _ artist: String, _ title: String, _ format: String) -> DiscogsCollectionItem {
+        DiscogsCollectionItem(instanceID: 90_000 + i, dateAdded: nil,
+                              release: Release(id: 900_000 + i, artist: artist, title: title, format: format))
+    }
+    let (f, url) = try freshStore("digital")
+    defer { try? FileManager.default.removeItem(at: url) }
+    let withFile = [it(0, "ABBA", "Arrival", "Vinyl, LP"), it(1, "Blur", "Parklife", "CD, Album"),
+                    it(5, "Moby", "Play", "File, MP3, Album"), it(6, "Björk", "Vespertine", "2×DVD, Album")]
+    let fr = try f.applyCollection(withFile)
+    let fc = try f.mediumCounts()
+    check(fc[.vinyl] == 2 && fc[.cd] == 1 && fr.newCopies.count == 3, "fil tælles ikke med; dvd bliver på pladehylden")
+    let vLib = try f.loadLibrary(), cLib = try f.loadLibrary(medium: .cd)
+    check(vLib.allItems.allSatisfy { $0.title != "Play" } && cLib.allItems.allSatisfy { $0.title != "Play" },
+          "filen står hverken blandt plader eller cd'er")
+    let again = try f.applyCollection(withFile)
+    check(again.newCopies.isEmpty && again.removedCopies.isEmpty, "filen gemmes og ses ikke som ny eller fjernet ved næste sync")
+    let playID = try f.db.query("SELECT id FROM copies WHERE release_id = 900005").first!["id"]!.int!
+    try f.setMedium(copyID: playID, .cd)
+    let cdNow = try f.loadLibrary(medium: .cd)
+    check(cdNow.unplaced.contains(playID), "brugeren kan selv sætte en fil på en hylde")
+    let cdLoc = try f.addSection(shelf: 1, section: "A", medium: .cd)
+    try f.move(copyID: playID, to: cdLoc, index: 0)
+    try f.setMedium(copyID: playID, nil)
+    let left = try f.db.query("SELECT copy_id FROM placements WHERE copy_id = ?", playID)
+    check(left.isEmpty,
+          "fil tilbage til Discogs' format: pladsen fjernes (ingen skjult placering)")
+    let gone = try f.applyCollection(withFile.filter { $0.release.title != "Play" })
+    check(gone.removedCopies.isEmpty, "en fil, der forsvinder fra Discogs, meldes ikke som fjernet plade")
+
+    // En fil, der allerede står i reolen (fra før appen kendte forskel), bliver stående med samme nummer.
+    let (k, kurl) = try freshStore("digital-keep")
+    defer { try? FileManager.default.removeItem(at: kurl) }
+    _ = try k.applyCollection([it(10, "ABBA", "Arrival", "Vinyl, LP"), it(11, "Moby", "Play", "File, MP3"), it(12, "Zappa", "Hot Rats", "Vinyl, LP")])
+    let fileID = try k.db.query("SELECT id FROM copies WHERE release_id = 900011").first!["id"]!.int!
+    try k.setMedium(copyID: fileID, .vinyl)          // som en gammel version, der regnede filen for en plade
+    let all = try k.loadLibrary().allItems.map(\.id).sorted()
+    try k.createLayout([(shelf: 1, section: "A", copies: all)])
+    try k.db.run("UPDATE copies SET medium_override = NULL WHERE id = ?", fileID)   // gammel database: intet valg gemt
+    let before = placementRows(k)
+    let reopened = try ShelfStore(path: kurl.path)
+    let lib = try reopened.loadLibrary()
+    check(placementRows(reopened) == before && lib.copies[fileID]?.mediumOverride == .vinyl && lib.sections.values.first?.count == 3,
+          "en fil med en plads bliver stående efter opdateringen (ingen numre flytter sig)")
+} catch { check(false, "digitale filer: \(error)") }
 
 // MARK: Opdatering fra GitHub Releases (uden net)
 do {

@@ -41,10 +41,24 @@ public enum Medium: String, CaseIterable, Identifiable {
     /// Ud fra Discogs' format, fx "Vinyl, LP" eller "2×CD, Album". Kun det første format tæller.
     /// Alt, der ikke er en cd (vinyl, kassetter, bokse …), hører til pladerne, som før.
     public static func of(format: String?) -> Medium {
-        guard let first = format?.split(separator: ",").first else { return .vinyl }
-        var name = first.trimmingCharacters(in: .whitespaces).uppercased()
-        if let x = name.firstIndex(of: "×") { name = String(name[name.index(after: x)...]) }
-        return ["CD", "CDR", "SACD", "HDCD"].contains(name) ? .cd : .vinyl
+        ["CD", "CDR", "SACD", "HDCD"].contains(firstFormat(format)) ? .cd : .vinyl
+    }
+
+    /// Første format uden antal: "2×CD, Album" → "CD", "8×File, MP3" → "FILE".
+    private static func firstFormat(_ format: String?) -> String {
+        guard let first = format?.split(separator: ",").first else { return "" }
+        let name = first.trimmingCharacters(in: .whitespaces).uppercased()
+        if let x = name.firstIndex(of: "×") { return String(name[name.index(after: x)...]) }
+        return name
+    }
+
+    /// Kun digitale filer (Discogs-formatet "File"). De står ikke fysisk nogen steder.
+    public static func isDigital(format: String?) -> Bool { firstFormat(format) == "FILE" }
+
+    /// Hylden, en kopi hører til: brugerens valg, ellers ud fra formatet.
+    /// nil = ingen hylde (digitale filer), medmindre brugeren selv har flyttet kopien.
+    public static func shelfOf(override: Medium?, format: String?) -> Medium? {
+        override ?? (isDigital(format: format) ? nil : of(format: format))
     }
 
     /// "Plader" / "Cd'er" – til skiftet øverst og overskrifter.
