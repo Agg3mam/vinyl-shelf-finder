@@ -367,7 +367,7 @@ struct CloudSettings: View {
                 .textContentType(.emailAddress)
                 .disabled(codeSent)
             if codeSent {
-                TextField("Kode fra mailen", text: $code, prompt: Text("6 cifre"))
+                TextField("Kode fra mailen (hvis der er en)", text: $code, prompt: Text("6 cifre"))
                     .textContentType(.oneTimeCode)
             }
             if case .failed(let message) = model.cloudPhase {
@@ -381,9 +381,9 @@ struct CloudSettings: View {
                     }
                     .buttonStyle(.borderedProminent)
                     .disabled(busy || code.filter(\.isNumber).count < 6)
-                    Button("Ny kode") { codeSent = false; code = "" }
+                    Button("Ny mail") { codeSent = false; code = "" }
                 } else {
-                    Button("Send kode") {
+                    Button("Send mail") {
                         busy = true
                         Task { codeSent = await model.requestCloudCode(email: email); busy = false }
                     }
@@ -396,8 +396,8 @@ struct CloudSettings: View {
             Text("Log ind på din konto")
         } footer: {
             Text(codeSent
-                 ? "Vi har sendt en kode til \(email). Den kan tage et minut om at komme. Tjek også uønsket post."
-                 : "Brug den samme e-mail på Mac, Windows og iPhone. Du får en kode på mail – ingen adgangskode. Første gang oprettes kontoen.")
+                 ? "Vi har sendt en mail til \(email). Åbn den på denne Mac, og klik på linket – så logger appen ind. Står der en kode i mailen, kan du også skrive den her. Tjek uønsket post, hvis mailen ikke kommer."
+                 : "Brug den samme e-mail på Mac, Windows og iPhone. Du får en mail med et link – ingen adgangskode. Første gang oprettes kontoen.")
         }
     }
 }

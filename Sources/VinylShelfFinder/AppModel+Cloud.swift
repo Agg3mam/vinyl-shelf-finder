@@ -66,6 +66,25 @@ extension AppModel {
         }
     }
 
+    /// Linket i login-mailen åbner appen (vinylshelf://auth#…). Returnerer true, hvis adressen var et login.
+    @discardableResult
+    func completeCloudLink(_ url: URL) -> Bool {
+        do {
+            guard let s = try CloudClient.session(fromLink: url) else { return false }
+            guard cloudEnabled else { return true }
+            try saveCloudSession(s)
+            cloudLoggedIn = true
+            let email = s.email.isEmpty ? (cloudEmail ?? "") : s.email
+            cloudEmail = email
+            store.setSetting("cloud_email", email)
+            cloudPhase = .idle
+            startCloud()
+        } catch {
+            cloudPhase = .failed(error.localizedDescription)
+        }
+        return true
+    }
+
     func logOutCloud() {
         cloudTimer?.cancel()
         cloudDebounce?.cancel()
@@ -78,7 +97,7 @@ extension AppModel {
         store.setSetting("cloud_user", nil)
     }
 
-    private func saveCloudSession(_ s: CloudSession) throws {
+    fileprivate func saveCloudSession(_ s: CloudSession) throws {
         let json = String(data: try JSONEncoder().encode(s), encoding: .utf8) ?? ""
         try KeychainSecret.cloudSession.save(json)
         cloudSession = s

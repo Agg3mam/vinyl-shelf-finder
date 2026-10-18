@@ -2259,6 +2259,19 @@ do { try MainActor.assumeIsolated {
     let wl = try win.loadLibrary()
     check(wl.locations.count == 1 && wl.locations[0].shelf == 1 && wl.copies.count == 2, "\"Brug kontoens reoler\" erstatter enhedens reoler, plader bevares")
 
+    // Login fra linket i mailen (vinylshelf://auth#…). Adgangsnøglen er en JWT med bruger-ID og e-mail.
+    let claims = Data(#"{"sub":"abc-123","email":"a@b.dk","exp":2000000000}"#.utf8).base64EncodedString()
+        .replacingOccurrences(of: "=", with: "").replacingOccurrences(of: "+", with: "-").replacingOccurrences(of: "/", with: "_")
+    let link = URL(string: "vinylshelf://auth#access_token=x.\(claims).y&refresh_token=r1&expires_in=3600&expires_at=1999999999&type=magiclink")!
+    let fromLink = try CloudClient.session(fromLink: link)
+    check(fromLink?.userID == "abc-123" && fromLink?.email == "a@b.dk" && fromLink?.refreshToken == "r1" && fromLink?.expiresAt == 1999999999,
+          "login fra linket i mailen")
+    check((try? CloudClient.session(fromLink: URL(string: "vinylshelf://section/4")!)) == .some(nil), "en QR-adresse er ikke et login")
+    var linkError = ""
+    do { _ = try CloudClient.session(fromLink: URL(string: "vinylshelf://auth#error=access_denied&error_code=otp_expired&error_description=Email+link+is+invalid+or+has+expired")!) }
+    catch { linkError = error.localizedDescription }
+    check(linkError == "Linket er brugt eller udløbet. Bed om en ny mail.", "udløbet link giver en dansk besked")
+
     // Udløbet login.
     let bad = CloudSession(accessToken: "forkert", refreshToken: "x", expiresAt: 0, userID: session.userID, email: session.email)
     var needsLogin = false

@@ -427,6 +427,7 @@ final class AppModel {
 
     /// Åbner en sektion fra en scannet eller klikket `vinylshelf://section/<id>`-kode.
     func open(_ url: URL) {
+        if completeCloudLink(url) { return }
         guard let id = ShelfLabel.locationID(fromScanCode: url.absoluteString), library.location(id) != nil else { return }
         sidebar = .section(id)
         selection = library.sections[id]?.first

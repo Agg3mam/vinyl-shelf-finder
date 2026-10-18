@@ -49,9 +49,49 @@ public final class CloudClient: @unchecked Sendable {
 
     // MARK: Login med kode
 
-    /// Sender en 6-cifret kode til e-mailen. Kontoen oprettes, hvis den ikke findes.
+    /// Hvor linket i login-mailen sender hen: appen selv (vinylshelf://auth), ikke en webside.
+    /// Adressen skal stå under Redirect URLs i Supabase (Authentication › URL Configuration).
+    public static let loginRedirect = "vinylshelf://auth"
+
+    /// Sender en login-mail (et link, der åbner appen, og en kode, hvis skabelonen viser den).
+    /// Kontoen oprettes, hvis den ikke findes.
     public func requestCode(email: String) async throws {
-        _ = try await send("POST", "auth/v1/otp", body: ["email": email, "create_user": true], token: nil)
+        let redirect = Self.loginRedirect.addingPercentEncoding(withAllowedCharacters: .alphanumerics) ?? ""
+        _ = try await send("POST", "auth/v1/otp?redirect_to=\(redirect)", body: ["email": email, "create_user": true], token: nil)
+    }
+
+    /// Login fra linket i mailen: vinylshelf://auth#access_token=…&refresh_token=…&expires_at=…
+    /// Bruger-ID og e-mail står i adgangsnøglen (JWT). nil, hvis adressen ikke er et login.
+    public static func session(fromLink url: URL) throws -> CloudSession? {
+        guard url.scheme == "vinylshelf", url.host == "auth" else { return nil }
+        let raw = url.fragment ?? URLComponents(url: url, resolvingAgainstBaseURL: false)?.query ?? ""
+        var p: [String: String] = [:]
+        for pair in raw.split(separator: "&") {
+            let kv = pair.split(separator: "=", maxSplits: 1).map { String($0).removingPercentEncoding ?? String($0) }
+            if kv.count == 2 { p[kv[0]] = kv[1] }
+        }
+        if let desc = p["error_description"] ?? p["error"] {
+            throw CloudError(desc.contains("expired") || desc.contains("invalid")
+                             ? "Linket er brugt eller udløbet. Bed om en ny mail."
+                             : "Login mislykkedes: \(desc.replacingOccurrences(of: "+", with: " "))")
+        }
+        guard let access = p["access_token"], let refresh = p["refresh_token"],
+              let claims = jwtClaims(access), let id = claims["sub"] as? String else {
+            throw CloudError("Linket kunne ikke læses. Bed om en ny mail.")
+        }
+        let expiresAt = p["expires_at"].flatMap(Double.init)
+            ?? (claims["exp"] as? Double) ?? Date().timeIntervalSince1970 + (p["expires_in"].flatMap(Double.init) ?? 3600)
+        return CloudSession(accessToken: access, refreshToken: refresh, expiresAt: expiresAt,
+                            userID: id, email: (claims["email"] as? String) ?? "")
+    }
+
+    static func jwtClaims(_ jwt: String) -> [String: Any]? {
+        let parts = jwt.split(separator: ".")
+        guard parts.count >= 2 else { return nil }
+        var b = String(parts[1]).replacingOccurrences(of: "-", with: "+").replacingOccurrences(of: "_", with: "/")
+        while b.count % 4 != 0 { b += "=" }
+        guard let data = Data(base64Encoded: b) else { return nil }
+        return (try? JSONSerialization.jsonObject(with: data)) as? [String: Any]
     }
 
     /// Bytter koden for et login.
