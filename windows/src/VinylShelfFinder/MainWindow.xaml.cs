@@ -63,13 +63,7 @@ public sealed partial class MainWindow : Window
         DetailHost.Child = Detail.View;
         Body.SizeChanged += (_, e) => ListColumn.Width = new GridLength(Math.Clamp(e.NewSize.Width * 0.4, 260, 360));
         // Under 1100 px vises sidepanelet kun med ikoner (NavigationView's Auto folder sig ikke ud igen).
-        Nav.SizeChanged += (_, e) =>
-        {
-            var mode = e.NewSize.Width >= 1100 ? NavigationViewPaneDisplayMode.Left : NavigationViewPaneDisplayMode.LeftCompact;
-            if (Nav.PaneDisplayMode == mode) return;
-            Nav.PaneDisplayMode = mode;
-            Nav.IsPaneOpen = mode == NavigationViewPaneDisplayMode.Left;
-        };
+        Nav.SizeChanged += (_, e) => FitPane(e.NewSize.Width);
         TopBar.Children.Add(BuildToolbar());
         TopBar.Children.Add(_errorBar);
         _errorBar.Closed += (_, _) => Model.ErrorMessage = null;
@@ -577,6 +571,21 @@ public sealed partial class MainWindow : Window
         int w = Math.Min(1440, area.Width * 9 / 10), h = Math.Min(1000, area.Height * 9 / 10);
         AppWindow.MoveAndResize(new Windows.Graphics.RectInt32(area.X + (area.Width - w) / 2, area.Y + (area.Height - h) / 2, w, h));
     }
+
+    /// <summary>
+    /// Fuldt sidepanel fra 1100 px, ellers kun ikoner. NavigationView lukker selv panelet under
+    /// skiftet, så det åbnes først bagefter.
+    /// </summary>
+    private void FitPane(double width)
+    {
+        bool wide = width >= 1100;
+        var mode = wide ? NavigationViewPaneDisplayMode.Left : NavigationViewPaneDisplayMode.LeftCompact;
+        if (Nav.PaneDisplayMode != mode) Nav.PaneDisplayMode = mode;
+        if (wide && !Nav.IsPaneOpen) DispatcherQueue.TryEnqueue(() => { if (Nav.PaneDisplayMode == NavigationViewPaneDisplayMode.Left) Nav.IsPaneOpen = true; });
+    }
+
+    /// <summary>Til smoke-testen: sidepanelets tilstand.</summary>
+    internal string PaneState => $"{Nav.ActualWidth:0} px, {Nav.PaneDisplayMode}, open={Nav.IsPaneOpen}";
 
     /// <summary>Fast vinduesstørrelse til smoke-testens billeder.</summary>
     internal void ResizeForSmoke(int width, int height) => AppWindow.Resize(new Windows.Graphics.SizeInt32(width, height));

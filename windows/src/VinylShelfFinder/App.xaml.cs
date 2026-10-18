@@ -82,6 +82,7 @@ public partial class App : Application
             {
                 m.Query = "beatles";
                 await Shot("02-sog-og-plade.png");
+                TryWrite(Path.Combine(dir, "pane.txt"), "1280: " + _window.PaneState);
                 if (m.Selection is long sel)
                 {
                     m.FindModeCopy = sel;
