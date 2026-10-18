@@ -26,6 +26,6 @@ Hvad hver app kan. Målet er ✅ i begge kolonner. Opdatér tabellen i samme com
 | Digitale filer står ikke på en hylde | ✅ | ✅ | En fil, der allerede har en plads, bliver stående (begge apps) |
 | Sortering: "Tal sidst" | ✅ | ✅ | Standard: til på Windows, fra på Mac (en opdatering må ikke ændre Mac-sorteringen) |
 | Sortering: "Efternavn først" | ✅ | ✅ | |
-| Eksport / import / nulstil | ❌ | ✅ | |
+| Eksport / import / nulstil | ✅ | ✅ | Samme filformat: en eksport fra den ene kan importeres i den anden |
 | `vinylshelf://`-adresser (QR åbner appen) | ✅ | ❌ | |
 | Mobilside på lokalnettet | ❌ | ❌ | Halvt lavet (kun ruter), ingen server endnu |

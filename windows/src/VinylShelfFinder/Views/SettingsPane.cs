@@ -289,7 +289,7 @@ public sealed class SettingsPane : IPane
         // Eksport: hele systemet i én fil, som kan importeres igen.
         var export = Ui.Btn("Eksportér…", async (b, _) => await Safe(() => ExportAsync((FrameworkElement)b)), "");
         p.Children.Add(Group(Ui.Text("Eksportér", "BodyStrongTextBlockStyle"), export,
-            Footer("Gemmer hele dit system i én fil: plader og cd'er, reoler, sektioner, placeringer, flueben, historik, lyttelog og indstillinger. Discogs-tokenet kommer ikke med.")));
+            Footer("Gemmer hele dit system i én fil: plader og cd'er, reoler, sektioner, placeringer, flueben, historik, lyttelog og indstillinger. Discogs-tokenet kommer ikke med. Filen kan også åbnes i Mac-udgaven.")));
 
         // Import: tilbage til et gemt system.
         var import = Ui.Btn("Importér…", async (b, _) => await Safe(() => ImportAsync((FrameworkElement)b)), "");

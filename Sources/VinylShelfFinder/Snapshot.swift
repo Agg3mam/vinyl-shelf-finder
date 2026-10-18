@@ -120,6 +120,7 @@ enum Snapshotter {
         model.clearSortChecked()
         render(SortSettings().appRoot().environment(model), size: CGSize(width: 640, height: 900), to: dir.appendingPathComponent("16-sortering-indstillinger.png"))
         render(SurnameSheet().appRoot().environment(model), size: CGSize(width: 540, height: 600), to: dir.appendingPathComponent("16b-efternavn.png"))
+        render(BackupSettings().appRoot().environment(model), size: CGSize(width: 640, height: 760), to: dir.appendingPathComponent("17-sikkerhedskopi.png"))
         try? LabelsPDF.write(ShelfLabel.labels(for: model.library), to: dir.appendingPathComponent("labels.pdf"))
         model.forceOnboarding = true
         render(ContentView().appRoot().environment(model), size: CGSize(width: 1000, height: 900), to: dir.appendingPathComponent("6-onboarding.png"))

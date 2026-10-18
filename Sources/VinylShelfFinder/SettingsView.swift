@@ -8,7 +8,7 @@ struct SettingsView: View {
             SortSettings().tabItem { Label("Sortering", systemImage: "textformat.abc") }
             ShelfSettings().tabItem { Label("Reol", systemImage: "books.vertical") }
             IMusicSettings().tabItem { Label("iMusic", systemImage: "bag") }
-            BackupSettings().tabItem { Label("Sikkerhedskopi", systemImage: "clock.arrow.circlepath") }
+            BackupSettings().tabItem { Label("Sikkerhedskopi og data", systemImage: "clock.arrow.circlepath") }
             UpdateSettings().tabItem { Label("Opdatering", systemImage: "arrow.down.circle") }
         }
         .padding(Spacing.l)
@@ -215,6 +215,10 @@ struct ShelfSettings: View {
 
 struct BackupSettings: View {
     @Environment(AppModel.self) private var model
+    @ViewState private var exportedTo: URL?
+    @ViewState private var pendingImport: (name: String, summary: ImportSummary)?
+    @ViewState private var confirmReset = false
+    @ViewState private var removeToken = false
 
     var body: some View {
         Form {
@@ -233,9 +237,81 @@ struct BackupSettings: View {
                     Button("Vis i Finder") { model.showBackupsInFinder() }
                 }
             } footer: {
-                Text("Appen gemmer selv en kopi af reolen, placeringer, historik og lyttelog én gang om dagen og beholder de seneste \(DatabaseBackup.keep). Se README.md for, hvordan en kopi gendannes.")
+                Text("Appen gemmer selv en kopi af reolen, placeringer, historik og lyttelog én gang om dagen og beholder de seneste \(DatabaseBackup.keep).")
+            }
+            Section {
+                Button("Eksportér…", action: exportFile)
+            } header: { Text("Eksportér") } footer: {
+                Text("Gemmer hele dit system i én fil: plader og cd'er, reoler, sektioner, placeringer, flueben, historik, lyttelog og indstillinger. Discogs-tokenet kommer ikke med. Filen kan også åbnes i Windows-udgaven.")
+            }
+            Section {
+                Button("Importér…", action: importFile)
+            } header: { Text("Importér") } footer: {
+                Text("Henter et system fra en eksport eller en af de daglige sikkerhedskopier. Det nuværende system gemmes først som en kopi, og appen åbner igen.")
+            }
+            Section {
+                Button("Nulstil appen…") { removeToken = false; confirmReset = true }
+            } header: { Text("Start helt forfra") } footer: {
+                Text("Sletter reoler, placeringer, historik og lyttelog, så appen starter forfra. Det nuværende system gemmes først som en kopi, som kan importeres igen.")
             }
         }
         .formStyle(.grouped)
+        .alert("Eksporteret", isPresented: Binding(get: { exportedTo != nil }, set: { if !$0 { exportedTo = nil } })) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text("Dit system er gemt i:\n\(exportedTo?.path ?? "")\n\nGem filen et sikkert sted. Den kan importeres igen under Indstillinger › Sikkerhedskopi og data.")
+        }
+        .alert("Importér dette system?", isPresented: Binding(get: { pendingImport != nil }, set: { if !$0 { pendingImport = nil } }),
+               presenting: pendingImport) { _ in
+            Button("Importér og åbn igen") { model.applyAndRestart(reset: false, removeToken: false) }
+            Button("Annullér", role: .cancel) { model.cancelPendingChange() }
+        } message: { p in
+            Text("\(p.name) indeholder \(Self.count(p.summary.vinyl, "plade", "plader")) og \(Self.count(p.summary.cds, "cd", "cd'er")) fordelt på \(Self.count(p.summary.sections, "sektion", "sektioner")).\n\nDet nuværende system erstattes. Det gemmes først som en kopi i mappen med sikkerhedskopier, så du kan komme tilbage til det. Appen lukker og åbner igen.")
+        }
+        .sheet(isPresented: $confirmReset) { resetSheet }
+    }
+
+    private var resetSheet: some View {
+        VStack(alignment: .leading, spacing: Spacing.s) {
+            Text("Start helt forfra?").font(.title2.weight(.semibold))
+            Text("Alle reoler, sektioner, placeringer, flueben, historik og lyttelog slettes for både plader og cd'er. Bagefter henter appen samlingen fra Discogs igen, og du laver reolerne forfra.")
+                .fixedSize(horizontal: false, vertical: true)
+            Text("Det nuværende system gemmes først som en kopi i mappen med sikkerhedskopier, så du kan importere det igen. Appen lukker og åbner igen.")
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+            Toggle("Fjern også forbindelsen til Discogs (tokenet)", isOn: $removeToken)
+                .toggleStyle(.checkbox)
+                .disabled(model.isDemo || !model.hasToken)
+            HStack {
+                Spacer()
+                Button("Annullér") { confirmReset = false }.keyboardShortcut(.cancelAction)
+                Button("Nulstil og åbn igen", role: .destructive) {
+                    confirmReset = false
+                    model.applyAndRestart(reset: true, removeToken: removeToken)
+                }
+            }
+        }
+        .padding(Spacing.l)
+        .frame(width: 460)
+    }
+
+    private static func count(_ n: Int, _ one: String, _ many: String) -> String { n == 1 ? "1 \(one)" : "\(n) \(many)" }
+
+    private func exportFile() {
+        let panel = NSSavePanel()
+        panel.nameFieldStringValue = DataTransfer.exportFileName()
+        panel.allowedContentTypes = [.init(filenameExtension: DataTransfer.fileExtension) ?? .data]
+        panel.directoryURL = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        if model.export(to: url) { exportedTo = url }
+    }
+
+    private func importFile() {
+        let panel = NSOpenPanel()
+        panel.allowedContentTypes = [.init(filenameExtension: DataTransfer.fileExtension) ?? .data]
+        panel.allowsMultipleSelection = false
+        panel.directoryURL = model.backupFolder
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        if let s = model.prepareImport(url) { pendingImport = (url.lastPathComponent, s) }
     }
 }

@@ -72,8 +72,11 @@ public struct SQLiteError: Error, CustomStringConvertible, LocalizedError {
 public final class SQLiteDatabase {
     private var handle: OpaquePointer?
     private static let transient = unsafeBitCast(-1, to: sqlite3_destructor_type.self)
+    /// Filen, databasen ligger i (bruges af eksport, import og nulstilling).
+    public let path: String
 
     public init(path: String) throws {
+        self.path = path
         let flags = SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE | SQLITE_OPEN_FULLMUTEX
         guard sqlite3_open_v2(path, &handle, flags, nil) == SQLITE_OK else {
             let msg = handle.map { String(cString: sqlite3_errmsg($0)) } ?? "kan ikke åbne database"

@@ -88,6 +88,9 @@ final class AppModel {
     var lastReport: ShelfStore.SyncReport?
     var showSyncReport = false
     var errorMessage: String?
+    /// Det, der blev udført ved denne start (vises én gang som besked).
+    private(set) var justApplied: DataTransfer.Applied = .unchanged
+    var showAppliedNotice: Bool = true
 
     // Ark/overlays
     var findModeCopy: Int64?
@@ -129,13 +132,14 @@ final class AppModel {
 
     init() {
         do {
-            if isDemo {
-                let url = ShelfStore.defaultURL.deletingLastPathComponent().appendingPathComponent("demo.sqlite")
-                store = try ShelfStore(path: url.path)
-                try DemoData.seedIfEmpty(store)
-            } else {
-                store = try ShelfStore(path: ShelfStore.defaultURL.path)
-            }
+            let path = isDemo
+                ? ShelfStore.defaultURL.deletingLastPathComponent().appendingPathComponent("demo.sqlite").path
+                : ShelfStore.defaultURL.path
+            // En bestilt import eller nulstilling (fra Indstillinger › Sikkerhedskopi) udføres, før databasen åbnes.
+            do { justApplied = try DataTransfer.applyPending(dbPath: path) }
+            catch { errorMessage = "Importen eller nulstillingen kunne ikke gennemføres: \(error.localizedDescription)" }
+            store = try ShelfStore(path: path)
+            if isDemo { try DemoData.seedIfEmpty(store) }
         } catch {
             fatalError("Kunne ikke åbne databasen: \(error)")
         }
@@ -559,6 +563,63 @@ extension AppModel {
     func showBackupsInFinder() {
         try? FileManager.default.createDirectory(at: backupFolder, withIntermediateDirectories: true)
         NSWorkspace.shared.open(backupFolder)
+    }
+}
+
+// MARK: - Eksport, import og nulstilling (se DataTransfer, samme forløb som på Windows)
+
+extension AppModel {
+    private var dbPath: String { store.db.path }
+
+    /// Hele systemet til en fil, som kan importeres igen senere (også på Windows).
+    @discardableResult
+    func export(to url: URL) -> Bool {
+        do { try DataTransfer.export(store, to: url.path); return true }
+        catch { errorMessage = error.localizedDescription; return false }
+    }
+
+    /// Kontrollerer filen og lægger den klar. Selve skiftet sker, når appen åbner igen.
+    func prepareImport(_ url: URL) -> ImportSummary? {
+        do { return try DataTransfer.requestImport(dbPath: dbPath, source: url.path) }
+        catch { errorMessage = error.localizedDescription; return nil }
+    }
+
+    func cancelPendingChange() { DataTransfer.cancelPending(dbPath: dbPath) }
+
+    /// Gemmer en sikkerhedskopi af det nuværende system og genstarter appen, så den bestilte import
+    /// eller nulstilling udføres. `reset`: appen begynder forfra; `removeToken`: Discogs-forbindelsen fjernes også.
+    func applyAndRestart(reset: Bool, removeToken: Bool) {
+        do {
+            let folder = isDemo ? URL(fileURLWithPath: dbPath).deletingLastPathComponent() : backupFolder
+            try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+            try DataTransfer.safetyCopy(store, folder: folder, reason: reset ? "nulstilling" : "import")
+        } catch {
+            cancelPendingChange()
+            errorMessage = "Der kunne ikke tages en sikkerhedskopi først, så intet er ændret. \(error.localizedDescription)"
+            return
+        }
+        do {
+            // Først nu (efter ja og sikkerhedskopi) bliver ændringen aktiv for næste start.
+            if reset { try DataTransfer.requestReset(dbPath: dbPath) } else { try DataTransfer.commitImport(dbPath: dbPath) }
+            try Self.relaunchAfterQuit(demo: isDemo)
+        } catch {
+            cancelPendingChange()
+            errorMessage = "Appen kunne ikke åbne igen, så intet er ændret. \(error.localizedDescription)"
+            return
+        }
+        if removeToken { disconnect() }
+        NSApp.terminate(nil)
+    }
+
+    /// Åbner appen igen, når denne udgave er helt lukket (så databasen ikke er i brug).
+    private static func relaunchAfterQuit(demo: Bool) throws {
+        let bundle = Bundle.main.bundlePath
+        guard bundle.hasSuffix(".app") else { throw DataTransfer.TransferError(message: "Appen kører ikke fra Programmer.") }
+        let pid = ProcessInfo.processInfo.processIdentifier
+        let p = Process()
+        p.executableURL = URL(fileURLWithPath: "/bin/sh")
+        p.arguments = ["-c", "while kill -0 \(pid) 2>/dev/null; do sleep 0.2; done; /usr/bin/open -n \"$0\" $1", bundle, demo ? "--args --demo" : ""]
+        try p.run()
     }
 }
 

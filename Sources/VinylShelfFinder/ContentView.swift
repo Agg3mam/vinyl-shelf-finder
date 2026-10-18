@@ -18,6 +18,15 @@ struct ContentView: View {
         .task {
             if model.needsRankSync { await model.sync(showReport: false) }
         }
+        .alert(model.justApplied == .reset ? "Appen er nulstillet" : "Systemet er importeret",
+               isPresented: Binding(get: { model.justApplied != .unchanged && model.showAppliedNotice },
+                                    set: { if !$0 { model.showAppliedNotice = false } })) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(model.justApplied == .reset
+                 ? "Du starter helt forfra. Det gamle system ligger som en kopi i mappen med sikkerhedskopier og kan importeres igen."
+                 : "Reoler, placeringer og historik er hentet fra filen. Det tidligere system ligger som en kopi i mappen med sikkerhedskopier.")
+        }
         .alert("Der opstod en fejl", isPresented: Binding(
             get: { model.errorMessage != nil },
             set: { if !$0 { model.errorMessage = nil } })) {

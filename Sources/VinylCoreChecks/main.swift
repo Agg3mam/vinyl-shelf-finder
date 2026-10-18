@@ -2007,6 +2007,82 @@ do {
           "en fil med en plads bliver stående efter opdateringen (ingen numre flytter sig)")
 } catch { check(false, "digitale filer: \(error)") }
 
+// MARK: Eksport, import og nulstilling (samme checks som på Windows)
+do {
+    let dir = FileManager.default.temporaryDirectory.appendingPathComponent("vsf-transfer-\(UUID().uuidString)")
+    try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+    defer { try? FileManager.default.removeItem(at: dir) }
+    let dbPath = dir.appendingPathComponent("vinyl.sqlite").path
+    var comps = DateComponents(); comps.year = 2026; comps.month = 10; comps.day = 17; comps.hour = 21; comps.minute = 5
+    let when = Calendar.current.date(from: comps)!
+    let export = dir.appendingPathComponent("ud").appendingPathComponent(DataTransfer.exportFileName(when)).path
+    check(URL(fileURLWithPath: export).lastPathComponent == "Vinyl Shelf Finder 2026-10-17.sqlite", "eksportens filnavn (samme som Windows)")
+    check(DataTransfer.safetyFileName("nulstilling", when).hasPrefix("før-nulstilling-2026-10-17-")
+          && DatabaseBackup.date(fromFileName: "før-nulstilling-2026-10-17-2105.sqlite") == nil,
+          "sikkerhedskopien før nulstilling ryddes ikke væk som en daglig kopi")
+
+    do {
+        let s = try ShelfStore(path: dbPath)
+        _ = try s.applyCollection([item(1, 1, "ABBA", "Arrival"), item(2, 2, "Bowie", "Low")])
+        let ids = try s.loadLibrary().allItems.map(\.id)
+        try s.createLayout([(shelf: 1, section: "A", copies: ids)])
+        s.setSortChecked(.vinyl, copyID: ids[0], checked: true)
+        try DataTransfer.export(s, to: export)
+        try DataTransfer.export(s, to: export)   // en eksisterende fil erstattes
+    }
+    let outFiles = try FileManager.default.contentsOfDirectory(atPath: (export as NSString).deletingLastPathComponent)
+    check(FileManager.default.fileExists(atPath: export) && !outFiles.contains { $0.hasSuffix(".partial") }, "eksport gemmes som én fil")
+
+    // Nulstilling: tom database ved næste start.
+    try DataTransfer.requestReset(dbPath: dbPath)
+    check((try? DataTransfer.applyPending(dbPath: dbPath)) == .reset && !FileManager.default.fileExists(atPath: dbPath), "nulstilling sletter databasen før start")
+    check((try? DataTransfer.applyPending(dbPath: dbPath)) == .unchanged, "intet at gøre bagefter")
+    do {
+        let s = try ShelfStore(path: dbPath)
+        let lib = try s.loadLibrary()
+        check(lib.copies.isEmpty && lib.locations.isEmpty && s.sortChecked(.vinyl).isEmpty, "appen starter helt forfra")
+    }
+
+    // Import: det gamle system kommer tilbage.
+    let summary = try DataTransfer.requestImport(dbPath: dbPath, source: export)
+    check(summary == ImportSummary(vinyl: 2, cds: 0, sections: 1), "import viser indholdet først: \(summary)")
+    check(FileManager.default.fileExists(atPath: export), "den valgte fil røres ikke")
+    check((try? DataTransfer.applyPending(dbPath: dbPath)) == .unchanged && !FileManager.default.fileExists(atPath: DataTransfer.stagedImport(dbPath)),
+          "en import uden bekræftelse bruges ikke og ryddes væk")
+    do { let s = try ShelfStore(path: dbPath); check((try? s.loadLibrary().copies.isEmpty) == true, "databasen er urørt uden bekræftelse") }
+    _ = try DataTransfer.requestImport(dbPath: dbPath, source: export)
+    try DataTransfer.commitImport(dbPath: dbPath)
+    check((try? DataTransfer.applyPending(dbPath: dbPath)) == .imported, "bekræftet import udføres ved start")
+    do {
+        let s = try ShelfStore(path: dbPath)
+        let lib = try s.loadLibrary()
+        check(lib.copies.count == 2 && lib.locations.count == 1 && lib.unplaced.isEmpty && s.sortChecked(.vinyl).count == 1,
+              "reoler, placeringer og flueben er tilbage")
+    }
+
+    // Forkerte filer afvises, og intet bestilles.
+    let junk = dir.appendingPathComponent("noter.sqlite").path
+    try Data("ikke en database".utf8).write(to: URL(fileURLWithPath: junk))
+    var refused = false
+    do { _ = try DataTransfer.requestImport(dbPath: dbPath, source: junk) }
+    catch let e as DataTransfer.TransferError { refused = e.message.contains("ikke en eksport") }
+    check(refused && !FileManager.default.fileExists(atPath: DataTransfer.importFile(dbPath)), "en fil, der ikke er en eksport, afvises")
+    let empty = dir.appendingPathComponent("tom.sqlite").path
+    _ = try ShelfStore(path: empty)
+    var emptyRefused = false
+    do { _ = try DataTransfer.requestImport(dbPath: dbPath, source: empty) }
+    catch let e as DataTransfer.TransferError { emptyRefused = e.message.contains("ingen plader") }
+    check(emptyRefused && !FileManager.default.fileExists(atPath: DataTransfer.stagedImport(dbPath)), "en tom database afvises")
+    var own = false
+    do { _ = try DataTransfer.requestImport(dbPath: dbPath, source: dbPath) } catch is DataTransfer.TransferError { own = true }
+    check(own, "appens egen database kan ikke importeres")
+
+    // Fortryd: en bestilt nulstilling kan aflyses.
+    try DataTransfer.requestReset(dbPath: dbPath)
+    DataTransfer.cancelPending(dbPath: dbPath)
+    check((try? DataTransfer.applyPending(dbPath: dbPath)) == .unchanged && FileManager.default.fileExists(atPath: dbPath), "bestilt nulstilling kan fortrydes")
+} catch { check(false, "eksport/import: \(error)") }
+
 // MARK: Opdatering fra GitHub Releases (uden net)
 do {
     check(AppVersion("v1.2.3")! > AppVersion("1.2")! && AppVersion("1.10")! > AppVersion("1.9")!
