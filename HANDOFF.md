@@ -299,6 +299,8 @@ installeret). **Kun Windows; Mac-appen har ikke fået noget af det nedenfor.** W
 - **Rettede nedbrud:** "Forbind" lukkede appen (OnboardingView genbrugte tokenfeltet i en ny forælder,
   WinUI 0x800F1000), og sync fejlede ("samlingen kunne ikke læses"), fordi Discogs' `instance_id` nu er større
   end int.MaxValue. `InstanceId` er `long` hele vejen (JSON, model, sync, database).
+  Mac-appen har ikke fejlen (Swift `Int` er 64 bit, SQLite bruges med `bind_int64`/`column_int64`); to checks i
+  VinylCoreChecks sikrer det (18. okt).
 - **Logo:** `Assets/AppIcon.ico` fra Mac-ikonet (uden macOS' kant), i .exe, hovedvindue og Discogs-vindue.
 - **Digitale filer** (første format "File") står hverken på plade- eller cd-hylden (`MediumExtensions.ShelfOf`),
   meldes ikke som nye eller fjernede; brugeren kan selv flytte en fil til en hylde.

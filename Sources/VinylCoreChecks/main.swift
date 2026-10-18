@@ -219,6 +219,24 @@ do {
     check(old.useDiscogsOrder && !old.danishAlphabet, "tolerant dekodning af gamle regler")
 }
 
+// MARK: instance_id over 32 bit (Discogs har passeret 2.147.483.647; Windows-versionen fejlede på det)
+do {
+    let big = 2_400_000_123
+    let page = #"{"pagination":{"page":1,"pages":1,"items":1},"releases":[{"id":7,"instance_id":2400000123,"basic_information":{"id":7,"title":"Værsgo","artists":[{"name":"Kim Larsen"}]}}]}"#
+    let parsed = try DiscogsClient.parseCollectionPage(Data(page.utf8))
+    check(parsed.items.first?.instanceID == big, "instance_id over Int32.max læses fra Discogs' svar")
+
+    let url = FileManager.default.temporaryDirectory.appendingPathComponent("vsf-big-\(UUID().uuidString).sqlite")
+    defer { try? FileManager.default.removeItem(at: url) }
+    let s = try ShelfStore(path: url.path)
+    let bigItem = item(big, 7, "Kim Larsen", "Værsgo")
+    _ = try s.applyCollection([bigItem])
+    let again = try s.applyCollection([bigItem])
+    let copies = Array(try s.loadLibrary().copies.values)
+    check(copies.count == 1 && copies.first?.instanceID == big && again.newCopies.isEmpty,
+          "instance_id over Int32.max overlever databasen og to syncs")
+}
+
 // MARK: Discogs JSON
 do {
     let json = """
