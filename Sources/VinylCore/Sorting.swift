@@ -32,6 +32,11 @@ public struct SortRules: Equatable, Codable {
     public var ignorePunctuation: Bool = true
     /// Æ, Ø, Å sorteres efter Z (ellers Æ=AE, Ø=O, Å=A).
     public var danishAlphabet: Bool = true
+    /// Kunstnere, der starter med et tal (10cc, 2Pac, The 1975), står sidst – efter Z og Æ Ø Å.
+    /// Gælder også med Discogs' rækkefølge, hvor tallene ellers står først; indbyrdes beholder de rækkefølgen.
+    /// Slået fra på Mac, når den mangler i de gemte regler: en opdatering må ikke ændre sorteringen.
+    /// (Windows har den slået til som standard; se PARITET.md.)
+    public var numbersLast: Bool = false
     public var various: VariousPlacement = .alphabetical
     public var withinArtist: WithinArtist = .title
     /// Kunstner (som vist) → sorteringsnavn, fx "Bob Dylan" → "Dylan, Bob".
@@ -40,7 +45,7 @@ public struct SortRules: Equatable, Codable {
     public init() {}
 
     private enum CodingKeys: String, CodingKey {
-        case useDiscogsOrder, artistArticles, titleArticles, ignorePunctuation, danishAlphabet, various, withinArtist
+        case useDiscogsOrder, artistArticles, titleArticles, ignorePunctuation, danishAlphabet, numbersLast, various, withinArtist
     }
 
     /// Tolerant dekodning, så gemte regler fra ældre versioner ikke går tabt.
@@ -52,6 +57,7 @@ public struct SortRules: Equatable, Codable {
         titleArticles = try c.decodeIfPresent([String].self, forKey: .titleArticles) ?? d.titleArticles
         ignorePunctuation = try c.decodeIfPresent(Bool.self, forKey: .ignorePunctuation) ?? d.ignorePunctuation
         danishAlphabet = try c.decodeIfPresent(Bool.self, forKey: .danishAlphabet) ?? d.danishAlphabet
+        numbersLast = try c.decodeIfPresent(Bool.self, forKey: .numbersLast) ?? d.numbersLast
         various = try c.decodeIfPresent(VariousPlacement.self, forKey: .various) ?? d.various
         withinArtist = try c.decodeIfPresent(WithinArtist.self, forKey: .withinArtist) ?? d.withinArtist
     }
@@ -129,6 +135,7 @@ public struct SortRules: Equatable, Codable {
     // MARK: Sammenligning
 
     public struct Key {
+        public var numberGroup: Int    // 1 = kunstneren starter med et tal og skal stå sidst (numbersLast), ellers 0
         public var discogsRank: Int     // Int.max hvis ukendt eller ikke i brug
         public var group: Int          // 0 = først, 1 = normal, 2 = sidst
         public var artist: String
@@ -149,10 +156,12 @@ public struct SortRules: Equatable, Codable {
             case .last: group = 2
             }
         }
+        let sortArtist = sortArtist(artist, override: item.copy.sortArtistOverride)
         return Key(
+            numberGroup: numbersLast && Self.startsWithDigit(sortArtist) ? 1 : 0,
             discogsRank: useDiscogsOrder ? (item.copy.discogsRank ?? Int.max) : Int.max,
             group: group,
-            artist: collationKey(sortArtist(artist, override: item.copy.sortArtistOverride)),
+            artist: collationKey(sortArtist),
             primary: collationKey(sortTitle(item.release.title, override: item.copy.sortTitleOverride)),
             year: item.release.year.flatMap { $0 > 0 ? $0 : nil } ?? 9999,
             catalog: collationKey(item.release.catalogNumber ?? ""),
@@ -161,7 +170,13 @@ public struct SortRules: Equatable, Codable {
         )
     }
 
+    /// "10cc", "2Pac", "1975" (efter "The" er fjernet).
+    public static func startsWithDigit(_ sortArtist: String) -> Bool {
+        sortArtist.unicodeScalars.first.map { CharacterSet.decimalDigits.contains($0) } ?? false
+    }
+
     public func areInIncreasingOrder(_ a: Key, _ b: Key) -> Bool {
+        if a.numberGroup != b.numberGroup { return a.numberGroup < b.numberGroup }
         if a.discogsRank != b.discogsRank { return a.discogsRank < b.discogsRank }
         if a.group != b.group { return a.group < b.group }
         let c = Self.naturalCompare(a.artist, b.artist)

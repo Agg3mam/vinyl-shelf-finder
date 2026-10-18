@@ -56,6 +56,7 @@ struct SortSettings: View {
     // skrive mere end én artikel.
     @ViewState private var artistArticlesText = ""
     @ViewState private var titleArticlesText = ""
+    @ViewState private var showSurname = false
 
     var body: some View {
         let rules = model.rules
@@ -63,8 +64,20 @@ struct SortSettings: View {
             Section {
                 Toggle("Præcis samme rækkefølge som i Discogs-samlingen", isOn: Binding(
                     get: { rules.useDiscogsOrder }, set: { var r = rules; r.useDiscogsOrder = $0; model.updateRules(r) }))
-            } footer: {
                 Text("Pladerne står i den rækkefølge, Discogs selv sorterer samlingen (kunstner A–Z). Reglerne herunder bruges kun, når dette er slået fra.")
+                    .font(.caption).foregroundStyle(.secondary)
+                Toggle("Kunstnere, der starter med et tal, står sidst", isOn: Binding(
+                    get: { rules.numbersLast }, set: { var r = rules; r.numbersLast = $0; model.updateRules(r) }))
+            } footer: {
+                Text("10cc, 2Pac og The 1975 står efter Z og Æ Ø Å. Gælder også med Discogs' rækkefølge, hvor tallene ellers står først.")
+            }
+            Section {
+                let fresh = SurnameSheet.newCount(model)
+                Button(fresh > 0 ? "Vælg personer… (\(fresh) nye forslag)" : "Vælg personer…") { showSurname = true }
+            } header: {
+                Text("Efternavn først")
+            } footer: {
+                Text("Personer sorteres efter efternavn: Bob Dylan under D, Leonard Cohen under C. Appen foreslår, hvem der er personer, og du retter gættet. Bands som Pink Floyd røres ikke.")
             }
             Section {
                 TextField("Ignorerede artikler i kunstnernavne", text: $artistArticlesText, prompt: Text("The, Die, Les"))
@@ -104,6 +117,7 @@ struct SortSettings: View {
             }
         }
         .formStyle(.grouped)
+        .sheet(isPresented: $showSurname) { SurnameSheet().environment(model) }
         // Sorteringsnavne, der tilføjes eller fjernes, glider ind/ud.
         .animation(Motion.rows(reduceMotion), value: rules.artistOverrides)
         .onAppear {

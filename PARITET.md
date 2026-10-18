@@ -24,8 +24,8 @@ Hvad hver app kan. Målet er ✅ i begge kolonner. Opdatér tabellen i samme com
 | Sorteringsliste med flueben | ✅ | ✅ | |
 | instance_id over 32 bit | ✅ | ✅ | Mac havde aldrig fejlen (Swift `Int` er 64 bit) |
 | Digitale filer står ikke på en hylde | ❌ | ✅ | Skal flyttes til Mac uden at ændre placeringer |
-| Sortering: "Tal sidst" | ❌ | ✅ | Windows: standard til. Mac: skal være fra (sorteringen må ikke ændre sig) |
-| Sortering: "Efternavn først" | ❌ | ✅ | |
+| Sortering: "Tal sidst" | ✅ | ✅ | Standard: til på Windows, fra på Mac (en opdatering må ikke ændre Mac-sorteringen) |
+| Sortering: "Efternavn først" | ✅ | ✅ | |
 | Eksport / import / nulstil | ❌ | ✅ | |
 | `vinylshelf://`-adresser (QR åbner appen) | ✅ | ❌ | |
 | Mobilside på lokalnettet | ❌ | ❌ | Halvt lavet (kun ruter), ingen server endnu |

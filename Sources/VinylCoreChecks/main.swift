@@ -1889,6 +1889,73 @@ do {
     check(s.sortChecked(.cd).isEmpty, "start forfra rydder fluebenene")
 } catch { check(false, "sorteringsliste: \(error)") }
 
+// MARK: Tal sidst (som på Windows, men slået fra som standard på Mac)
+do {
+    let d = SortRules()
+    check(!d.numbersLast, "tal sidst er slået fra som standard på Mac (sorteringen må ikke ændre sig ved opdatering)")
+    check(SortRules.startsWithDigit(d.sortArtist("The 1975")) && SortRules.startsWithDigit("10cc")
+          && !SortRules.startsWithDigit(d.sortArtist("Blur")) && !SortRules.startsWithDigit(""), "tal genkendes (efter “The”)")
+    func rec(_ id: Int64, _ artist: String, _ rank: Int?) -> RecordItem {
+        RecordItem(copy: Copy(id: id, instanceID: Int(id), releaseID: Int(id), discogsRank: rank),
+                   release: Release(id: Int(id), artist: artist, title: "T"))
+    }
+    let discogs = [rec(1, "10cc", 0), rec(2, "2Pac", 1), rec(3, "ABBA", 2), rec(4, "Zappa", 3), rec(5, "Åge Aleksandersen", 4)]
+    check(d.sorted(discogs).first?.artist == "10cc", "slået fra: tal først som i Discogs (uændret sortering)")
+    var on = d; on.numbersLast = true
+    check(on.sorted(discogs).map(\.artist) == ["ABBA", "Zappa", "Åge Aleksandersen", "10cc", "2Pac"],
+          "Discogs-rækkefølge: tal flyttes sidst og beholder deres indbyrdes orden")
+    var own = on; own.useDiscogsOrder = false
+    check(own.sorted(discogs).map(\.artist) == ["ABBA", "Zappa", "Åge Aleksandersen", "2Pac", "10cc"],
+          "egne regler: bogstaver, Æ Ø Å, og så tal i talorden")
+    let json = String(data: try JSONEncoder().encode(on), encoding: .utf8)!
+    let decodedOn = try JSONDecoder().decode(SortRules.self, from: Data(json.utf8))
+    check(json.contains("\"numbersLast\":true") && decodedOn.numbersLast,
+          "tal-reglen gemmes og læses (samme nøgle som Windows)")
+    let old = try JSONDecoder().decode(SortRules.self, from: Data(#"{"danishAlphabet":true}"#.utf8))
+    check(!old.numbersLast, "gemte regler fra før tal-reglen: forbliver slået fra")
+} catch { check(false, "tal sidst: \(error)") }
+
+// MARK: Efternavn først (samme checks som på Windows)
+do {
+    check(SurnameSort.reverse("Bob Dylan") == "Dylan, Bob" && SurnameSort.reverse("Kim Larsen") == "Larsen, Kim", "for- og efternavn vendes")
+    check(SurnameSort.reverse("Ludwig van Beethoven") == "Beethoven, Ludwig van" && SurnameSort.reverse("Sammy Davis Jr.") == "Davis, Sammy Jr.",
+          "partikel bliver hos fornavnet, Jr. bliver bagerst")
+    check(SurnameSort.reverse("Gasolin'") == nil && SurnameSort.reverse("The Beatles") == nil && SurnameSort.reverse("Simon & Garfunkel") == nil
+          && SurnameSort.reverse("Various") == nil && SurnameSort.reverse("UB40") == nil && SurnameSort.reverse("Earth Wind and Fire") == nil
+          && SurnameSort.reverse("Crosby Stills Nash Young") == nil, "ét ord, The, &, tal, and og fire ord vendes ikke")
+    check(SurnameSort.looksLikePerson("Leonard Cohen") && !SurnameSort.looksLikePerson("Pink Floyd") && !SurnameSort.looksLikePerson("Massive Attack")
+          && !SurnameSort.looksLikePerson("The Allman Brothers Band"), "gættet: person eller band")
+    check(!SurnameSort.looksLikePerson("Black Stone Cherry") && !SurnameSort.looksLikePerson("Blue Cheer") && SurnameSort.reverse("A Perfect Circle") == nil
+          && SurnameSort.reverse("Beethoven - Schubert") == nil && SurnameSort.looksLikePerson("B.B. King") && SurnameSort.looksLikePerson("Alice Cooper"),
+          "typiske bandnavne gættes som bands; B.B. King er stadig en person")
+
+    let cands = SurnameSort.candidates(["Bob Dylan", "Pink Floyd", "Bob Dylan", "Kim Larsen", "ABBA"])
+    check(cands.map(\.artist) == ["Bob Dylan", "Kim Larsen", "Pink Floyd"], "hver kunstner én gang, kun dem der kan vendes")
+
+    var rules = SortRules()
+    rules.artistOverrides["Kim Larsen"] = "Larsen, Kim (Gasolin')"
+    let applied = SurnameSort.apply(rules, candidates: cands, persons: ["Bob Dylan", "Kim Larsen"])
+    check(applied.artistOverrides["Bob Dylan"] == "Dylan, Bob" && applied.artistOverrides["Kim Larsen"] == "Larsen, Kim (Gasolin')"
+          && applied.artistOverrides["Pink Floyd"] == nil && !applied.useDiscogsOrder && rules.useDiscogsOrder,
+          "valgte får efternavn (eget navn beholdes), Discogs-rækkefølge slås fra, originalen røres ikke")
+    let undone = SurnameSort.apply(applied, candidates: cands, persons: ["Kim Larsen"])
+    check(undone.artistOverrides["Bob Dylan"] == nil && undone.artistOverrides["Kim Larsen"] != nil, "fravalgt: det vendte navn fjernes igen")
+
+    func rec(_ id: Int64, _ artist: String) -> RecordItem {
+        RecordItem(copy: Copy(id: id, instanceID: Int(id), releaseID: Int(id)), release: Release(id: Int(id), artist: artist, title: "T"))
+    }
+    let withCohen = SurnameSort.apply(applied, candidates: SurnameSort.candidates(["Leonard Cohen"]), persons: ["Leonard Cohen"])
+    check(withCohen.sorted([rec(1, "Kim Larsen"), rec(2, "Bob Dylan"), rec(3, "Leonard Cohen")]).map(\.artist)
+          == ["Leonard Cohen", "Bob Dylan", "Kim Larsen"], "sorteres efter efternavn")
+
+    let (s, url) = try freshStore("surname")
+    defer { try? FileManager.default.removeItem(at: url) }
+    s.saveSurnameNotPersons(["Pink Floyd", "Daft Punk", "Pink Floyd"])
+    check(s.surnameNotPersons() == ["Daft Punk", "Pink Floyd"], "ikke-personer huskes")
+    s.setSetting("surname_not_persons", "ødelagt")
+    check(s.surnameNotPersons().isEmpty, "ødelagt gemt liste → tom, ingen fejl")
+} catch { check(false, "efternavn først: \(error)") }
+
 // MARK: Opdatering fra GitHub Releases (uden net)
 do {
     check(AppVersion("v1.2.3")! > AppVersion("1.2")! && AppVersion("1.10")! > AppVersion("1.9")!

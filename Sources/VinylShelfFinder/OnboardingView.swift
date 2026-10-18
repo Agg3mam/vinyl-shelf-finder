@@ -305,6 +305,7 @@ struct LayoutStep: View {
 /// De vigtigste sorteringsregler direkte i onboarding.
 struct QuickSortRules: View {
     @Environment(AppModel.self) private var model
+    @ViewState private var showSurname = false
 
     var body: some View {
         let rules = model.rules
@@ -312,6 +313,10 @@ struct QuickSortRules: View {
         Toggle("Præcis samme rækkefølge som i min Discogs-samling (kunstner A–Z)", isOn: Binding(
             get: { rules.useDiscogsOrder }, set: { var r = rules; r.useDiscogsOrder = $0; model.updateRules(r) }))
             .fontWeight(.medium)
+        Toggle("Tal sidst (10cc, 2Pac efter Z og Æ Ø Å)", isOn: Binding(
+            get: { rules.numbersLast }, set: { var r = rules; r.numbersLast = $0; model.updateRules(r) }))
+        Button("Efternavn først…") { showSurname = true }
+            .help("Sortér personer efter efternavn (Bob Dylan under D)")
         HStack(spacing: Spacing.m) {
             Toggle("Ignorér “The”", isOn: Binding(
                 get: { rules.artistArticles.contains { $0.lowercased() == "the" } },
@@ -331,5 +336,6 @@ struct QuickSortRules: View {
         .opacity(rules.useDiscogsOrder ? 0.5 : 1)
         }
         .toggleStyle(.checkbox)
+        .sheet(isPresented: $showSurname) { SurnameSheet().environment(model) }
     }
 }
