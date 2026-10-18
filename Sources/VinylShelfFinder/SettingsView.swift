@@ -364,8 +364,11 @@ struct CloudSettings: View {
 
     /// Linket endte på en fejlside (localhost): adressen indeholder login-oplysningerne.
     private func usePasted() {
-        guard let url = URL(string: pasted.trimmingCharacters(in: .whitespacesAndNewlines)) else { return }
-        if model.completeCloudLink(url) { pasted = "" }
+        busy = true
+        Task {
+            if await model.completeCloudPaste(pasted) { pasted = "" }
+            busy = false
+        }
     }
 
     @ViewBuilder private var login: some View {
@@ -400,16 +403,17 @@ struct CloudSettings: View {
                 if busy { ProgressView().controlSize(.small) }
             }
             if codeSent {
-                TextField("Eller indsæt adressen fra browseren", text: $pasted, prompt: Text("http://localhost:3000/#access_token=…"))
+                TextField("Indsæt linket fra mailen", text: $pasted, prompt: Text("https://…supabase.co/auth/v1/verify?token=…"))
                     .onSubmit(usePasted)
-                Button("Brug adressen", action: usePasted)
-                    .disabled(!pasted.contains("access_token="))
+                Button("Log ind med linket", action: usePasted)
+                    .buttonStyle(.borderedProminent)
+                    .disabled(busy || pasted.trimmingCharacters(in: .whitespaces).isEmpty)
             }
         } header: {
             Text("Log ind på din konto")
         } footer: {
             Text(codeSent
-                 ? "Vi har sendt en mail til \(email). Åbn den på denne Mac, og klik på linket – så logger appen ind. Står der en kode i mailen, kan du også skrive den her. Tjek uønsket post, hvis mailen ikke kommer."
+                 ? "Vi har sendt en mail til \(email). Klik IKKE på linket. Højreklik på det i stedet, vælg Kopiér link, og indsæt det ovenfor. Står der en kode i mailen, kan du også skrive den. Tjek uønsket post, hvis mailen ikke kommer."
                  : "Brug den samme e-mail på Mac, Windows og iPhone. Du får en mail med et link – ingen adgangskode. Første gang oprettes kontoen.")
         }
     }

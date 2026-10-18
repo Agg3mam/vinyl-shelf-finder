@@ -105,6 +105,22 @@ public final class CloudClient: @unchecked Sendable {
         return try Self.session(from: data, email: email)
     }
 
+    /// Linket fra mailen, kopieret og indsat i appen (https://….supabase.co/auth/v1/verify?token=…&type=…).
+    /// Appen bytter det selv for et login, så browseren ikke skal bruges. nil, hvis adressen ikke er sådan et link.
+    public static func emailLinkToken(_ text: String) -> (token: String, type: String)? {
+        guard let c = URLComponents(string: text.trimmingCharacters(in: .whitespacesAndNewlines)),
+              c.path.hasSuffix("/auth/v1/verify"),
+              let token = c.queryItems?.first(where: { $0.name == "token" })?.value, !token.isEmpty else { return nil }
+        let type = c.queryItems?.first(where: { $0.name == "type" })?.value ?? "magiclink"
+        return (token, type)
+    }
+
+    public func verifyEmailLink(_ text: String) async throws -> CloudSession? {
+        guard let (token, type) = Self.emailLinkToken(text) else { return nil }
+        let data = try await send("POST", "auth/v1/verify", body: ["type": type, "token_hash": token], token: nil)
+        return try Self.session(from: data, email: "")
+    }
+
     /// Fornyer et udløbet login.
     public func refresh(_ s: CloudSession) async throws -> CloudSession {
         let data = try await send("POST", "auth/v1/token?grant_type=refresh_token", body: ["refresh_token": s.refreshToken], token: nil)

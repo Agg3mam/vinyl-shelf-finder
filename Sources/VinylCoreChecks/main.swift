@@ -2191,7 +2191,8 @@ final class StubCloud: URLProtocol, @unchecked Sendable {
         switch (request.httpMethod ?? "", path) {
         case ("POST", "/auth/v1/otp"): out = [String: Any]()
         case ("POST", "/auth/v1/verify"):
-            if ((json as? [String: Any])?["token"] as? String) == "123456" { out = session }
+            let j = json as? [String: Any]
+            if (j?["token"] as? String) == "123456" || (j?["token_hash"] as? String) == "pkce_hash1" { out = session }
             else { status = 403; out = ["code": 403, "error_code": "otp_expired", "msg": "Token has expired or is invalid"] }
         case ("POST", "/auth/v1/token"): out = session
         case ("GET", "/rest/v1/sync_records"):
@@ -2287,6 +2288,13 @@ do { try MainActor.assumeIsolated {
     do { _ = try CloudClient.session(fromLink: URL(string: "vinylshelf://auth#error=access_denied&error_code=otp_expired&error_description=Email+link+is+invalid+or+has+expired")!) }
     catch { linkError = error.localizedDescription }
     check(linkError == "Linket er brugt eller udløbet. Bed om en ny mail.", "udløbet link giver en dansk besked")
+
+    // Linket fra mailen, kopieret og indsat i appen: appen bytter det selv for et login.
+    let mailLink = "https://stub.supabase.co/auth/v1/verify?token=pkce_hash1&type=magiclink&redirect_to=vinylshelf://auth"
+    check(CloudClient.emailLinkToken(mailLink)?.token == "pkce_hash1" && CloudClient.emailLinkToken(mailLink)?.type == "magiclink"
+          && CloudClient.emailLinkToken("https://example.com/") == nil, "linket fra mailen genkendes")
+    let viaLink = onMain { try await cloud.verifyEmailLink(mailLink) }
+    check((try? viaLink.get())??.accessToken == "adgang", "indsat link fra mailen giver et login")
 
     // Udløbet login.
     let bad = CloudSession(accessToken: "forkert", refreshToken: "x", expiresAt: 0, userID: session.userID, email: session.email)

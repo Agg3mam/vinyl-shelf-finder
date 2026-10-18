@@ -105,6 +105,19 @@ public sealed partial class AppModel
         return true;
     }
 
+    /// Indsat tekst i fanen Konto: linket fra mailen, eller adressen fra en browserside.
+    public async Task<bool> CompleteCloudPasteAsync(string text)
+    {
+        try
+        {
+            if (await _cloud.VerifyEmailLinkAsync(text) is CloudSession s) { LoggedIn(s); return true; }
+        }
+        catch (Exception ex) { CloudMessage = ex.Message; return false; }
+        if (CompleteCloudLink(text)) return CloudLoggedIn;
+        CloudMessage = "Det indsatte er ikke et login-link. Kopiér linket fra mailen (højreklik › Kopiér link).";
+        return false;
+    }
+
     private void LoggedIn(CloudSession s)
     {
         SaveCloudSession(s);

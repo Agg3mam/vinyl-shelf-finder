@@ -85,6 +85,28 @@ extension AppModel {
         return true
     }
 
+    /// Indsat tekst i fanen Konto: linket fra mailen, eller adressen fra en browserside.
+    func completeCloudPaste(_ text: String) async -> Bool {
+        do {
+            if let s = try await cloud.verifyEmailLink(text) {
+                try saveCloudSession(s)
+                cloudLoggedIn = true
+                let email = s.email.isEmpty ? (cloudEmail ?? "") : s.email
+                cloudEmail = email
+                store.setSetting("cloud_email", email)
+                cloudPhase = .idle
+                startCloud()
+                return true
+            }
+        } catch {
+            cloudPhase = .failed(error.localizedDescription)
+            return false
+        }
+        if let url = URL(string: text.trimmingCharacters(in: .whitespacesAndNewlines)), completeCloudLink(url) { return cloudLoggedIn }
+        cloudPhase = .failed("Det indsatte er ikke et login-link. Kopiér linket fra mailen (højreklik › Kopiér link).")
+        return false
+    }
+
     func logOutCloud() {
         cloudTimer?.cancel()
         cloudDebounce?.cancel()

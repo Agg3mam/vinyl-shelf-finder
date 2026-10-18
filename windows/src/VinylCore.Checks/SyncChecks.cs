@@ -30,7 +30,7 @@ sealed class StubCloud : HttpMessageHandler
             {
                 case ("POST", "/auth/v1/otp"): break;
                 case ("POST", "/auth/v1/verify"):
-                    if (body?["token"]?.GetValue<string>() == "123456") output = session;
+                    if (body?["token"]?.GetValue<string>() == "123456" || body?["token_hash"]?.GetValue<string>() == "pkce_hash1") output = session;
                     else { status = 403; output = new JsonObject { ["code"] = 403, ["error_code"] = "otp_expired" }; }
                     break;
                 case ("POST", "/auth/v1/token"): output = session; break;
@@ -220,6 +220,12 @@ static class SyncChecks
         try { CloudClient.SessionFromLink("vinylshelf://auth#error=access_denied&error_code=otp_expired&error_description=Email+link+is+invalid+or+has+expired"); }
         catch (CloudException e) { linkError = e.Message; }
         Check.That(linkError == "Linket er brugt eller udløbet. Bed om en ny mail.", "udløbet link giver en dansk besked");
+
+        // Linket fra mailen, kopieret og indsat i appen: appen bytter det selv for et login.
+        var mailLink = "https://stub.supabase.co/auth/v1/verify?token=pkce_hash1&type=magiclink&redirect_to=vinylshelf://auth";
+        Check.That(CloudClient.EmailLinkToken(mailLink) == ("pkce_hash1", "magiclink") && CloudClient.EmailLinkToken("https://example.com/") is null,
+                   "linket fra mailen genkendes");
+        Check.That(cloud.VerifyEmailLinkAsync(mailLink).GetAwaiter().GetResult()?.AccessToken == "adgang", "indsat link fra mailen giver et login");
 
         bool needsLogin = false;
         try { cloud.FetchAsync(null, session with { AccessToken = "forkert" }).GetAwaiter().GetResult(); }

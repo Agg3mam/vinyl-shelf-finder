@@ -80,6 +80,25 @@ public sealed class CloudClient
         return SessionFrom(data, email);
     }
 
+    /// Linket fra mailen, kopieret og indsat i appen (https://….supabase.co/auth/v1/verify?token=…&type=…).
+    /// Appen bytter det selv for et login, så browseren ikke skal bruges. null, hvis teksten ikke er sådan et link.
+    public static (string Token, string Type)? EmailLinkToken(string text)
+    {
+        if (!Uri.TryCreate(text.Trim(), UriKind.Absolute, out var url) || !url.AbsolutePath.EndsWith("/auth/v1/verify", StringComparison.Ordinal)) return null;
+        var q = url.Query.TrimStart('?').Split('&', StringSplitOptions.RemoveEmptyEntries)
+                   .Select(p => p.Split('=', 2)).Where(kv => kv.Length == 2)
+                   .GroupBy(kv => Uri.UnescapeDataString(kv[0])).ToDictionary(g => g.Key, g => Uri.UnescapeDataString(g.First()[1]));
+        if (!q.TryGetValue("token", out var token) || token.Length == 0) return null;
+        return (token, q.TryGetValue("type", out var type) ? type : "magiclink");
+    }
+
+    public async Task<CloudSession?> VerifyEmailLinkAsync(string text)
+    {
+        if (EmailLinkToken(text) is not var (token, type)) return null;
+        var data = await SendAsync("POST", "auth/v1/verify", new JsonObject { ["type"] = type, ["token_hash"] = token }, null).ConfigureAwait(false);
+        return SessionFrom(data, "");
+    }
+
     /// Fornyer et udløbet login.
     public async Task<CloudSession> RefreshAsync(CloudSession s)
     {

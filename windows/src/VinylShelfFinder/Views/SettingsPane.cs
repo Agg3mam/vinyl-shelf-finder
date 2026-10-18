@@ -118,7 +118,7 @@ public sealed class SettingsPane : IPane
 
     private readonly TextBox _cloudEmail = new() { Header = "E-mail", PlaceholderText = "dig@eksempel.dk", MinWidth = 320, MaxWidth = 420, HorizontalAlignment = HorizontalAlignment.Left };
     private readonly TextBox _cloudCode = new() { Header = "Kode fra mailen (hvis der er en)", PlaceholderText = "6 cifre", MinWidth = 200, MaxWidth = 260, HorizontalAlignment = HorizontalAlignment.Left };
-    private readonly TextBox _cloudPaste = new() { Header = "Eller indsæt adressen fra browseren", PlaceholderText = "http://localhost:3000/#access_token=…", MinWidth = 320, MaxWidth = 520, HorizontalAlignment = HorizontalAlignment.Left };
+    private readonly TextBox _cloudPaste = new() { Header = "Indsæt linket fra mailen", PlaceholderText = "https://…supabase.co/auth/v1/verify?token=…", MinWidth = 320, MaxWidth = 520, HorizontalAlignment = HorizontalAlignment.Left };
     private bool _cloudSent;
 
     private void Cloud(StackPanel p)
@@ -154,9 +154,13 @@ public sealed class SettingsPane : IPane
                 ((Button)b).IsEnabled = false;
                 if (!await _model.VerifyCloudCodeAsync(_cloudEmail.Text, _cloudCode.Text)) ((Button)b).IsEnabled = true;
             }, accent: true);
-            rows.Add(Ui.HStack(8, login, Ui.Btn("Ny mail", (_, _) => { _cloudSent = false; _cloudCode.Text = ""; Rebuild(); })));
             rows.Add(_cloudPaste);
-            rows.Add(Ui.Btn("Brug adressen", (_, _) => { if (_model.CompleteCloudLink(_cloudPaste.Text)) _cloudPaste.Text = ""; }));
+            rows.Add(Ui.Btn("Log ind med linket", async (b, _) =>
+            {
+                ((Button)b).IsEnabled = false;
+                if (await _model.CompleteCloudPasteAsync(_cloudPaste.Text)) _cloudPaste.Text = ""; else ((Button)b).IsEnabled = true;
+            }, accent: true));
+            rows.Add(Ui.HStack(8, login, Ui.Btn("Ny mail", (_, _) => { _cloudSent = false; _cloudCode.Text = ""; Rebuild(); })));
         }
         else
         {
@@ -169,7 +173,7 @@ public sealed class SettingsPane : IPane
         }
         if (_model.CloudMessage is string msg) rows.Add(Ui.Label(Ui.Glyph.Warning, msg, color: Ui.Secondary));
         rows.Add(Footer(_cloudSent
-            ? $"Vi har sendt en mail til {_cloudEmail.Text}. Åbn den på denne pc, og klik på linket – så logger appen ind. Står der en kode i mailen, kan du også skrive den her. Tjek uønsket post, hvis mailen ikke kommer."
+            ? $"Vi har sendt en mail til {_cloudEmail.Text}. Klik IKKE på linket. Højreklik på det i stedet, vælg Kopiér link, og indsæt det ovenfor. Står der en kode i mailen, kan du også skrive den. Tjek uønsket post, hvis mailen ikke kommer."
             : "Brug den samme e-mail på Mac, Windows og iPhone. Du får en mail med et link – ingen adgangskode. Første gang oprettes kontoen."));
         p.Children.Add(Group(rows.ToArray()));
     }
