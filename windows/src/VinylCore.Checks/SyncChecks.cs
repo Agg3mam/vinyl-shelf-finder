@@ -153,6 +153,10 @@ static class SyncChecks
         var lbAfter = b.LoadLibrary();
         Check.That(bHas == 4 && lbAfter.Copies.Count == 3 && Same(Order(lbAfter), Order(a.LoadLibrary())), "slettet plade forsvinder også på den anden enhed");
 
+        // En afspilning af en plade, som enheden ikke kender, huskes ikke som synkroniseret, så den ikke slettes i skyen.
+        b.ApplySyncDocs(new List<SyncDoc> { new(SyncKind.Play, "ukendt-afspilning", new JsonObject { ["copy"] = "findes-ikke", ["at"] = 1.0 }) });
+        Check.That(!b.PendingSyncDocs().Any(x => x.Key == "ukendt-afspilning"), "en post, der ikke kunne lægges ind, slettes ikke i skyen");
+
         // Poster fra Mac (Swift) har samme felter: et eksempel læses korrekt.
         using var d = new ShelfStore(TempDb("sync-mac"));
         var macDocs = new List<SyncDoc>
@@ -203,9 +207,26 @@ static class SyncChecks
         try { CloudSync.RunAsync(mac, cloud, session, "mac").GetAwaiter().GetResult(); }
         catch (NeedsChoiceException) { asked = true; }
         Check.That(asked, "konto og enhed har hver deres reoler: brugeren spørges");
-        CloudSync.RunAsync(mac, cloud, session, "mac", FirstSync.UseCloud).GetAwaiter().GetResult();
+        int safetyCopies = 0;
+        CloudSync.RunAsync(mac, cloud, session, "mac", FirstSync.UseCloud, () => safetyCopies++).GetAwaiter().GetResult();
         var ml = mac.LoadLibrary();
         Check.That(ml.Locations.Count == 1 && ml.Locations[0].Shelf == 1 && ml.Copies.Count == 2, "\"Brug kontoens reoler\" erstatter enhedens reoler, plader bevares");
+        Check.That(safetyCopies == 1, "der tages en sikkerhedskopi, før enhedens reoler erstattes");
+
+        // En sektion slettet på pc'en: telefonen tager en sikkerhedskopi, før den slettes der.
+        var extra = pc.Db.Run("INSERT INTO locations(shelf, section, sort_index, medium) VALUES(2, 'X', 5, 'vinyl')");
+        CloudSync.RunAsync(pc, cloud, session, "windows").GetAwaiter().GetResult();
+        CloudSync.RunAsync(phone, cloud, session, "iphone").GetAwaiter().GetResult();
+        int phoneHad = phone.LoadLibrary().Locations.Count;
+        pc.DeleteEmptySection(extra);
+        CloudSync.RunAsync(pc, cloud, session, "windows").GetAwaiter().GetResult();
+        int phoneCopies = 0;
+        CloudSync.RunAsync(phone, cloud, session, "iphone", safetyCopy: () => phoneCopies++).GetAwaiter().GetResult();
+        int phoneNow = phone.LoadLibrary().Locations.Count;
+        Check.That(phoneHad == 2 && phoneNow == 1 && phoneCopies == 1, $"slettet sektion: sikkerhedskopi først, så slettes den ({phoneHad}, {phoneCopies})");
+        bool failingCopy = false;
+        CloudSync.RunAsync(phone, cloud, session, "iphone", safetyCopy: () => failingCopy = true).GetAwaiter().GetResult();
+        Check.That(!failingCopy, "ingen sikkerhedskopi, når intet slettes");
 
         // Login fra linket i mailen og fra en indsat localhost-adresse.
         var claims = Convert.ToBase64String(Encoding.UTF8.GetBytes("""{"sub":"abc-123","email":"a@b.dk","exp":2000000000}"""))

@@ -2159,6 +2159,10 @@ do {
     let lbAfter = try b.loadLibrary()
     let laAfter = try a.loadLibrary()
     check(bHas == 4 && lbAfter.copies.count == 3 && order(lbAfter) == order(laAfter), "slettet plade forsvinder også på den anden enhed")
+
+    // En afspilning af en plade, som enheden ikke kender, huskes ikke som synkroniseret, så den ikke slettes i skyen.
+    try b.applySyncDocs([SyncDoc(kind: .play, key: "ukendt-afspilning", data: ["copy": .string("findes-ikke"), "at": .double(1)])])
+    check(!(try b.pendingSyncDocs()).contains { $0.key == "ukendt-afspilning" }, "en post, der ikke kunne lægges ind, slettes ikke i skyen")
 } catch { check(false, "synkronisering: \(error)") }
 
 // MARK: Kontoen i skyen (falsk Supabase, uden net)
@@ -2269,9 +2273,28 @@ do { try MainActor.assumeIsolated {
     var asked = false
     if case .failure(let e) = choice, e is CloudSync.NeedsChoice { asked = true }
     check(asked, "konto og enhed har hver deres reoler: brugeren spørges")
-    _ = onMain { try await CloudSync.run(store: win, client: cloud, session: session, device: "windows", firstSync: .useCloud) }
+    var safetyCopies = 0
+    _ = onMain { try await CloudSync.run(store: win, client: cloud, session: session, device: "windows", firstSync: .useCloud,
+                                         safetyCopy: { safetyCopies += 1 }) }
     let wl = try win.loadLibrary()
     check(wl.locations.count == 1 && wl.locations[0].shelf == 1 && wl.copies.count == 2, "\"Brug kontoens reoler\" erstatter enhedens reoler, plader bevares")
+    check(safetyCopies == 1, "der tages en sikkerhedskopi, før enhedens reoler erstattes")
+
+    // En sektion slettet på Mac'en: telefonen tager en sikkerhedskopi, før den slettes der.
+    let extra = try mac.db.run("INSERT INTO locations(shelf, section, sort_index, medium) VALUES(2, 'X', 5, 'vinyl')")
+    _ = onMain { try await CloudSync.run(store: mac, client: cloud, session: session, device: "mac") }
+    _ = onMain { try await CloudSync.run(store: phone, client: cloud, session: session, device: "iphone") }
+    let phoneHad = try phone.loadLibrary().locations.count
+    try mac.deleteEmptySection(extra)
+    _ = onMain { try await CloudSync.run(store: mac, client: cloud, session: session, device: "mac") }
+    var phoneCopies = 0
+    _ = onMain { try await CloudSync.run(store: phone, client: cloud, session: session, device: "iphone", safetyCopy: { phoneCopies += 1 }) }
+    let phoneNow = try phone.loadLibrary().locations.count
+    check(phoneHad == 2 && phoneNow == 1 && phoneCopies == 1,
+          "slettet sektion: sikkerhedskopi først, så slettes den (\(phoneHad), \(phoneCopies))")
+    var failingCopy = false
+    _ = onMain { try await CloudSync.run(store: phone, client: cloud, session: session, device: "iphone", safetyCopy: { failingCopy = true }) }
+    check(!failingCopy, "ingen sikkerhedskopi, når intet slettes")
 
     // Login fra linket i mailen (vinylshelf://auth#…). Adgangsnøglen er en JWT med bruger-ID og e-mail.
     let claims = Data(#"{"sub":"abc-123","email":"a@b.dk","exp":2000000000}"#.utf8).base64EncodedString()

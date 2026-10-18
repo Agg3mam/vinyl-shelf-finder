@@ -197,7 +197,8 @@ public sealed partial class ShelfStore
     // MARK: Poster fra skyen ind i den lokale database
 
     /// Lægger poster fra skyen ind. Rækkefølgen sikrer, at pladen findes, før den placeres.
-    /// Returnerer antallet af ændrede poster.
+    /// Poster, der ikke kunne lægges ind (fx en afspilning af en ukendt plade), huskes ikke som synkroniseret,
+    /// så næste synkronisering ikke sender en sletning af dem op. Returnerer antallet af ændrede poster.
     public int ApplySyncDocs(IReadOnlyList<SyncDoc> remote)
     {
         EnsureSyncIds();
@@ -205,10 +206,12 @@ public sealed partial class ShelfStore
         // Egne ændringer, der kommer tilbage fra skyen, springes over.
         var fresh = remote.Where(d => (state.TryGetValue(d.Id, out var s) ? s : null) != d.Canonical).ToList();
         var order = new[] { SyncKind.Release, SyncKind.Copy, SyncKind.Location, SyncKind.Section, SyncKind.Play, SyncKind.Setting };
+        var skipped = new HashSet<string>();
         Db.Transaction(() =>
         {
             foreach (var kind in order)
-                foreach (var d in fresh.Where(d => d.Kind == kind)) Apply(d);
+                foreach (var d in fresh.Where(d => d.Kind == kind))
+                    if (!Apply(d)) skipped.Add(d.Id);
             // Slettede reoler fjernes til sidst, når deres plader er flyttet.
             foreach (var d in fresh.Where(d => d.Kind == SyncKind.Location && d.Data is null))
                 if (LocalId("locations", d.Key) is long id)
@@ -217,7 +220,7 @@ public sealed partial class ShelfStore
                     Db.Run("DELETE FROM locations WHERE id = ?", id);
                 }
         });
-        MarkSynced(remote);
+        MarkSynced(remote.Where(d => !skipped.Contains(d.Id)));
         return fresh.Count;
     }
 
@@ -241,13 +244,18 @@ public sealed partial class ShelfStore
     private static IEnumerable<string> Strings(JsonNode? n) =>
         n is JsonArray a ? a.Select(x => x is JsonValue j && j.TryGetValue<string>(out var s) ? s : null).OfType<string>() : Enumerable.Empty<string>();
 
-    private void Apply(SyncDoc d)
+    /// Har denne enhed reolen med det fælles ID?
+    public bool HasLocation(string uid) => LocalId("locations", uid) is not null;
+
+    /// false: posten kunne ikke lægges ind (den mangler noget, den bygger på).
+    private bool Apply(SyncDoc d)
     {
         var v = d.Data ?? new JsonObject();
         switch (d.Kind)
         {
             case SyncKind.Release:
-                if (d.Data is null || !long.TryParse(d.Key, NumberStyles.Integer, CultureInfo.InvariantCulture, out var rid)) return;
+                if (d.Data is null) return true;
+                if (!long.TryParse(d.Key, NumberStyles.Integer, CultureInfo.InvariantCulture, out var rid)) return false;
                 Db.Run("""
                     INSERT INTO releases(discogs_release_id, artist, title, year, label, catalog_number, format, cover_url, thumb_url, genres, updated_at)
                     VALUES(?,?,?,?,?,?,?,?,?,?,?)
@@ -270,9 +278,9 @@ public sealed partial class ShelfStore
                         Db.Run("DELETE FROM plays WHERE copy_id = ?", e);
                         Db.Run("DELETE FROM copies WHERE id = ?", e);
                     }
-                    return;
+                    return true;
                 }
-                if (Long(v, "release") is not long release || !Db.Query("SELECT 1 FROM releases WHERE discogs_release_id = ?", release).Any()) return;
+                if (Long(v, "release") is not long release || !Db.Query("SELECT 1 FROM releases WHERE discogs_release_id = ?", release).Any()) return false;
                 object?[] fields =
                 {
                     Long(v, "instance"), release, Text(v, "status") ?? "home", Text(v, "note"),
@@ -295,7 +303,7 @@ public sealed partial class ShelfStore
             }
 
             case SyncKind.Location:
-                if (d.Data is null) return; // slettes til sidst (se ApplySyncDocs)
+                if (d.Data is null) return true; // slettes til sidst (se ApplySyncDocs)
                 if (LocalId("locations", d.Key) is long lid)
                     Db.Run("UPDATE locations SET shelf = ?, section = ?, sort_index = ?, medium = ? WHERE id = ?",
                            Long(v, "shelf") ?? 1, Text(v, "section") ?? "A", Long(v, "sortIndex") ?? 0, Text(v, "medium") ?? "vinyl", lid);
@@ -306,7 +314,7 @@ public sealed partial class ShelfStore
 
             case SyncKind.Section:
             {
-                if (LocalId("locations", d.Key) is not long loc) return;
+                if (LocalId("locations", d.Key) is not long loc) return d.Data is null;
                 var ids = Strings(v["copies"]).Select(CopyIdOf).OfType<long>().ToList();
                 Db.Run("DELETE FROM placements WHERE location_id = ?", loc);
                 for (int i = 0; i < ids.Count; i++)
@@ -321,9 +329,10 @@ public sealed partial class ShelfStore
                 if (d.Data is null)
                 {
                     if (existing is long e) Db.Run("DELETE FROM plays WHERE id = ?", e);
-                    return;
+                    return true;
                 }
-                if (existing is not null || Text(v, "copy") is not string c || CopyIdOf(c) is not long copy || Dbl(v, "at") is not double at) return;
+                if (existing is not null) return true;
+                if (Text(v, "copy") is not string c || CopyIdOf(c) is not long copy || Dbl(v, "at") is not double at) return false;
                 Db.Run("INSERT INTO plays(copy_id, played_at, uid) VALUES(?, ?, ?)", copy, at, d.Key);
                 break;
             }
@@ -346,5 +355,6 @@ public sealed partial class ShelfStore
                     SetSetting(d.Key, Text(v, "value"));
                 break;
         }
+        return true;
     }
 }

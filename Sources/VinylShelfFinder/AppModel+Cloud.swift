@@ -121,9 +121,8 @@ extension AppModel {
         cloudSession = nil
         cloudLoggedIn = false
         cloudPhase = .idle
-        // Data på denne Mac bliver, hvor de er. Næste login sammenligner forfra.
-        store.setSetting("cloud_cursor", nil)
-        store.setSetting("cloud_user", nil)
+        // Data på denne Mac bliver, hvor de er, og det sidst synkroniserede huskes, så ændringer, der laves
+        // imens, sendes op ved næste login. Logger man ind på en anden konto, sammenlignes der forfra (CloudSync.run).
     }
 
     fileprivate func saveCloudSession(_ s: CloudSession) throws {
@@ -147,12 +146,14 @@ extension AppModel {
 
     // MARK: Synkronisering
 
-    func syncCloud(firstSync: CloudSync.FirstSync? = nil) async {
+    /// `userInitiated`: brugeren trykkede "Synkronisér nu" (så stilles et udskudt spørgsmål igen).
+    func syncCloud(firstSync: CloudSync.FirstSync? = nil, userInitiated: Bool = false) async {
         guard cloudEnabled, cloudLoggedIn, cloudPhase != .syncing else { return }
         cloudPhase = .syncing
         do {
             let s = try await validCloudSession()
-            let report = try await CloudSync.run(store: store, client: cloud, session: s, device: Self.cloudDevice, firstSync: firstSync)
+            let report = try await CloudSync.run(store: store, client: cloud, session: s, device: Self.cloudDevice,
+                                                 firstSync: firstSync, safetyCopy: { [self] in try cloudSafetyCopy() })
             if report.received > 0 {
                 cloudApplying = true
                 reloadSettingsFromStore()
@@ -163,8 +164,13 @@ extension AppModel {
             store.setSetting("cloud_last_sync", String(Date().timeIntervalSince1970))
             cloudPhase = .idle
         } catch let choice as CloudSync.NeedsChoice {
-            cloudChoice = choice
-            cloudPhase = .idle
+            if cloudChoicePostponed && !userInitiated {
+                cloudPhase = .failed("Vælg, hvilke reoler der skal bruges: tryk Synkronisér nu.")
+            } else {
+                cloudChoicePostponed = false
+                cloudChoice = choice
+                cloudPhase = .idle
+            }
         } catch let e as CloudError where e.needsLogin {
             logOutCloud()
             cloudPhase = .failed("Du er logget ud af kontoen. Log ind igen for at synkronisere.")
@@ -176,5 +182,16 @@ extension AppModel {
     func resolveCloudChoice(_ choice: CloudSync.FirstSync) {
         cloudChoice = nil
         Task { await syncCloud(firstSync: choice) }
+    }
+
+    func postponeCloudChoice() {
+        cloudChoice = nil
+        cloudChoicePostponed = true
+    }
+
+    /// Sikkerhedskopi, før synkroniseringen sletter reoler på denne Mac (kan importeres igen).
+    private func cloudSafetyCopy() throws {
+        try FileManager.default.createDirectory(at: backupFolder, withIntermediateDirectories: true)
+        try DataTransfer.safetyCopy(store, folder: backupFolder, reason: "konto")
     }
 }

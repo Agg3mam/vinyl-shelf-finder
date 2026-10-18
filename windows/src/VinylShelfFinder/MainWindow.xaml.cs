@@ -349,7 +349,7 @@ public sealed partial class MainWindow : Window
         {
             XamlRoot = Root.XamlRoot,
             Title = "Hvilke reoler skal bruges?",
-            Content = Ui.Text($"Kontoen har {c.CloudSections} sektioner, og denne pc har {c.LocalSections} andre. Pladerne, lyttelog og flueben flettes, men reolerne skal komme ét sted fra. Det, der ikke bruges, gemmes ikke. Tag evt. en eksport først (Indstillinger › Sikkerhedskopi og data)."),
+            Content = Ui.Text($"Kontoen har {c.CloudSections} sektioner, og denne pc har {c.LocalSections} andre. Pladerne, lyttelog og flueben flettes, men reolerne skal komme ét sted fra. Vælger du denne pc's reoler, forsvinder kontoens reoler også på dine andre enheder. Før reoler slettes, gemmes en sikkerhedskopi i mappen med sikkerhedskopier."),
             PrimaryButtonText = "Brug kontoens reoler",
             SecondaryButtonText = "Brug denne pc's reoler",
             CloseButtonText = "Senere",
@@ -360,7 +360,7 @@ public sealed partial class MainWindow : Window
             var r = await d.ShowAsync();
             if (r == ContentDialogResult.Primary) Model.ResolveCloudChoice(FirstSync.UseCloud);
             else if (r == ContentDialogResult.Secondary) Model.ResolveCloudChoice(FirstSync.UseThisDevice);
-            else Model.CloudChoice = null;
+            else Model.PostponeCloudChoice();
         }
         catch (System.Runtime.InteropServices.COMException) { Model.CloudChoice = null; } // en anden dialog er åben
     }

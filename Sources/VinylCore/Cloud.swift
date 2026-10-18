@@ -268,9 +268,10 @@ public enum CloudSync {
 
     /// Henter nyt fra skyen, lægger det ind, og sender egne ændringer op.
     /// Kaster `NeedsChoice`, hvis kontoen og enheden begge har reoler første gang (se `FirstSync`).
+    /// `safetyCopy` kaldes, før reoler på denne enhed slettes (fx en sikkerhedskopi). Fejler den, ændres intet.
     @MainActor
     public static func run(store: ShelfStore, client: CloudClient, session: CloudSession, device: String,
-                           firstSync: FirstSync? = nil) async throws -> Report {
+                           firstSync: FirstSync? = nil, safetyCopy: (() throws -> Void)? = nil) async throws -> Report {
         // En anden konto end sidst: start forfra med sammenligningen.
         if store.setting("cloud_user") != session.userID {
             try store.db.run("DELETE FROM sync_state")
@@ -279,6 +280,7 @@ public enum CloudSync {
         let since = store.setting("cloud_cursor")
         var (remote, cursor) = try await client.fetch(since: since, session: session)
         var report = Report()
+        var copied = false
 
         if since == nil {
             let remoteLocations = Set(remote.filter { $0.kind == .location && $0.data != nil }.map(\.key))
@@ -289,6 +291,8 @@ public enum CloudSync {
                 case nil:
                     throw NeedsChoice(cloudSections: remoteLocations.count, localSections: localLocations.count)
                 case .useCloud:
+                    try safetyCopy?()
+                    copied = true
                     try store.db.transaction {
                         try store.db.run("DELETE FROM placements")
                         try store.db.run("DELETE FROM locations")
@@ -302,6 +306,11 @@ public enum CloudSync {
                     report.sent += deletions.count
                 }
             }
+        }
+        // En anden enhed har slettet reoler, som findes her.
+        let removed = remote.filter { $0.kind == .location && $0.data == nil }
+        if !copied, try removed.contains(where: { try store.hasLocation(uid: $0.key) }) {
+            try safetyCopy?()
         }
 
         report.received = try store.applySyncDocs(remote)

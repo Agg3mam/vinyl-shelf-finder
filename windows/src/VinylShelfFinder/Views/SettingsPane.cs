@@ -133,7 +133,7 @@ public sealed class SettingsPane : IPane
             rows.Add(Row("Logget ind som", _model.CloudEmail ?? ""));
             rows.Add(Row("Senest synkroniseret", _model.CloudSyncing ? "Synkroniserer …" : _model.CloudLastSync is DateTimeOffset d ? DanishDate.DateTime(d) : "Ikke endnu"));
             if (_model.CloudMessage is string m) rows.Add(Ui.Label(Ui.Glyph.Warning, m, color: Ui.Secondary));
-            var now = Ui.Btn("Synkronisér nu", async (_, _) => await _model.SyncCloudAsync(), Ui.Glyph.Sync);
+            var now = Ui.Btn("Synkronisér nu", async (_, _) => await _model.SyncCloudAsync(userInitiated: true), Ui.Glyph.Sync);
             now.IsEnabled = !_model.CloudSyncing;
             rows.Add(Ui.HStack(8, now, Ui.Btn("Log ud", (_, _) => _model.LogOutCloud())));
             rows.Add(Footer("Reoler, placeringer, flueben, lyttelog og sorteringsregler er de samme på alle dine enheder. Appen synkroniserer selv ved start, kort efter hver ændring og hvert 5. minut. Discogs-tokenet og iMusic-adressen bliver på denne pc."));

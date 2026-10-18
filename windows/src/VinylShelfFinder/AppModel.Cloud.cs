@@ -14,6 +14,8 @@ public sealed partial class AppModel
     private bool _cloudTimerRunning;
     private bool _cloudApplying;
     private bool _cloudStarted;
+    /// "Senere" i spørgsmålet om reolerne: spørg først igen, når brugeren selv synkroniserer.
+    private bool _cloudChoicePostponed;
 
     private bool _cloudLoggedIn;
     /// Logget ind på kontoen?
@@ -143,9 +145,8 @@ public sealed partial class AppModel
         _cloudSession = null;
         CloudLoggedIn = false;
         CloudMessage = null;
-        // Data på denne pc bliver, hvor de er. Næste login sammenligner forfra.
-        Store.SetSetting("cloud_cursor", null);
-        Store.SetSetting("cloud_user", null);
+        // Data på denne pc bliver, hvor de er, og det sidst synkroniserede huskes, så ændringer, der laves
+        // imens, sendes op ved næste login. Logger man ind på en anden konto, sammenlignes der forfra (CloudSync.RunAsync).
     }
 
     private void SaveCloudSession(CloudSession s)
@@ -170,14 +171,15 @@ public sealed partial class AppModel
 
     // MARK: Synkronisering
 
-    public async Task SyncCloudAsync(FirstSync? firstSync = null)
+    /// <paramref name="userInitiated"/>: brugeren trykkede "Synkronisér nu" (så stilles et udskudt spørgsmål igen).
+    public async Task SyncCloudAsync(FirstSync? firstSync = null, bool userInitiated = false)
     {
         if (!CloudEnabled || !CloudLoggedIn || CloudSyncing) return;
         CloudSyncing = true;
         try
         {
             var s = await ValidCloudSessionAsync();
-            var report = await CloudSync.RunAsync(Store, _cloud, s, CloudDevice, firstSync);
+            var report = await CloudSync.RunAsync(Store, _cloud, s, CloudDevice, firstSync, CloudSafetyCopy);
             if (report.Received > 0)
             {
                 _cloudApplying = true;
@@ -188,7 +190,11 @@ public sealed partial class AppModel
             Store.SetSetting("cloud_last_sync", (DateTimeOffset.Now.ToUnixTimeMilliseconds() / 1000.0).ToString("R", System.Globalization.CultureInfo.InvariantCulture));
             CloudMessage = null;
         }
-        catch (NeedsChoiceException choice) { CloudChoice = choice; }
+        catch (NeedsChoiceException choice)
+        {
+            if (_cloudChoicePostponed && !userInitiated) CloudMessage = "Vælg, hvilke reoler der skal bruges: tryk Synkronisér nu.";
+            else { _cloudChoicePostponed = false; CloudChoice = choice; }
+        }
         catch (CloudException ex) when (ex.NeedsLogin)
         {
             LogOutCloud();
@@ -202,5 +208,18 @@ public sealed partial class AppModel
     {
         CloudChoice = null;
         _ = SyncCloudAsync(choice);
+    }
+
+    public void PostponeCloudChoice()
+    {
+        CloudChoice = null;
+        _cloudChoicePostponed = true;
+    }
+
+    /// Sikkerhedskopi, før synkroniseringen sletter reoler på denne pc (kan importeres igen).
+    private void CloudSafetyCopy()
+    {
+        Directory.CreateDirectory(BackupFolder);
+        DataTransfer.SafetyCopy(Store, BackupFolder, "konto");
     }
 }

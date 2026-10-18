@@ -31,9 +31,9 @@ struct ContentView: View {
                presenting: model.cloudChoice) { _ in
             Button("Brug kontoens reoler") { model.resolveCloudChoice(.useCloud) }
             Button("Brug denne Macs reoler") { model.resolveCloudChoice(.useThisDevice) }
-            Button("Senere", role: .cancel) {}
+            Button("Senere", role: .cancel) { model.postponeCloudChoice() }
         } message: { c in
-            Text("Kontoen har \(c.cloudSections) sektioner, og denne Mac har \(c.localSections) andre. Pladerne, lyttelog og flueben flettes, men reolerne skal komme ét sted fra. Det, der ikke bruges, gemmes ikke. Tag evt. en eksport først (Indstillinger › Sikkerhedskopi og data).")
+            Text("Kontoen har \(c.cloudSections) sektioner, og denne Mac har \(c.localSections) andre. Pladerne, lyttelog og flueben flettes, men reolerne skal komme ét sted fra. Vælger du denne Macs reoler, forsvinder kontoens reoler også på dine andre enheder. Før reoler slettes, gemmes en sikkerhedskopi i mappen med sikkerhedskopier.")
         }
         .alert("Der opstod en fejl", isPresented: Binding(
             get: { model.errorMessage != nil },

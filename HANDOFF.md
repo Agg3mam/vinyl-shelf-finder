@@ -376,8 +376,8 @@ projektet med egen konto (RLS adskiller data), men hver skal have sit eget Disco
 - Første gang med reoler både i skyen og lokalt spørges der (`NeedsChoice`: brug kontoens / denne enheds).
 - Apps: fanen **Konto** (første fane i Indstillinger), synk ved start, 4 s efter ændringer og hvert 5. minut.
   Login gemmes i nøgleringen / Legitimationsadministrator (`dk.vinylshelffinder.cloud`).
-- Checks: Mac `swift run -c release VinylCoreChecks` (528), Windows på Mac
-  `~/.dotnet/dotnet run --project windows/src/VinylCore.Checks -c Release` (614, .NET 8 i hjemmemappen).
+- Checks: Mac `swift run -c release VinylCoreChecks` (532), Windows på Mac
+  `~/.dotnet/dotnet run --project windows/src/VinylCore.Checks -c Release` (618, .NET 8 i hjemmemappen).
   Begge har en falsk server (`StubCloud`), så der testes aldrig mod den rigtige konto.
 
 **Login: problemet lige nu (brugeren er IKKE logget ind endnu)**
@@ -399,8 +399,22 @@ projektet med egen konto (RLS adskiller data), men hver skal have sit eget Disco
   **med token-delen fjernet**, så formen kan tjekkes. Overvej så egen SMTP (fx Resend, brugeren skal selv oprette
   konto) så skabelonen kan vise en 6-cifret kode (`{{ .Token }}`). Det fjerner også mailgrænsen.
 
+**Gennemgang udført 18. okt (begge platforme rettet)**
+- Sikkerhed i orden: kun den offentlige nøgle i koden, RLS låser rækkerne til ejeren, token/iMusic synkroniseres ikke.
+- Rettet: før synkroniseringen sletter reoler på enheden ("Brug kontoens reoler", eller en sektion slettet på en
+  anden enhed), gemmes en sikkerhedskopi (`før-konto-….sqlite` i mappen med sikkerhedskopier). Fejler kopien, ændres intet.
+- Rettet: poster fra skyen, der ikke kunne lægges ind (fx en afspilning af en ukendt plade), huskes ikke som
+  synkroniseret. Før ville næste synk have sendt en sletning af dem op og slettet dem på de andre enheder.
+- Rettet: "Log ud" glemmer ikke længere det sidst synkroniserede. Før ville ændringer, der blev lavet imens,
+  blive overskrevet af skyen ved næste login. Et login på en anden konto sammenligner stadig forfra.
+- Rettet: "Senere" i spørgsmålet om reolerne spørger ikke igen ved hver automatisk synk, kun ved "Synkronisér nu".
+  Teksten siger nu, at "Brug denne Macs/pc's reoler" også fjerner kontoens reoler på de andre enheder.
+- Afprøvet på en kopi af en v5-database med rigtige data: migreringen til v6 virker, sorteringsreglerne er
+  uændrede, og en fuld runde (eksport → ny enhed) giver samme rækkefølge og intet at sende tilbage.
+- Kendt, ikke rettet: QR-koderne bruger enhedens lokale sektionsnummer; iPhone-appen skal bruge `uid`.
+
 **Næste skridt (i rækkefølge)**
-1. Gennemgå hele grenen `claude/sky-synk` mod `main` (se "Gennemgang" nedenfor).
+1. ~~Gennemgå hele grenen~~ (udført, se ovenfor). Windows-UI-delen er kun tjekket af CI efter push.
 2. Få brugeren logget ind på Mac (husk mailgrænsen: vent ~1 time efter sidste mail). Tjek at "Senest
    synkroniseret" får et tidspunkt.
 3. Merge `claude/sky-synk` til `main` og lav en ny udgivelse (push `claude/udgivelse-vX.Y.Z`), så Windows kan

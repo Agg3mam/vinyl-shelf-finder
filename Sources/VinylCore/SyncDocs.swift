@@ -215,7 +215,8 @@ extension ShelfStore {
     // MARK: Poster fra skyen ind i den lokale database
 
     /// Lægger poster fra skyen ind. Rækkefølgen sikrer, at pladen findes, før den placeres.
-    /// Returnerer antallet af ændrede poster.
+    /// Poster, der ikke kunne lægges ind (fx en afspilning af en ukendt plade), huskes ikke som synkroniseret,
+    /// så næste synkronisering ikke sender en sletning af dem op. Returnerer antallet af ændrede poster.
     @discardableResult
     public func applySyncDocs(_ remote: [SyncDoc]) throws -> Int {
         try ensureSyncIDs()
@@ -226,9 +227,12 @@ extension ShelfStore {
         // Egne ændringer, der kommer tilbage fra skyen, springes over.
         let fresh = remote.filter { stateData["\($0.kind.rawValue)|\($0.key)"] != $0.canonical }
         let order: [SyncDoc.Kind] = [.release, .copy, .location, .section, .play, .setting]
+        var skipped = Set<String>()
         try db.transaction {
             for kind in order {
-                for d in fresh where d.kind == kind { try apply(d) }
+                for d in fresh where d.kind == kind {
+                    if !(try apply(d)) { skipped.insert("\(d.kind.rawValue)|\(d.key)") }
+                }
             }
             // Slettede reoler fjernes til sidst, når deres plader er flyttet.
             for d in fresh where d.kind == .location && d.data == nil {
@@ -238,7 +242,7 @@ extension ShelfStore {
                 }
             }
         }
-        try markSynced(remote)
+        try markSynced(remote.filter { !skipped.contains("\($0.kind.rawValue)|\($0.key)") })
         return fresh.count
     }
 
@@ -255,14 +259,19 @@ extension ShelfStore {
         return nil
     }
 
-    private func apply(_ d: SyncDoc) throws {
+    /// Har denne enhed reolen med det fælles ID?
+    public func hasLocation(uid: String) throws -> Bool { try localID("locations", uid: uid) != nil }
+
+    /// false: posten kunne ikke lægges ind (den mangler noget, den bygger på).
+    private func apply(_ d: SyncDoc) throws -> Bool {
         let v = d.data ?? [:]
         func text(_ k: String) -> String? { v[k]?.string }
         func int(_ k: String) -> Int64? { v[k]?.int }
         func dbl(_ k: String) -> Double? { v[k]?.double }
         switch d.kind {
         case .release:
-            guard d.data != nil, let id = Int64(d.key) else { return }
+            guard d.data != nil else { return true }
+            guard let id = Int64(d.key) else { return false }
             try db.run("""
                 INSERT INTO releases(discogs_release_id, artist, title, year, label, catalog_number, format, cover_url, thumb_url, genres, updated_at)
                 VALUES(?,?,?,?,?,?,?,?,?,?,?)
@@ -281,10 +290,10 @@ extension ShelfStore {
                     try db.run("DELETE FROM plays WHERE copy_id = ?", existing)
                     try db.run("DELETE FROM copies WHERE id = ?", existing)
                 }
-                return
+                return true
             }
             guard let release = int("release"),
-                  try db.query("SELECT 1 FROM releases WHERE discogs_release_id = ?", release).first != nil else { return }
+                  try db.query("SELECT 1 FROM releases WHERE discogs_release_id = ?", release).first != nil else { return false }
             let fields: [SQLConvertible] = [
                 int("instance"), release, text("status") ?? "home", text("note"),
                 (v["inDiscogs"]?.bool ?? true) ? 1 : 0, dbl("removedAt"),
@@ -306,7 +315,7 @@ extension ShelfStore {
             }
 
         case .location:
-            guard d.data != nil else { return } // slettes til sidst (se applySyncDocs)
+            guard d.data != nil else { return true } // slettes til sidst (se applySyncDocs)
             if let id = try localID("locations", uid: d.key) {
                 try db.run("UPDATE locations SET shelf = ?, section = ?, sort_index = ?, medium = ? WHERE id = ?",
                            int("shelf") ?? 1, text("section") ?? "A", int("sortIndex") ?? 0, text("medium") ?? "vinyl", id)
@@ -316,7 +325,7 @@ extension ShelfStore {
             }
 
         case .section:
-            guard let loc = try localID("locations", uid: d.key) else { return }
+            guard let loc = try localID("locations", uid: d.key) else { return d.data == nil }
             let ids = try (v["copies"]?.array ?? []).compactMap { $0.string }.compactMap { try copyID(uid: $0) }
             try db.run("DELETE FROM placements WHERE location_id = ?", loc)
             for (i, id) in ids.enumerated() {
@@ -328,9 +337,10 @@ extension ShelfStore {
             let existing = try localID("plays", uid: d.key)
             guard d.data != nil else {
                 if let existing { try db.run("DELETE FROM plays WHERE id = ?", existing) }
-                return
+                return true
             }
-            guard existing == nil, let c = text("copy"), let copy = try copyID(uid: c), let at = dbl("at") else { return }
+            guard existing == nil else { return true }
+            guard let c = text("copy"), let copy = try copyID(uid: c), let at = dbl("at") else { return false }
             try db.run("INSERT INTO plays(copy_id, played_at, uid) VALUES(?, ?, ?)", copy, at, d.key)
 
         case .setting:
@@ -346,5 +356,6 @@ extension ShelfStore {
                 setSetting(d.key, text("value"))
             }
         }
+        return true
     }
 }

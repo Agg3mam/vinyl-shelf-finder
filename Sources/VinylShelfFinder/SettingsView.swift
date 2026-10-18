@@ -352,7 +352,7 @@ struct CloudSettings: View {
                 Label(message, systemImage: "exclamationmark.triangle").foregroundStyle(.secondary)
             }
             HStack {
-                Button("Synkronisér nu") { Task { await model.syncCloud() } }
+                Button("Synkronisér nu") { Task { await model.syncCloud(userInitiated: true) } }
                     .disabled(model.cloudPhase == .syncing)
                 Button("Log ud") { model.logOutCloud() }
             }

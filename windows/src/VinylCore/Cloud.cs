@@ -296,7 +296,9 @@ public static class CloudSync
 {
     /// Henter nyt fra skyen, lægger det ind, og sender egne ændringer op.
     /// Kaster NeedsChoiceException, hvis kontoen og enheden begge har reoler første gang.
-    public static async Task<CloudSyncReport> RunAsync(ShelfStore store, CloudClient client, CloudSession session, string device, FirstSync? firstSync = null)
+    /// <paramref name="safetyCopy"/> kaldes, før reoler på denne enhed slettes (fx en sikkerhedskopi). Fejler den, ændres intet.
+    public static async Task<CloudSyncReport> RunAsync(ShelfStore store, CloudClient client, CloudSession session, string device,
+                                                       FirstSync? firstSync = null, Action? safetyCopy = null)
     {
         // En anden konto end sidst: start forfra med sammenligningen.
         if (store.Setting("cloud_user") != session.UserId)
@@ -307,6 +309,7 @@ public static class CloudSync
         var since = store.Setting("cloud_cursor");
         var (remote, cursor) = await client.FetchAsync(since, session);
         int sent = 0;
+        bool copied = false;
 
         if (since is null)
         {
@@ -320,6 +323,8 @@ public static class CloudSync
                     case null:
                         throw new NeedsChoiceException(remoteLocations.Count, localLocations.Count);
                     case FirstSync.UseCloud:
+                        safetyCopy?.Invoke();
+                        copied = true;
                         store.Db.Transaction(() =>
                         {
                             store.Db.Run("DELETE FROM placements");
@@ -337,6 +342,10 @@ public static class CloudSync
                 }
             }
         }
+
+        // En anden enhed har slettet reoler, som findes her.
+        if (!copied && remote.Any(d => d.Kind == SyncKind.Location && d.Data is null && store.HasLocation(d.Key)))
+            safetyCopy?.Invoke();
 
         int received = store.ApplySyncDocs(remote);
         store.SetSetting("cloud_user", session.UserId);

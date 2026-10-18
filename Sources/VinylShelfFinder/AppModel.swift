@@ -106,6 +106,8 @@ final class AppModel {
     @ObservationIgnored var cloudDebounce: Task<Void, Never>?
     @ObservationIgnored var cloudTimer: Task<Void, Never>?
     @ObservationIgnored var cloudApplying = false
+    /// "Senere" i spørgsmålet om reolerne: spørg først igen, når brugeren selv synkroniserer.
+    @ObservationIgnored var cloudChoicePostponed = false
 
     // Ark/overlays
     var findModeCopy: Int64?
