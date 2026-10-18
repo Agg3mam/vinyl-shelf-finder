@@ -1,6 +1,6 @@
 # Handoff: Vinyl Shelf Finder (hele projektet)
 
-**Opdateret:** 2. oktober 2026 (iMusic.dk som ekstra købssted, gren `claude/imusic-kobssted`).
+**Opdateret:** 18. oktober 2026 (Windows: rettelser, sorteringsliste, eksport/import, efternavn, gren `claude/ret-tokenfelt`).
 
 **Dette er den eneste handoff-fil.** Den indeholder alt, en ny Claude-session skal vide for at
 arbejde videre på projektet, uanset hvad opgaven er. Giv den videre som den første besked,
@@ -291,6 +291,44 @@ pakken QRCoder 1.6.0) og daglig sikkerhedskopi.
   opdatering via "Opdatér nu".
 - Ingen af grenene er merget. Første udgivelse (v1.0.0) venter på, at brugeren laver den på GitHub
   (sessionen må ikke skubbe tags).
+
+### 17.–18. okt (session 3, på brugerens Windows-pc): rettelser og nye funktioner (gren `claude/ret-tokenfelt`)
+
+Bygger på v1.0.0 (= `claude/windows-skaerme`). Lavet og testet på en rigtig Windows 11-pc (Git, .NET 8 SDK
+installeret; projektet ligger i `C:\Users\perhj\Documents\Claude Code\vinyl-shelf-finder`). Appen er installeret
+til brugeren i `%LOCALAPPDATA%\Programs\Vinyl Shelf Finder` (genvej i Start-menuen, version stadig 1.0.0) og er
+forbundet til Discogs med ca. 767 plader og 1086 cd'er, men **ingen reoler endnu**. **Kun Windows; Mac-appen har
+ikke fået noget af det nedenfor.** Windows-kernen har nu **584 checks**, alle grønne.
+
+- **Rettede nedbrud:** "Forbind" lukkede appen (OnboardingView genbrugte tokenfeltet i en ny forælder,
+  WinUI 0x800F1000), og sync fejlede ("samlingen kunne ikke læses"), fordi Discogs' `instance_id` nu er større
+  end int.MaxValue. `InstanceId` er `long` hele vejen (JSON, model, sync, database).
+- **Logo:** `Assets/AppIcon.ico` fra Mac-ikonet (uden macOS' kant), i .exe, hovedvindue og Discogs-vindue.
+- **Digitale filer** (første format "File") står hverken på plade- eller cd-hylden (`MediumExtensions.ShelfOf`),
+  meldes ikke som nye eller fjernede; brugeren kan selv flytte en fil til en hylde.
+- **Sorteringsliste** (sidepanelet): hele rækkefølgen for én hylde ad gangen, sektion for sektion, med flueben
+  (gemt i settings `sort_checked_vinyl/cd`), "Næste" og "Start forfra". Kan ses før reolerne er lavet.
+- **Eksport / import / nulstil** (Indstillinger › Sikkerhedskopi og data, `DataTransfer.cs`): eksport er en hel
+  SQLite-fil (VACUUM INTO). Import og nulstilling tager først en sikkerhedskopi (`før-import-…`/`før-nulstilling-…`
+  i backup-mappen), bestilles som filer ved siden af databasen og udføres ved næste start, før databasen åbnes;
+  appen genstarter sig selv. En import uden bekræftelse bruges aldrig; tomme filer afvises.
+- **Sortering:** "Tal sidst" (`SortRules.NumbersLast`, standard til, gælder også Discogs' rækkefølge) og
+  "Efternavn først" (`SurnameSort.cs` + `SurnameDialog`): appen gætter, hvilke kunstnere der er personer,
+  brugeren krydser af, valgene bliver sorteringsnavne ("Dylan, Bob"), og Discogs' rækkefølge slås fra.
+  Fravalgte gemmes i settings `surname_not_persons`.
+- **Fra en test-agents gennemgang, rettet:** Flyt-dialogens "Efter"-liste frøs med to ens titler (nu ComboBoxItem
+  med nummer), "Opdel samlingen forfra…" virkede ikke fra Indstillinger, async-knapper uden try/catch, cd-hylden
+  sagde "plader", digital fil tilbage til "Følg Discogs" beholdt en skjult placering.
+- **Ikke rettet (kosmetisk):** flere ikoner er tomme strenge i koden (fx "Opdatering" i sidepanelet), detaljepanelet
+  bliver skåret af ved 1280×820 og er ubrugeligt ved 800×600, Søg vælger ikke første resultat efter skift tilbage,
+  knapper med ikon har intet navn for Oplæser. Test-agenten så tilfældige 0xC0000374-nedbrud under sin
+  UI Automation-test; 6 billedtest i træk uden den gav 0 nedbrud, så årsagen var sandsynligvis frysningen ovenfor.
+- **Foreslået, ikke bygget:** "bunke-sortering" (grovsortér i bunker pr. sektion, så finsortér 70 ad gangen) og at
+  "[Lowbudget] Blues Band" o.l. med tegn foran sorteres under bogstavet.
+- Test på Windows: `cd windows; dotnet run --project src/VinylCore.Checks -c Release`, og
+  `VinylShelfFinder.exe --demo --smoke <mappe>` (nu også billeder af sorteringslisten). UI kan drives med
+  UI Automation fra PowerShell (gem scripts som UTF-8 med BOM). Brugerens rigtige database
+  `%LOCALAPPDATA%\VinylShelfFinder\vinyl.sqlite` er kun læst via kopier.
 
 ### Ikke færdigt / næste skridt (spørg brugeren om rækkefølgen)
 

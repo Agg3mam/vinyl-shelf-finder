@@ -38,6 +38,9 @@ public sealed partial class MainWindow : Window
     private OnboardingView? _onboarding;
     private bool _dialogOpen;
 
+    /// <summary>Hovedvinduets handle (fil-dialoger i en app uden MSIX-pakke skal kende vinduet).</summary>
+    internal static IntPtr Hwnd { get; private set; }
+
     public MainWindow(Updater updater, AppModel model, IMusicModel imusic)
     {
         _updater = updater;
@@ -49,7 +52,9 @@ public sealed partial class MainWindow : Window
         DetailPane.IMusic = imusic;
         InitializeComponent();
         Title = "Vinyl Shelf Finder";
+        AppWindow.SetIcon(System.IO.Path.Combine(AppContext.BaseDirectory, "Assets", "AppIcon.ico"));
         AppWindow.Resize(new Windows.Graphics.SizeInt32(1280, 820));
+        Hwnd = WinRT.Interop.WindowNative.GetWindowHandle(this);
 
         Search = new SearchPane(model);
         Detail = new DetailPane(model);
@@ -59,6 +64,26 @@ public sealed partial class MainWindow : Window
         TopBar.Children.Add(BuildToolbar());
         TopBar.Children.Add(_errorBar);
         _errorBar.Closed += (_, _) => Model.ErrorMessage = null;
+        if (Model.JustApplied != DataTransfer.Applied.None)
+        {
+            var reset = Model.JustApplied == DataTransfer.Applied.Reset;
+            TopBar.Children.Add(new InfoBar
+            {
+                Severity = InfoBarSeverity.Success,
+                IsOpen = true,
+                Margin = new Thickness(12, 8, 12, 0),
+                Title = reset ? "Appen er nulstillet" : "Systemet er importeret",
+                Message = reset
+                    ? "Du starter helt forfra. Det gamle system ligger som en kopi i mappen med sikkerhedskopier og kan importeres igen."
+                    : "Reoler, placeringer og historik er hentet fra filen. Det tidligere system ligger som en kopi i mappen med sikkerhedskopier.",
+            });
+        }
+        if (Model.ErrorMessage is string startError)
+        {
+            _errorBar.Title = "Noget gik galt";
+            _errorBar.Message = startError;
+            _errorBar.IsOpen = true;
+        }
         Nav.FooterMenuItems.Add(_updateItem);
         Nav.Loaded += (_, _) => { if (Nav.SettingsItem is NavigationViewItem si) si.Content = "Indstillinger"; };
 
@@ -85,6 +110,13 @@ public sealed partial class MainWindow : Window
                 ShowContent();
                 break;
             case nameof(AppModel.NeedsOnboarding):
+                // "Opdel samlingen forfra…" i Indstillinger: forlad Indstillinger, så opdelingen kan ses.
+                if (Model.ForceOnboarding && _settingsShown)
+                {
+                    _settingsShown = false;
+                    var item = Nav.MenuItems.OfType<NavigationViewItem>().FirstOrDefault(i => i.Tag is SidebarItem s && s == Model.Sidebar);
+                    if (item is not null) Nav.SelectedItem = item;
+                }
                 ShowContent();
                 break;
             case nameof(AppModel.SyncState):
@@ -195,6 +227,7 @@ public sealed partial class MainWindow : Window
         var items = Nav.MenuItems;
         items.Clear();
         items.Add(Item("Søg", Ui.Glyph.Search, SidebarItem.Search));
+        items.Add(Item("Sorteringsliste", Ui.Glyph.Checklist, new SidebarItem(SidebarKind.SortList)));
         items.Add(Item("Værdi", Ui.Glyph.Value, new SidebarItem(SidebarKind.Value)));
         items.Add(new NavigationViewItemHeader { Content = "Discogs" });
         items.Add(Item("Find nye plader", Ui.Glyph.Bag, new SidebarItem(SidebarKind.FindNew)));
@@ -344,7 +377,10 @@ public sealed partial class MainWindow : Window
     private void ShowContent()
     {
         if (_settingsShown) return;
-        if (Model.NeedsOnboarding)
+        // Sorteringslisten kan ses, før reolerne er lavet (så man kan se rækkefølgen først).
+        bool sortListWithoutShelves = Model.Sidebar.Kind == SidebarKind.SortList && !Model.ForceOnboarding
+                                      && Model.Library.Copies.Count > 0 && (Model.HasToken || Model.IsDemo);
+        if (Model.NeedsOnboarding && !sortListWithoutShelves)
         {
             _onboarding ??= new OnboardingView(Model);
             ShowFull(_onboarding);
@@ -379,6 +415,9 @@ public sealed partial class MainWindow : Window
                 break;
             case SidebarKind.History:
                 ShowFull(new HistoryPane(Model));
+                break;
+            case SidebarKind.SortList:
+                ShowFull(new SortListPane(Model));
                 break;
             default:
                 var title = s.Kind switch

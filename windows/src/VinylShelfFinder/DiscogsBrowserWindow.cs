@@ -46,6 +46,7 @@ public sealed class DiscogsBrowserWindow : Window
     {
         _model = model;
         Title = "Discogs";
+        AppWindow.SetIcon(System.IO.Path.Combine(AppContext.BaseDirectory, "Assets", "AppIcon.ico"));
         AppWindow.Resize(new Windows.Graphics.SizeInt32(1100, 820));
 
         var root = new Grid();

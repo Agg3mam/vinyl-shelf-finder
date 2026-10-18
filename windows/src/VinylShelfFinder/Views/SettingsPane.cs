@@ -31,7 +31,7 @@ public sealed class SettingsPane : IPane
         _updater = updater;
         _root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         _root.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
-        foreach (var (tag, text) in new[] { ("discogs", "Discogs"), ("sort", "Sortering"), ("shelf", "Reol"), ("imusic", "iMusic"), ("backup", "Sikkerhedskopi"), ("update", "Opdatering") })
+        foreach (var (tag, text) in new[] { ("discogs", "Discogs"), ("sort", "Sortering"), ("shelf", "Reol"), ("imusic", "iMusic"), ("backup", "Sikkerhedskopi og data"), ("update", "Opdatering") })
             _tabs.Items.Add(new SelectorBarItem { Text = text, Tag = tag });
         _tabs.SelectedItem = _tabs.Items[0];
         _tabs.SelectionChanged += (_, _) => { if (_tabs.SelectedItem?.Tag is string t) { _tab = t; Rebuild(); } };
@@ -144,7 +144,16 @@ public sealed class SettingsPane : IPane
         var rules = _model.Rules;
         var discogs = new ToggleSwitch { Header = "Præcis samme rækkefølge som i Discogs-samlingen", IsOn = rules.UseDiscogsOrder };
         discogs.Toggled += (_, _) => UpdateRules(r => r.UseDiscogsOrder = discogs.IsOn);
-        p.Children.Add(Group(discogs, Footer("Pladerne står i den rækkefølge, Discogs selv sorterer samlingen (kunstner A–Z). Reglerne herunder bruges kun, når dette er slået fra.")));
+        var numbers = new ToggleSwitch { Header = "Kunstnere, der starter med et tal, står sidst", IsOn = rules.NumbersLast };
+        numbers.Toggled += (_, _) => UpdateRules(r => r.NumbersLast = numbers.IsOn);
+        p.Children.Add(Group(discogs, Footer("Pladerne står i den rækkefølge, Discogs selv sorterer samlingen (kunstner A–Z). Reglerne herunder bruges kun, når dette er slået fra."),
+            numbers, Footer("10cc, 2Pac og The 1975 står efter Z og Æ Ø Å. Gælder også med Discogs' rækkefølge, hvor tallene ellers står først.")));
+
+        int fresh = SurnameDialog.NewCount(_model);
+        var surname = Ui.Btn(fresh > 0 ? $"Vælg personer… ({fresh} nye forslag)" : "Vælg personer…",
+            async (b, _) => await Safe(() => SurnameDialog.ShowAsync(_model, ((FrameworkElement)b).XamlRoot)));
+        p.Children.Add(Group(Ui.Text("Efternavn først", "BodyStrongTextBlockStyle"), surname,
+            Footer("Personer sorteres efter efternavn: Bob Dylan under D, Leonard Cohen under C. Appen foreslår, hvem der er personer, og du retter gættet. Bands som Pink Floyd røres ikke.")));
 
         Detach(_artistArticles);
         Detach(_titleArticles);
@@ -243,7 +252,7 @@ public sealed class SettingsPane : IPane
         structure.Add(Ui.Btn(_model.Medium == Medium.Vinyl ? "Ny reol" : "Ny cd-reol", (_, _) => _model.AddSection((shelves.Count == 0 ? 0 : shelves.Max()) + 1), ""));
         p.Children.Add(Group(structure.ToArray()));
 
-        var labels = Ui.Btn("Udskriv reolskilte med QR-kode… (Ctrl+P)", async (_, _) => await LabelsPrint.ExportAsync(_model), "");
+        var labels = Ui.Btn("Udskriv reolskilte med QR-kode… (Ctrl+P)", async (_, _) => await Safe(() => LabelsPrint.ExportAsync(_model)), "");
         labels.IsEnabled = lib.Locations.Count > 0;
         p.Children.Add(Group(labels, Footer("Ét skilt pr. sektion med første og sidste kunstner. Skiltene åbnes i browseren, hvor de kan udskrives.")));
 
@@ -276,6 +285,103 @@ public sealed class SettingsPane : IPane
         rows.Add(Ui.HStack(8, now, show));
         rows.Add(Footer($"Appen gemmer selv en kopi af reolen, placeringer, historik og lyttelog én gang om dagen og beholder de seneste {DatabaseBackup.Keep}."));
         p.Children.Add(Group(rows.ToArray()));
+
+        // Eksport: hele systemet i én fil, som kan importeres igen.
+        var export = Ui.Btn("Eksportér…", async (b, _) => await Safe(() => ExportAsync((FrameworkElement)b)), "");
+        p.Children.Add(Group(Ui.Text("Eksportér", "BodyStrongTextBlockStyle"), export,
+            Footer("Gemmer hele dit system i én fil: plader og cd'er, reoler, sektioner, placeringer, flueben, historik, lyttelog og indstillinger. Discogs-tokenet kommer ikke med.")));
+
+        // Import: tilbage til et gemt system.
+        var import = Ui.Btn("Importér…", async (b, _) => await Safe(() => ImportAsync((FrameworkElement)b)), "");
+        p.Children.Add(Group(Ui.Text("Importér", "BodyStrongTextBlockStyle"), import,
+            Footer("Henter et system fra en eksport eller en af de daglige sikkerhedskopier. Det nuværende system gemmes først som en kopi, og appen åbner igen.")));
+
+        // Nulstil: start helt forfra.
+        var reset = Ui.Btn("Nulstil appen…", async (b, _) => await Safe(() => ResetAsync((FrameworkElement)b)), "");
+        p.Children.Add(Group(Ui.Text("Start helt forfra", "BodyStrongTextBlockStyle"), reset,
+            Footer("Sletter reoler, placeringer, historik og lyttelog, så appen starter forfra. Det nuværende system gemmes først som en kopi, som kan importeres igen.")));
+    }
+
+    /// <summary>
+    /// En fejl i en async-knap (fx en fil-dialog, eller en anden dialog, der allerede er åben)
+    /// må aldrig lukke appen: den vises i fejlbjælken i stedet.
+    /// </summary>
+    private async Task Safe(Func<Task> action)
+    {
+        try { await action(); }
+        catch (Exception ex)
+        {
+            _model.CancelPendingChange();
+            _model.ErrorMessage = ex is System.Runtime.InteropServices.COMException
+                ? "Dialogen kunne ikke åbnes, fordi en anden dialog er åben. Prøv igen."
+                : AppModel.Describe(ex);
+        }
+    }
+
+    private static void InitPicker(object picker) => WinRT.Interop.InitializeWithWindow.Initialize(picker, MainWindow.Hwnd);
+
+    private async Task ExportAsync(FrameworkElement anchor)
+    {
+        var picker = new Windows.Storage.Pickers.FileSavePicker
+        {
+            SuggestedStartLocation = Windows.Storage.Pickers.PickerLocationId.DocumentsLibrary,
+            SuggestedFileName = Path.GetFileNameWithoutExtension(DataTransfer.ExportFileName(DateTimeOffset.Now)),
+        };
+        picker.FileTypeChoices.Add("Vinyl Shelf Finder-eksport", new List<string> { DataTransfer.Extension });
+        InitPicker(picker);
+        var file = await picker.PickSaveFileAsync();
+        if (file is null) return;
+        if (_model.ExportTo(file.Path))
+            await Info(anchor, "Eksporteret", $"Dit system er gemt i:\n{file.Path}\n\nGem filen et sikkert sted. Den kan importeres igen under Indstillinger › Sikkerhedskopi og data.");
+    }
+
+    private async Task ImportAsync(FrameworkElement anchor)
+    {
+        var picker = new Windows.Storage.Pickers.FileOpenPicker { SuggestedStartLocation = Windows.Storage.Pickers.PickerLocationId.DocumentsLibrary };
+        picker.FileTypeFilter.Add(DataTransfer.Extension);
+        InitPicker(picker);
+        var file = await picker.PickSingleFileAsync();
+        if (file is null) return;
+        if (_model.PrepareImport(file.Path) is not ImportSummary s) return;
+        var d = new ContentDialog
+        {
+            XamlRoot = anchor.XamlRoot,
+            Title = "Importér dette system?",
+            Content = Ui.VStack(10,
+                Ui.Text($"{file.Name} indeholder {Count(s.Vinyl, "plade", "plader")} og {Count(s.Cds, "cd", "cd'er")} fordelt på {Count(s.Sections, "sektion", "sektioner")}."),
+                Ui.Text("Det nuværende system erstattes. Det gemmes først som en kopi i mappen med sikkerhedskopier, så du kan komme tilbage til det. Appen lukker og åbner igen.", color: Ui.Secondary)),
+            PrimaryButtonText = "Importér og åbn igen",
+            CloseButtonText = "Annullér",
+            DefaultButton = ContentDialogButton.Close,
+        };
+        if (await d.ShowAsync() == ContentDialogResult.Primary) _model.ApplyAndRestart(reset: false, removeToken: false);
+        else _model.CancelPendingChange();
+    }
+
+    private async Task ResetAsync(FrameworkElement anchor)
+    {
+        var token = new CheckBox { Content = "Fjern også forbindelsen til Discogs (tokenet)", IsChecked = false, IsEnabled = !_model.IsDemo && _model.HasToken };
+        var d = new ContentDialog
+        {
+            XamlRoot = anchor.XamlRoot,
+            Title = "Start helt forfra?",
+            Content = Ui.VStack(12,
+                Ui.Text("Alle reoler, sektioner, placeringer, flueben, historik og lyttelog slettes for både plader og cd'er. Bagefter henter appen samlingen fra Discogs igen, og du laver reolerne forfra."),
+                Ui.Text("Det nuværende system gemmes først som en kopi i mappen med sikkerhedskopier, så du kan importere det igen. Appen lukker og åbner igen.", color: Ui.Secondary),
+                token),
+            PrimaryButtonText = "Nulstil og åbn igen",
+            CloseButtonText = "Annullér",
+            DefaultButton = ContentDialogButton.Close,
+        };
+        if (await d.ShowAsync() == ContentDialogResult.Primary) _model.ApplyAndRestart(reset: true, removeToken: token.IsChecked == true);
+    }
+
+    private static string Count(int n, string one, string many) => n == 1 ? $"1 {one}" : $"{n} {many}";
+
+    private static async Task Info(FrameworkElement anchor, string title, string text)
+    {
+        var d = new ContentDialog { XamlRoot = anchor.XamlRoot, Title = title, Content = Ui.Text(text), CloseButtonText = "OK" };
+        await d.ShowAsync();
     }
 
     // MARK: Opdatering

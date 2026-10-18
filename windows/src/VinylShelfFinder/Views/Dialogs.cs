@@ -93,7 +93,11 @@ public static class Dialogs
         void FillAfter()
         {
             after.Items.Clear();
-            foreach (var id in SectionIds()) after.Items.Add(lib.Item(id)?.FullName ?? "?");
+            // Hver linje er sit eget element med nummer: to kopier af samme plade gav ellers to ens
+            // tekster, som får ComboBox'ens tilgængelighed (Oplæser) til at løbe i ring og fryse appen.
+            int n = 0;
+            foreach (var id in SectionIds())
+                after.Items.Add(new ComboBoxItem { Content = $"{++n}. {lib.Item(id)?.FullName ?? "?"}", Tag = id });
         }
         section.SelectionChanged += (_, _) => { FillAfter(); Refresh(); };
         modes.SelectionChanged += (_, _) => Refresh();

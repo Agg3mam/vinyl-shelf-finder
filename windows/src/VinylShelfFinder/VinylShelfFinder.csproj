@@ -10,6 +10,8 @@
     <RootNamespace>VinylShelfFinder</RootNamespace>
     <AssemblyName>VinylShelfFinder</AssemblyName>
     <ApplicationManifest>app.manifest</ApplicationManifest>
+    <!-- Samme logo som Mac (Resources/AppIcon.icns), uden macOS' tomme kant. -->
+    <ApplicationIcon>Assets\AppIcon.ico</ApplicationIcon>
     <Platforms>x64</Platforms>
     <PlatformTarget>x64</PlatformTarget>
     <RuntimeIdentifier>win-x64</RuntimeIdentifier>
@@ -36,6 +38,10 @@
     <PackageReference Include="Microsoft.Windows.SDK.BuildTools" Version="10.0.26100.1742" />
     <!-- QR-koder på reolskiltene (MIT-licens, ren C#). -->
     <PackageReference Include="QRCoder" Version="1.6.0" />
+  </ItemGroup>
+  <ItemGroup>
+    <!-- Vinduets titellinje og proceslinjen (AppWindow.SetIcon i MainWindow). -->
+    <Content Include="Assets\AppIcon.ico" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\VinylCore\VinylCore.csproj" />

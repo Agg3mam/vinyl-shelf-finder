@@ -190,14 +190,14 @@ public sealed class SearchPane : IPane
         if (_model.Query.Length == 0)
         {
             _list.Visibility = Visibility.Collapsed;
-            _emptyHost.Children.Add(Ui.Empty(Ui.Glyph.Disc, Ui.Plader(_model.Library.Copies.Count),
+            _emptyHost.Children.Add(Ui.Empty(Ui.Glyph.Disc, _model.Medium.Count(_model.Library.Copies.Count),
                 "Skriv for at søge. ↑↓ vælger, Enter åbner “Find i reolen”, Esc rydder."));
         }
         else if (_shown.Count == 0)
         {
             _list.Visibility = Visibility.Collapsed;
             _emptyHost.Children.Add(Ui.Empty(Ui.Glyph.Search, "Ingen resultater",
-                $"Ingen plader matcher “{q}”. Prøv med færre ord, eller søg på katalognummer."));
+                $"Ingen {_model.Medium.Plural()} matcher “{q}”. Prøv med færre ord, eller søg på katalognummer."));
         }
         else
         {

@@ -217,7 +217,7 @@ public sealed class CheckShelf
     {
         var lib = model.Library;
         var p = new StackPanel { Spacing = 10, Width = 480 };
-        p.Children.Add(Ui.Text($"{r.Total} plader i din Discogs Collection.", color: Ui.Secondary));
+        p.Children.Add(Ui.Text($"{r.Total} plader og cd'er i din Discogs Collection.", color: Ui.Secondary));
         if (r.NewCopies.Count == 0 && r.RemovedCopies.Count == 0 && r.UpdatedReleases == 0 && r.ReturnedCopies.Count == 0)
             p.Children.Add(Ui.Label(Ui.Glyph.Check, "Ingen ændringer."));
         if (r.NewCopies.Count > 0)
@@ -232,11 +232,11 @@ public sealed class CheckShelf
             }
         }
         if (r.RemovedCopies.Count > 0)
-            p.Children.Add(Ui.Label(Ui.Glyph.Warning, $"{r.RemovedCopies.Count} plader er fjernet fra Discogs. Deres fysiske placering er bevaret – se “Fjernet fra Discogs”."));
+            p.Children.Add(Ui.Label(Ui.Glyph.Warning, $"{Ui.Plader(r.RemovedCopies.Count)} er fjernet fra Discogs. {(r.RemovedCopies.Count == 1 ? "Dens" : "Deres")} fysiske placering er bevaret – se “Fjernet fra Discogs”."));
         if (r.ReturnedCopies.Count > 0)
-            p.Children.Add(Ui.Label(Ui.Glyph.Undo, $"{r.ReturnedCopies.Count} plader er tilbage i Discogs Collection."));
+            p.Children.Add(Ui.Label(Ui.Glyph.Undo, $"{Ui.Plader(r.ReturnedCopies.Count)} er tilbage i Discogs Collection."));
         if (r.UpdatedReleases > 0)
-            p.Children.Add(Ui.Label("", $"Oplysninger fra Discogs er opdateret for {r.UpdatedReleases} plader. Ingen plader er flyttet."));
+            p.Children.Add(Ui.Label("", $"Oplysninger fra Discogs er opdateret for {Ui.Plader(r.UpdatedReleases)}. Ingen plader er flyttet."));
         var d = new ContentDialog
         {
             XamlRoot = root,

@@ -70,6 +70,9 @@ static class DataChecks
         CoverFlow();
         Planner();
         Cds();
+        SortListChecks();
+        Transfer();
+        Surname();
 
         foreach (var d in Dirs)
         {
@@ -108,6 +111,24 @@ static class DataChecks
         var back = SortRules.FromJson(json)!;
         Check.That(back.Various == VariousPlacement.Last && !back.UseDiscogsOrder && back.WithinArtist == WithinArtist.Year, "regler læses tilbage");
         Check.That(SortRules.FromJson("ikke json") is null && SortRules.FromJson("{\"various\":\"???\"}") is null, "ugyldige regler → standard");
+
+        // Tal sidst: kunstnere, der starter med et tal, efter Z og Æ Ø Å – også i Discogs' rækkefølge.
+        Check.That(r.NumbersLast && SortRules.StartsWithDigit(r.SortArtist("The 1975")) && SortRules.StartsWithDigit("10cc")
+                   && !SortRules.StartsWithDigit(r.SortArtist("Blur")) && !SortRules.StartsWithDigit(""), "tal genkendes (efter “The”)");
+        static RecordItem Rec(long id, string artist, int? rank) =>
+            new(new Copy(id, id, (int)id, DiscogsRank: rank), new Release((int)id, artist, "T"));
+        // Discogs' egen rækkefølge: tal først.
+        var discogs = new[] { Rec(1, "10cc", 0), Rec(2, "2Pac", 1), Rec(3, "ABBA", 2), Rec(4, "Zappa", 3), Rec(5, "Åge Aleksandersen", 4) };
+        Check.That(r.Sorted(discogs).Select(i => i.Artist).SequenceEqual(new[] { "ABBA", "Zappa", "Åge Aleksandersen", "10cc", "2Pac" }),
+                   "Discogs-rækkefølge: tal flyttes sidst og beholder deres indbyrdes orden");
+        var own = new SortRules { UseDiscogsOrder = false };
+        Check.That(own.Sorted(discogs).Select(i => i.Artist).SequenceEqual(new[] { "ABBA", "Zappa", "Åge Aleksandersen", "2Pac", "10cc" }),
+                   "egne regler: bogstaver, Æ Ø Å, og så tal i talorden");
+        var first = new SortRules { NumbersLast = false };
+        Check.That(first.Sorted(discogs).First().Artist == "10cc", "kan slås fra (tal først som i Discogs)");
+        var nlJson = new SortRules { NumbersLast = false }.ToJson();
+        Check.That(nlJson.Contains("\"numbersLast\":false") && SortRules.FromJson(nlJson)!.NumbersLast == false
+                   && SortRules.FromJson("{\"danishAlphabet\":true}")!.NumbersLast, "tal-reglen gemmes; gamle regler får standarden (tal sidst)");
     });
 
     // MARK: Database-wrapperen
@@ -362,7 +383,7 @@ static class DataChecks
         var l = s.LoadLibrary();
         var d = new SortRules();   // standard: UseDiscogsOrder = true
         Check.That(d.UseDiscogsOrder, "Discogs-rækkefølge er standard");
-        Check.That(d.Sorted(l.AllItems).Select(i => i.Copy.InstanceId!.Value).SequenceEqual(new[] { 1, 2, 3 }), "sorteret præcis som Discogs");
+        Check.That(d.Sorted(l.AllItems).Select(i => i.Copy.InstanceId!.Value).SequenceEqual(new long[] { 1, 2, 3 }), "sorteret præcis som Discogs");
         // Ny plade midt i Discogs-listen → forslag efter dens forgænger i Discogs
         var sorted = d.Sorted(l.AllItems).Select(i => i.Id).ToList();
         var locId = s.AddSection(1, "A");
@@ -385,6 +406,15 @@ static class DataChecks
         Check.That(!back.UseDiscogsOrder && back.ArtistOverrides.Count == 1 && back.ArtistOverrides["Bob Dylan"] == "Dylan, Bob",
                    "regler gemmes; kunstner-overrides i egen tabel, tomme droppes");
         Check.That(!(s.Setting("sort_rules") ?? "").Contains("Dylan"), "kunstner-overrides står ikke i sort_rules");
+
+        // instance_id over int.MaxValue gemmes, læses og genkendes ved næste sync (ingen dubletter).
+        using var bigStore = new ShelfStore(TempDb("big-instance"));
+        var bigItem = Item(1, 7, "Kim Larsen", "Værsgo") with { InstanceId = 2_400_000_123L };
+        bigStore.ApplyCollection(new[] { bigItem });
+        var again = bigStore.ApplyCollection(new[] { bigItem });
+        var bigLib = bigStore.LoadLibrary();
+        Check.That(bigLib.Copies.Count == 1 && bigLib.Copies.Values.Single().InstanceId == 2_400_000_123L && again.NewCopies.Count == 0,
+                   "instance_id over int.MaxValue overlever databasen og to syncs");
     });
 
     // MARK: Cd'er: egen hylde i samme samling (samme checks som på Mac)
@@ -452,11 +482,196 @@ static class DataChecks
         s.ApplyCollection(all);
         Check.That(s.LoadLibrary().Copies.GetValueOrDefault(kidA)?.MediumOverride == Medium.Vinyl, "sync bevarer valget af hylde");
 
+        // Digitale filer ("File") står ikke fysisk nogen steder: hverken på plade- eller cd-hylden.
+        Check.That(MediumExtensions.IsDigital("File, MP3, Album") && MediumExtensions.IsDigital("8×File, FLAC")
+                   && !MediumExtensions.IsDigital("Vinyl, LP") && !MediumExtensions.IsDigital("Box Set, CD") && !MediumExtensions.IsDigital(null),
+                   "digitale filer genkendes (kun første format)");
+        using var f = new ShelfStore(TempDb("digital"));
+        var withFile = new List<DiscogsCollectionItem> { It(0, "ABBA", "Arrival", "Vinyl, LP"), It(1, "Blur", "Parklife", "CD, Album"),
+            It(5, "Moby", "Play", "File, MP3, Album"), It(6, "Björk", "Vespertine", "2×DVD, Album") };
+        var fr = f.ApplyCollection(withFile);
+        var fc = f.MediumCounts();
+        Check.That(fc.GetValueOrDefault(Medium.Vinyl) == 2 && fc.GetValueOrDefault(Medium.Cd) == 1 && fr.NewCopies.Count == 3,
+                   "fil tælles ikke med; dvd bliver på pladehylden");
+        Check.That(f.LoadLibrary().AllItems.All(i => i.Title != "Play") && f.LoadLibrary(Medium.Cd).AllItems.All(i => i.Title != "Play"),
+                   "filen står hverken blandt plader eller cd'er");
+        var again = f.ApplyCollection(withFile);
+        Check.That(again.NewCopies.Count == 0 && again.RemovedCopies.Count == 0, "filen gemmes og ses ikke som ny eller fjernet ved næste sync");
+        var playId = f.Db.Query("SELECT c.id FROM copies c WHERE c.release_id = 700005").Single().Long("id")!.Value;
+        f.SetMedium(playId, Medium.Cd);
+        Check.That(f.LoadLibrary(Medium.Cd).Unplaced.Contains(playId), "brugeren kan selv sætte en fil på en hylde");
+        var cdLoc = f.AddSection(1, "A", Medium.Cd);
+        f.Move(playId, cdLoc, 0);
+        f.SetMedium(playId, null);
+        Check.That(f.Db.Query("SELECT copy_id FROM placements WHERE copy_id = ?", playId).Count == 0,"fil tilbage til Discogs' format: pladsen fjernes (ingen skjult placering)");
+        var gone = f.ApplyCollection(withFile.Where(i => i.Release.Title != "Play").ToList());
+        Check.That(gone.RemovedCopies.Count == 0, "en fil, der forsvinder fra Discogs, meldes ikke som fjernet plade");
+
         using var d = new ShelfStore(TempDb("cd-demo"));
         DemoData.SeedIfEmpty(d);
         var dcd = d.LoadLibrary(Medium.Cd);
         Check.That(dcd.Copies.Count == 10 && dcd.Locations.Count == 2 && dcd.Unplaced.Count == 0, "demo: cd-reol med 2 sektioner");
         Check.That(d.LoadLibrary().Copies.Count == 43, "demo: pladerne er uændrede");
+    });
+
+    // MARK: Sorteringslisten (plader og cd'er hver for sig)
+
+    private static void SortListChecks() => Check.Section("sorteringsliste", () =>
+    {
+        using var s = new ShelfStore(TempDb("sortlist"));
+        static DiscogsCollectionItem It(int i, string artist, string title, string format) =>
+            new(80_000 + i, null, new Release(800_000 + i, artist, title, Format: format));
+        // Discogs blander formaterne: ABBA (lp), Blur (cd), Bowie (lp), Radiohead (cd).
+        s.ApplyCollection(new[] { It(0, "ABBA", "Arrival", "Vinyl, LP"), It(1, "Blur", "Parklife", "CD, Album"),
+            It(2, "Bowie", "Low", "Vinyl, LP"), It(3, "Radiohead", "Kid A", "CD, Album") });
+        var rules = new SortRules();
+        var vinyl = SortList.Build(s.LoadLibrary(), rules);
+        var cds = SortList.Build(s.LoadLibrary(Medium.Cd), rules);
+        Check.That(vinyl.Select(e => e.Item.Title).SequenceEqual(new[] { "Arrival", "Low" }) && vinyl.Select(e => e.Number).SequenceEqual(new int?[] { 1, 2 }),
+                   "uden reoler: pladerne nummereret 1, 2 uden cd'er imellem");
+        Check.That(cds.Select(e => e.Item.Title).SequenceEqual(new[] { "Parklife", "Kid A" }) && cds.All(e => e.Location is null),
+                   "cd'erne har deres egen liste");
+
+        // Med reoler: fysisk rækkefølge sektion for sektion, nye til sidst.
+        var lib = s.LoadLibrary();
+        var ids = rules.Sorted(lib.AllItems).Select(i => i.Id).ToList();
+        s.CreateLayout(new List<(int, string, IReadOnlyList<long>)> { (1, "A", ids.Take(1).ToList()), (1, "B", ids.Skip(1).ToList()) });
+        s.ApplyCollection(new[] { It(0, "ABBA", "Arrival", "Vinyl, LP"), It(1, "Blur", "Parklife", "CD, Album"),
+            It(2, "Bowie", "Low", "Vinyl, LP"), It(3, "Radiohead", "Kid A", "CD, Album"), It(4, "Air", "Moon Safari", "Vinyl, LP") });
+        lib = s.LoadLibrary();
+        var low = lib.AllItems.First(i => i.Title == "Low").Id;
+        s.SetStatus(low, CopyStatus.Lent, "Mads");
+        var list = SortList.Build(s.LoadLibrary(), rules);
+        Check.That(list.Select(e => e.Item.Title).SequenceEqual(new[] { "Arrival", "Low", "Moon Safari" })
+                   && list[0].Location?.Section == "A" && list[1].Location?.Section == "B" && list[2].Location is null,
+                   "med reoler: sektion A, sektion B, og ny plade uden plads til sidst");
+        Check.That(list[1].Number is null && list[2].Number == 2 && SortList.Countable(list) == 2, "udlånt plade har intet nummer og tæller ikke med");
+
+        // Flueben gemmes pr. hylde.
+        var arrival = list[0].Item.Id;
+        s.SetSortChecked(Medium.Vinyl, arrival, true);
+        s.SetSortChecked(Medium.Vinyl, arrival, true);
+        Check.That(s.SortChecked(Medium.Vinyl).SetEquals(new[] { arrival }) && s.SortChecked(Medium.Cd).Count == 0, "flueben gemmes pr. hylde");
+        Check.That(SortList.NextUnchecked(list, s.SortChecked(Medium.Vinyl))?.Item.Title == "Moon Safari", "næste uden flueben springer udlånte over");
+        s.SetSortChecked(Medium.Vinyl, arrival, false);
+        Check.That(s.SortChecked(Medium.Vinyl).Count == 0, "flueben kan fjernes");
+        s.SetSortChecked(Medium.Cd, cds[0].Item.Id, true);
+        s.ClearSortChecked(Medium.Cd);
+        Check.That(s.SortChecked(Medium.Cd).Count == 0, "start forfra rydder fluebenene");
+    });
+
+    // MARK: Efternavn først
+
+    private static void Surname() => Check.Section("efternavn først", () =>
+    {
+        Check.That(SurnameSort.Reverse("Bob Dylan") == "Dylan, Bob" && SurnameSort.Reverse("Kim Larsen") == "Larsen, Kim", "for- og efternavn vendes");
+        Check.That(SurnameSort.Reverse("Ludwig van Beethoven") == "Beethoven, Ludwig van" && SurnameSort.Reverse("Sammy Davis Jr.") == "Davis, Sammy Jr.",
+                   "partikel bliver hos fornavnet, Jr. bliver bagerst");
+        Check.That(SurnameSort.Reverse("Gasolin'") is null && SurnameSort.Reverse("The Beatles") is null && SurnameSort.Reverse("Simon & Garfunkel") is null
+                   && SurnameSort.Reverse("Various") is null && SurnameSort.Reverse("UB40") is null && SurnameSort.Reverse("Earth Wind and Fire") is null
+                   && SurnameSort.Reverse("Crosby Stills Nash Young") is null, "ét ord, The, &, tal, and og fire ord vendes ikke");
+        Check.That(SurnameSort.LooksLikePerson("Leonard Cohen") && !SurnameSort.LooksLikePerson("Pink Floyd") && !SurnameSort.LooksLikePerson("Massive Attack")
+                   && !SurnameSort.LooksLikePerson("The Allman Brothers Band"), "gættet: person eller band");
+        Check.That(!SurnameSort.LooksLikePerson("Black Stone Cherry") && !SurnameSort.LooksLikePerson("Blue Cheer") && SurnameSort.Reverse("A Perfect Circle") is null
+                   && SurnameSort.Reverse("Beethoven - Schubert") is null && SurnameSort.LooksLikePerson("B.B. King") && SurnameSort.LooksLikePerson("Alice Cooper"),
+                   "typiske bandnavne gættes som bands; B.B. King er stadig en person");
+
+        var cands = SurnameSort.Candidates(new[] { "Bob Dylan", "Pink Floyd", "Bob Dylan", "Kim Larsen", "ABBA" });
+        Check.That(cands.Select(c => c.Artist).SequenceEqual(new[] { "Bob Dylan", "Kim Larsen", "Pink Floyd" }), "hver kunstner én gang, kun dem der kan vendes");
+
+        var rules = new SortRules();
+        rules.ArtistOverrides["Kim Larsen"] = "Larsen, Kim (Gasolin')";
+        var applied = SurnameSort.Apply(rules, cands, new HashSet<string> { "Bob Dylan", "Kim Larsen" });
+        Check.That(applied.ArtistOverrides["Bob Dylan"] == "Dylan, Bob" && applied.ArtistOverrides["Kim Larsen"] == "Larsen, Kim (Gasolin')"
+                   && !applied.ArtistOverrides.ContainsKey("Pink Floyd") && !applied.UseDiscogsOrder && rules.UseDiscogsOrder,
+                   "valgte får efternavn (eget navn beholdes), Discogs-rækkefølge slås fra, originalen røres ikke");
+        var undone = SurnameSort.Apply(applied, cands, new HashSet<string> { "Kim Larsen" });
+        Check.That(!undone.ArtistOverrides.ContainsKey("Bob Dylan") && undone.ArtistOverrides.ContainsKey("Kim Larsen"), "fravalgt: det vendte navn fjernes igen");
+
+        // Sorteringen bruger det: Cohen før Dylan før Larsen, uanset fornavn.
+        static RecordItem Rec(long id, string artist) => new(new Copy(id, id, (int)id), new Release((int)id, artist, "T"));
+        var withCohen = SurnameSort.Apply(applied, SurnameSort.Candidates(new[] { "Leonard Cohen" }), new HashSet<string> { "Leonard Cohen" });
+        var sorted = withCohen.Sorted(new[] { Rec(1, "Kim Larsen"), Rec(2, "Bob Dylan"), Rec(3, "Leonard Cohen") });
+        Check.That(sorted.Select(i => i.Artist).SequenceEqual(new[] { "Leonard Cohen", "Bob Dylan", "Kim Larsen" }), "sorteres efter efternavn");
+
+        using var s = new ShelfStore(TempDb("surname"));
+        s.SaveSurnameNotPersons(new[] { "Pink Floyd", "Daft Punk", "Pink Floyd" });
+        Check.That(s.SurnameNotPersons().SetEquals(new[] { "Daft Punk", "Pink Floyd" }), "ikke-personer huskes");
+        s.SetSetting("surname_not_persons", "ødelagt");
+        Check.That(s.SurnameNotPersons().Count == 0, "ødelagt gemt liste → tom, ingen fejl");
+    });
+
+    // MARK: Eksport, import og nulstilling
+
+    private static void Transfer() => Check.Section("eksport, import og nulstilling", () =>
+    {
+        var dir = Check.TempDir();
+        Dirs.Add(dir);
+        var dbPath = Path.Combine(dir, "vinyl.sqlite");
+        var export = Path.Combine(dir, "ud", DataTransfer.ExportFileName(new DateTimeOffset(2026, 10, 17, 21, 5, 0, TimeSpan.FromHours(2))));
+        Check.That(Path.GetFileName(export) == "Vinyl Shelf Finder 2026-10-17.sqlite", "eksportens filnavn");
+        Check.That(DataTransfer.SafetyFileName("nulstilling", new DateTimeOffset(2026, 10, 17, 21, 5, 0, TimeSpan.FromHours(2)))
+                   .StartsWith("før-nulstilling-2026-10-17-") && DatabaseBackup.DateFromFileName("før-nulstilling-2026-10-17-2105.sqlite") is null,
+                   "sikkerhedskopien før nulstilling ryddes ikke væk som en daglig kopi");
+
+        using (var s = new ShelfStore(dbPath))
+        {
+            s.ApplyCollection(new[] { Item(1, 1, "ABBA", "Arrival"), Item(2, 2, "Bowie", "Low") });
+            var ids = s.LoadLibrary().AllItems.Select(i => i.Id).ToList();
+            s.CreateLayout(new List<(int, string, IReadOnlyList<long>)> { (1, "A", ids) });
+            s.SetSortChecked(Medium.Vinyl, ids[0], true);
+            DataTransfer.Export(s, export);
+            DataTransfer.Export(s, export); // en eksisterende fil erstattes
+        }
+        Check.That(File.Exists(export) && !Directory.GetFiles(Path.GetDirectoryName(export)!).Any(f => f.EndsWith(".partial")), "eksport gemmes som én fil");
+
+        // Nulstilling: tom database ved næste start.
+        DataTransfer.RequestReset(dbPath);
+        Check.That(DataTransfer.ApplyPending(dbPath) == DataTransfer.Applied.Reset && !File.Exists(dbPath), "nulstilling sletter databasen før start");
+        Check.That(DataTransfer.ApplyPending(dbPath) == DataTransfer.Applied.None, "intet at gøre bagefter");
+        using (var s = new ShelfStore(dbPath))
+            Check.That(s.LoadLibrary().Copies.Count == 0 && s.LoadLibrary().Locations.Count == 0 && s.SortChecked(Medium.Vinyl).Count == 0, "appen starter helt forfra");
+
+        // Import: det gamle system kommer tilbage.
+        var summary = DataTransfer.RequestImport(dbPath, export);
+        Check.That(summary == new ImportSummary(2, 0, 1), $"import viser indholdet først: {summary}");
+        Check.That(File.Exists(export), "den valgte fil røres ikke");
+        // Lukkes appen, før brugeren har sagt ja, sker der intet ved næste start.
+        Check.That(DataTransfer.ApplyPending(dbPath) == DataTransfer.Applied.None && !File.Exists(DataTransfer.StagedImport(dbPath)),
+                   "en import uden bekræftelse bruges ikke og ryddes væk");
+        using (var s = new ShelfStore(dbPath)) Check.That(s.LoadLibrary().Copies.Count == 0, "databasen er urørt uden bekræftelse");
+        DataTransfer.RequestImport(dbPath, export);
+        DataTransfer.CommitImport(dbPath);
+        Check.That(DataTransfer.ApplyPending(dbPath) == DataTransfer.Applied.Import, "bekræftet import udføres ved start");
+        using (var s = new ShelfStore(dbPath))
+        {
+            var lib = s.LoadLibrary();
+            Check.That(lib.Copies.Count == 2 && lib.Locations.Count == 1 && lib.Unplaced.Count == 0 && s.SortChecked(Medium.Vinyl).Count == 1,
+                       "reoler, placeringer og flueben er tilbage");
+        }
+
+        // Forkerte filer afvises, og intet bestilles.
+        var junk = Path.Combine(dir, "noter.sqlite");
+        File.WriteAllText(junk, "ikke en database");
+        bool refused = false;
+        try { DataTransfer.RequestImport(dbPath, junk); }
+        catch (DatabaseException e) { refused = e.UserFacing && e.UserMessage.Contains("ikke en eksport"); }
+        Check.That(refused && !File.Exists(DataTransfer.ImportFile(dbPath)), "en fil, der ikke er en eksport, afvises");
+        var empty = Path.Combine(dir, "tom.sqlite");
+        using (new ShelfStore(empty)) { }
+        bool emptyRefused = false;
+        try { DataTransfer.RequestImport(dbPath, empty); }
+        catch (DatabaseException e) { emptyRefused = e.UserFacing && e.UserMessage.Contains("ingen plader"); }
+        Check.That(emptyRefused && !File.Exists(DataTransfer.StagedImport(dbPath)), "en tom database afvises");
+        bool own = false;
+        try { DataTransfer.RequestImport(dbPath, dbPath); }
+        catch (DatabaseException e) { own = e.UserFacing; }
+        Check.That(own, "appens egen database kan ikke importeres");
+
+        // Fortryd: en bestilt nulstilling kan aflyses.
+        DataTransfer.RequestReset(dbPath);
+        DataTransfer.CancelPending(dbPath);
+        Check.That(DataTransfer.ApplyPending(dbPath) == DataTransfer.Applied.None && File.Exists(dbPath), "bestilt nulstilling kan fortrydes");
     });
 
     // MARK: Reference-mode på demo-data

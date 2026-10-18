@@ -199,7 +199,8 @@ public sealed partial class ShelfStore : IDisposable
         foreach (var r in Db.Query("SELECT * FROM copies"))
         {
             var c = CopyFrom(r);
-            var m = c.MediumOverride ?? MediumExtensions.Of(releases.TryGetValue(c.ReleaseId, out var rel) ? rel.Format : null);
+            // Digitale filer kommer hverken på plade- eller cd-hylden.
+            var m = MediumExtensions.ShelfOf(c.MediumOverride, releases.TryGetValue(c.ReleaseId, out var rel) ? rel.Format : null);
             if (m == medium) copies[c.Id] = c;
         }
         var locations = Db.Query("SELECT * FROM locations WHERE medium = ?", medium.RawValue()).Select(r =>
@@ -218,8 +219,8 @@ public sealed partial class ShelfStore : IDisposable
         var counts = new Dictionary<Medium, int>();
         foreach (var r in Db.Query("SELECT c.medium_override, r.format FROM copies c JOIN releases r ON r.discogs_release_id = c.release_id"))
         {
-            var m = MediumExtensions.FromRaw(r.Text("medium_override")) ?? MediumExtensions.Of(r.Text("format"));
-            counts[m] = counts.GetValueOrDefault(m) + 1;
+            if (MediumExtensions.ShelfOf(MediumExtensions.FromRaw(r.Text("medium_override")), r.Text("format")) is Medium m)
+                counts[m] = counts.GetValueOrDefault(m) + 1;
         }
         return counts;
     }
@@ -231,7 +232,7 @@ public sealed partial class ShelfStore : IDisposable
 
     private static Copy CopyFrom(SqlRow r) => new(
         r.Long("id")!.Value,
-        r.Int("discogs_instance_id"),
+        r.Long("discogs_instance_id"),
         r.Int("release_id") ?? 0,
         CopyStatusExtensions.FromRaw(r.Text("status") ?? "home") ?? CopyStatus.Home,
         r.Text("status_note"),
@@ -457,8 +458,9 @@ public sealed partial class ShelfStore : IDisposable
         {
             var fmt = Db.Query("SELECT r.format FROM copies c JOIN releases r ON r.discogs_release_id = c.release_id WHERE c.id = ?", copyId)
                 .FirstOrDefault()?.Text("format");
-            var now = medium ?? MediumExtensions.Of(fmt);
-            if (loc.Text("medium") != now.RawValue()) Unplace(copyId);
+            // null = ingen hylde (en digital fil tilbage til "Følg Discogs"): pladsen fjernes også.
+            var now = MediumExtensions.ShelfOf(medium, fmt);
+            if (now is null || loc.Text("medium") != now.Value.RawValue()) Unplace(copyId);
         }
         Db.Run("UPDATE copies SET medium_override = ? WHERE id = ?", medium?.RawValue(), copyId);
     }
@@ -491,7 +493,7 @@ public sealed partial class ShelfStore : IDisposable
     {
         // Discogs kan levere samme instance to gange (fx hvis samlingen ændres, mens siderne
         // hentes). Den første forekomst vinder; ellers fejler hele syncen på UNIQUE(discogs_instance_id).
-        var firstSeen = new HashSet<int>();
+        var firstSeen = new HashSet<long>();
         var items = collection.Where(i => firstSeen.Add(i.InstanceId)).ToList();
         var report = new SyncReport { Total = items.Count };
         Db.Transaction(() =>
@@ -529,13 +531,13 @@ public sealed partial class ShelfStore : IDisposable
                 }
             }
 
-            var copyByInstance = new Dictionary<int, SqlRow>();
+            var copyByInstance = new Dictionary<long, SqlRow>();
             foreach (var c in Db.Query("SELECT id, discogs_instance_id, in_discogs, release_id FROM copies WHERE discogs_instance_id IS NOT NULL"))
-                copyByInstance[c.Int("discogs_instance_id")!.Value] = c;
+                copyByInstance[c.Long("discogs_instance_id")!.Value] = c;
 
             // Discogs' egen rækkefølge gemmes, så "Præcis som Discogs" kan bruge den.
             Db.Run("UPDATE copies SET discogs_rank = NULL");
-            var seen = new HashSet<int>();
+            var seen = new HashSet<long>();
             for (int rank = 0; rank < items.Count; rank++)
             {
                 var it = items[rank];
@@ -558,7 +560,8 @@ public sealed partial class ShelfStore : IDisposable
                         INSERT INTO copies(discogs_instance_id, release_id, status, in_discogs, date_added, created_at, discogs_rank)
                         VALUES(?, ?, 'home', 1, ?, ?, ?)
                         """, it.InstanceId, it.Release.Id, it.DateAdded, now, rank);
-                    report.NewCopies.Add(id);
+                    // Digitale filer gemmes (så de ikke ser "fjernet" ud), men meldes ikke som nye plader.
+                    if (!MediumExtensions.IsDigital(it.Release.Format)) report.NewCopies.Add(id);
                     Log(HistoryKind.AddedFromDiscogs, id, $"Ny i Discogs: {it.Release.Artist} – {it.Release.Title}");
                 }
             }
@@ -568,7 +571,9 @@ public sealed partial class ShelfStore : IDisposable
                 if (seen.Contains(instance) || c.Long("in_discogs") == 0) continue;
                 var id = c.Long("id")!.Value;
                 Db.Run("UPDATE copies SET in_discogs = 0, removed_from_discogs_at = ? WHERE id = ?", now, id);
-                report.RemovedCopies.Add(id);
+                var releaseId = (int)(c.Long("release_id") ?? 0);
+                if (!MediumExtensions.IsDigital(existingReleases.TryGetValue(releaseId, out var rel) ? rel.Format : null))
+                    report.RemovedCopies.Add(id);
                 Log(HistoryKind.RemovedFromDiscogs, id, $"{RecordName(id)} er ikke længere i din Discogs-samling. Pladsen i reolen er bevaret.");
             }
             if (report.UpdatedReleases > 0)

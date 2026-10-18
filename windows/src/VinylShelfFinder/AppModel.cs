@@ -5,7 +5,7 @@ using VinylShelfFinder.Core;
 
 namespace VinylShelfFinder;
 
-public enum SidebarKind { Search, NewRecords, Removed, Away, Section, History, Value, Listen, Plays, FindNew }
+public enum SidebarKind { Search, NewRecords, Removed, Away, Section, History, Value, Listen, Plays, FindNew, SortList }
 
 /// <summary>Punkt i sidepanelet. <see cref="SectionId"/> bruges kun ved <see cref="SidebarKind.Section"/>.</summary>
 public sealed record SidebarItem(SidebarKind Kind, long SectionId = 0)
@@ -43,16 +43,12 @@ public sealed class AppModel : INotifyPropertyChanged
         _dispatcher = DispatcherQueue.GetForCurrentThread();
         // Demo-tilstanden må aldrig røre adgangskodelageret: den får en tom hukommelses-udgave.
         _token = demo ? new InMemorySecretStore() : WindowsCredentialStore.Discogs;
-        if (demo)
-        {
-            var dir = Path.GetDirectoryName(ShelfStore.DefaultPath)!;
-            Store = new ShelfStore(Path.Combine(dir, "demo.sqlite"));
-            DemoData.SeedIfEmpty(Store);
-        }
-        else
-        {
-            Store = new ShelfStore(ShelfStore.DefaultPath);
-        }
+        var path = demo ? Path.Combine(Path.GetDirectoryName(ShelfStore.DefaultPath)!, "demo.sqlite") : ShelfStore.DefaultPath;
+        // En bestilt import eller nulstilling (fra Indstillinger › Sikkerhedskopi) udføres, før databasen åbnes.
+        try { JustApplied = DataTransfer.ApplyPending(path); }
+        catch (Exception ex) { _errorMessage = "Importen eller nulstillingen kunne ikke gennemføres: " + ex.Message; }
+        Store = new ShelfStore(path);
+        if (demo) DemoData.SeedIfEmpty(Store);
         _rules = Store.LoadSortRules();
         _neighborCount = int.TryParse(Store.Setting("neighbor_count"), out var n) && n > 0 ? n : 1;
         _username = Store.Setting("discogs_username");
@@ -194,6 +190,7 @@ public sealed class AppModel : INotifyPropertyChanged
         {
             var lib = Store.LoadLibrary(Medium);
             _mediumCounts = Store.MediumCounts();
+            LoadSortChecked();
             _searchIndex = new SearchIndex(lib);
             Stats = new ListeningStats(Store.LoadPlays());
             Library = lib;
@@ -432,6 +429,95 @@ public sealed class AppModel : INotifyPropertyChanged
         {
             BackupError = Describe(ex);
         }
+    }
+
+    // MARK: Eksport, import og nulstilling (se DataTransfer)
+
+    /// <summary>Det, der blev udført ved denne start (vises én gang som besked).</summary>
+    public DataTransfer.Applied JustApplied { get; }
+
+    /// <summary>Hele systemet til en fil, som kan importeres igen senere.</summary>
+    public bool ExportTo(string path)
+    {
+        try { DataTransfer.Export(Store, path); return true; }
+        catch (Exception ex) { ErrorMessage = Describe(ex); return false; }
+    }
+
+    /// <summary>Kontrollerer filen og lægger den klar. Selve skiftet sker, når appen åbner igen.</summary>
+    public ImportSummary? PrepareImport(string path)
+    {
+        try { return DataTransfer.RequestImport(Store.Db.Path, path); }
+        catch (Exception ex) { ErrorMessage = Describe(ex); return null; }
+    }
+
+    public void CancelPendingChange()
+    {
+        try { DataTransfer.CancelPending(Store.Db.Path); } catch { }
+    }
+
+    /// <summary>
+    /// Gemmer en sikkerhedskopi af det nuværende system og genstarter appen, så den bestilte import
+    /// eller nulstilling udføres. `reset`: appen begynder forfra; `removeToken`: Discogs-forbindelsen fjernes også.
+    /// </summary>
+    public bool ApplyAndRestart(bool reset, bool removeToken)
+    {
+        try
+        {
+            var folder = IsDemo ? Path.GetDirectoryName(Store.Db.Path)! : BackupFolder;
+            DataTransfer.SafetyCopy(Store, folder, reset ? "nulstilling" : "import");
+        }
+        catch (Exception ex)
+        {
+            CancelPendingChange();
+            ErrorMessage = "Der kunne ikke tages en sikkerhedskopi først, så intet er ændret. " + Describe(ex);
+            return false;
+        }
+        try
+        {
+            // Først nu (efter ja og sikkerhedskopi) bliver ændringen aktiv for næste start.
+            if (reset) DataTransfer.RequestReset(Store.Db.Path);
+            else DataTransfer.CommitImport(Store.Db.Path);
+            var args = IsDemo ? "--demo" : "";
+            // Den nye udgave venter selv på, at denne lukker databasen (DataTransfer.ApplyPending).
+            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(Environment.ProcessPath!, args) { UseShellExecute = false });
+        }
+        catch (Exception ex)
+        {
+            CancelPendingChange();
+            ErrorMessage = "Appen kunne ikke åbne igen, så intet er ændret. " + Describe(ex);
+            return false;
+        }
+        if (removeToken) Disconnect();
+        Microsoft.UI.Xaml.Application.Current.Exit();
+        return true;
+    }
+
+    // MARK: Sorteringslisten
+
+    /// <summary>Flueben i sorteringslisten for den viste hylde.</summary>
+    public IReadOnlySet<long> SortChecked => _sortChecked;
+    private HashSet<long> _sortChecked = new();
+
+    public void LoadSortChecked()
+    {
+        try { _sortChecked = Store.SortChecked(Medium); } catch { _sortChecked = new(); }
+    }
+
+    public void SetSortChecked(long copyId, bool isChecked)
+    {
+        try
+        {
+            Store.SetSortChecked(Medium, copyId, isChecked);
+            if (isChecked) _sortChecked.Add(copyId); else _sortChecked.Remove(copyId);
+            OnChanged(nameof(SortChecked));
+        }
+        catch (Exception ex) { ErrorMessage = Describe(ex); }
+    }
+
+    public void ClearSortChecked()
+    {
+        try { Store.ClearSortChecked(Medium); _sortChecked = new(); OnChanged(nameof(SortChecked)); }
+        catch (Exception ex) { ErrorMessage = Describe(ex); }
     }
 
     // MARK: Værdi

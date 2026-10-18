@@ -130,6 +130,9 @@ static class NetChecks
         Check.That(a.Release.Year == 1973 && a.Release.Genres == "Rock" && a.Release.CoverUrl == "https://i.discogs.com/c.jpg"
                    && a.DateAdded == "2024-01-02T10:00:00-08:00", "år, genre, cover og dato");
         Check.That(b.Release.Artist == "Simon & Garfunkel", $"kunstner-join: {b.Release.Artist}");
+        // Nye instance_id'er er større end int.MaxValue (2.147.483.647). Før gav det "samlingen kunne ikke læses".
+        var big = DiscogsClient.ParseCollectionPage(B("""{"pagination":{"pages":1,"items":1},"releases":[{"id":5,"instance_id":2400000123,"basic_information":{"id":5,"title":"T","artists":[{"name":"A"}]}}]}"""));
+        Check.That(big.Items.Count == 1 && big.Items[0].InstanceId == 2_400_000_123L, "instance_id over int.MaxValue");
         Check.That(b.Release.Year == null && b.Release.CatalogNumber == null && b.Release.CoverUrl == null && b.Release.ThumbUrl == null,
                    "manglende år/katalognr./cover");
         Check.That(b.Release.Label == "CBS" && b.Release.Format == "2×Vinyl", $"label uden (2), 2×Vinyl: {b.Release.Format}");

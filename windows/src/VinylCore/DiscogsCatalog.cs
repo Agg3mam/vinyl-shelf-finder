@@ -496,6 +496,10 @@ internal static class Json
     public static int? Int(JsonElement? e) =>
         e is { ValueKind: JsonValueKind.Number } n && n.TryGetInt32(out var i) ? i : null;
 
+    /// Heltal, der kan blive større end int (fx instance_id, som har passeret 2.147.483.647).
+    public static long? Long(JsonElement? e) =>
+        e is { ValueKind: JsonValueKind.Number } n && n.TryGetInt64(out var l) ? l : null;
+
     /// Kun et tal.
     public static double? Double(JsonElement? e) =>
         e is { ValueKind: JsonValueKind.Number } n && n.TryGetDouble(out var d) ? d : null;

@@ -45,6 +45,7 @@ public static class Ui
         public const string ToEnd = "";
         public const string Back = "";
         public const string Forward = "";
+        public const string Checklist = "\uE9D5";
     }
 
     public static string StatusGlyph(this CopyStatus s) => s switch

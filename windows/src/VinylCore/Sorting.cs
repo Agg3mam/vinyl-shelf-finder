@@ -33,6 +33,7 @@ public static class SortRuleLabels
 
 /// Maskin-nøgle til sammenligning (se SortRules.KeyFor).
 public readonly record struct SortKey(
+    int NumberGroup,   // 1 = kunstneren starter med et tal og skal stå sidst (NumbersLast), ellers 0
     int DiscogsRank,   // int.MaxValue hvis ukendt eller ikke i brug
     int Group,         // 0 = først, 1 = normal, 2 = sidst
     string Artist,
@@ -57,6 +58,9 @@ public sealed class SortRules : IEquatable<SortRules>
     public bool IgnorePunctuation { get; set; } = true;
     /// Æ, Ø, Å sorteres efter Z (ellers Æ=AE, Ø=O, Å=A).
     public bool DanishAlphabet { get; set; } = true;
+    /// Kunstnere, der starter med et tal (10cc, 2Pac, The 1975), står sidst – efter Z og Æ Ø Å.
+    /// Gælder også med Discogs' rækkefølge, hvor tallene ellers står først; indbyrdes beholder de rækkefølgen.
+    public bool NumbersLast { get; set; } = true;
     public VariousPlacement Various { get; set; } = VariousPlacement.Alphabetical;
     public WithinArtist WithinArtist { get; set; } = WithinArtist.Title;
     /// Kunstner (som vist) → sorteringsnavn, fx "Bob Dylan" → "Dylan, Bob".
@@ -70,6 +74,7 @@ public sealed class SortRules : IEquatable<SortRules>
         TitleArticles = new(TitleArticles),
         IgnorePunctuation = IgnorePunctuation,
         DanishAlphabet = DanishAlphabet,
+        NumbersLast = NumbersLast,
         Various = Various,
         WithinArtist = WithinArtist,
         ArtistOverrides = new(ArtistOverrides),
@@ -78,7 +83,7 @@ public sealed class SortRules : IEquatable<SortRules>
     public bool Equals(SortRules? o) => o is not null && UseDiscogsOrder == o.UseDiscogsOrder
         && ArtistArticles.SequenceEqual(o.ArtistArticles) && TitleArticles.SequenceEqual(o.TitleArticles)
         && IgnorePunctuation == o.IgnorePunctuation && DanishAlphabet == o.DanishAlphabet
-        && Various == o.Various && WithinArtist == o.WithinArtist
+        && NumbersLast == o.NumbersLast && Various == o.Various && WithinArtist == o.WithinArtist
         && ArtistOverrides.Count == o.ArtistOverrides.Count
         && ArtistOverrides.All(kv => o.ArtistOverrides.TryGetValue(kv.Key, out var v) && v == kv.Value);
     public override bool Equals(object? obj) => Equals(obj as SortRules);
@@ -96,6 +101,7 @@ public sealed class SortRules : IEquatable<SortRules>
             ["titleArticles"] = new JsonArray(TitleArticles.Select(a => (JsonNode?)JsonValue.Create(a)).ToArray()),
             ["ignorePunctuation"] = IgnorePunctuation,
             ["danishAlphabet"] = DanishAlphabet,
+            ["numbersLast"] = NumbersLast,
             ["various"] = Various.RawValue(),
             ["withinArtist"] = WithinArtist.RawValue(),
         };
@@ -115,6 +121,7 @@ public sealed class SortRules : IEquatable<SortRules>
             if (o["titleArticles"] is JsonArray ta) r.TitleArticles = ta.Select(x => x?.GetValue<string>() ?? "").ToList();
             if (o["ignorePunctuation"] is JsonValue ip && ip.TryGetValue<bool>(out var b2)) r.IgnorePunctuation = b2;
             if (o["danishAlphabet"] is JsonValue da && da.TryGetValue<bool>(out var b3)) r.DanishAlphabet = b3;
+            if (o["numbersLast"] is JsonValue nl && nl.TryGetValue<bool>(out var b4)) r.NumbersLast = b4;
             if (o["various"] is JsonValue v && v.TryGetValue<string>(out var vs))
             {
                 r.Various = vs switch
@@ -224,10 +231,12 @@ public sealed class SortRules : IEquatable<SortRules>
         int group = 1;
         if (IsVarious(artist))
             group = Various switch { VariousPlacement.First => 0, VariousPlacement.Last => 2, _ => 1 };
+        var sortArtist = SortArtist(artist, item.Copy.SortArtistOverride);
         return new SortKey(
+            NumberGroup: NumbersLast && StartsWithDigit(sortArtist) ? 1 : 0,
             DiscogsRank: UseDiscogsOrder ? (item.Copy.DiscogsRank ?? int.MaxValue) : int.MaxValue,
             Group: group,
-            Artist: CollationKey(SortArtist(artist, item.Copy.SortArtistOverride)),
+            Artist: CollationKey(sortArtist),
             Primary: CollationKey(SortTitle(item.Release.Title, item.Copy.SortTitleOverride)),
             Year: item.Release.Year is int y && y > 0 ? y : 9999,
             Catalog: CollationKey(item.Release.CatalogNumber ?? ""),
@@ -235,8 +244,13 @@ public sealed class SortRules : IEquatable<SortRules>
             CopyId: item.Copy.Id);
     }
 
+    /// "10cc", "2Pac", "1975" (efter "The" er fjernet).
+    public static bool StartsWithDigit(string sortArtist) =>
+        sortArtist.EnumerateRunes().FirstOrDefault() is var r && Rune.IsDigit(r);
+
     public bool AreInIncreasingOrder(SortKey a, SortKey b)
     {
+        if (a.NumberGroup != b.NumberGroup) return a.NumberGroup < b.NumberGroup;
         if (a.DiscogsRank != b.DiscogsRank) return a.DiscogsRank < b.DiscogsRank;
         if (a.Group != b.Group) return a.Group < b.Group;
         int c = NaturalCompare(a.Artist, b.Artist);

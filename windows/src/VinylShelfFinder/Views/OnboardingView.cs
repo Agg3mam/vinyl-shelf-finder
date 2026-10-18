@@ -120,6 +120,9 @@ public sealed class OnboardingView : IPane
         connect.IsEnabled = !_busy;
         _token.KeyDown -= OnTokenKey;
         _token.KeyDown += OnTokenKey;
+        // Feltet genbruges ved hver Rebuild(): tag det ud af den gamle visning først,
+        // ellers giver WinUI "Element is already the child of another element", og appen lukker.
+        if (_token.Parent is Panel old) old.Children.Remove(_token);
         p.Children.Add(Ui.HStack(8, _token, connect));
         return p;
     }
@@ -262,22 +265,30 @@ public sealed class OnboardingView : IPane
         summary.VerticalAlignment = VerticalAlignment.Center;
         bottom.Children.Add(summary);
         var buttons = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8 };
+        if (!_model.ForceOnboarding && items.Count > 0)
+            buttons.Children.Add(Ui.Btn("Se hele rækkefølgen", (_, _) => _model.Sidebar = new SidebarItem(SidebarKind.SortList),
+                tooltip: $"Sorteringslisten: alle {m.Plural()} i den rækkefølge, de skal stå"));
         if (_model.ForceOnboarding) buttons.Children.Add(Ui.Btn("Annullér", (_, _) => _model.ForceOnboarding = false));
         var create = Ui.Btn(m == Medium.Vinyl ? "Opret reol" : "Opret cd-reol", async (s, _) =>
         {
-            if (_model.Library.Locations.Count == 0) { _model.CreateLayout(_plan); return; }
-            var d = new ContentDialog
+            try
             {
-                XamlRoot = ((FrameworkElement)s).XamlRoot,
-                Title = "Erstat den nuværende reolstruktur?",
-                Content = m == Medium.Vinyl
-                    ? "Alle nuværende fysiske placeringer erstattes med den sorterede rækkefølge. Historikken bevares."
-                    : "Cd'ernes nuværende placeringer erstattes med den sorterede rækkefølge. Pladerne røres ikke. Historikken bevares.",
-                PrimaryButtonText = "Erstat alle placeringer",
-                CloseButtonText = "Annullér",
-                DefaultButton = ContentDialogButton.Close,
-            };
-            if (await d.ShowAsync() == ContentDialogResult.Primary) _model.CreateLayout(_plan);
+                if (_model.Library.Locations.Count == 0) { _model.CreateLayout(_plan); return; }
+                var d = new ContentDialog
+                {
+                    XamlRoot = ((FrameworkElement)s).XamlRoot,
+                    Title = "Erstat den nuværende reolstruktur?",
+                    Content = m == Medium.Vinyl
+                        ? "Alle nuværende fysiske placeringer erstattes med den sorterede rækkefølge. Historikken bevares."
+                        : "Cd'ernes nuværende placeringer erstattes med den sorterede rækkefølge. Pladerne røres ikke. Historikken bevares.",
+                    PrimaryButtonText = "Erstat alle placeringer",
+                    CloseButtonText = "Annullér",
+                    DefaultButton = ContentDialogButton.Close,
+                };
+                if (await d.ShowAsync() == ContentDialogResult.Primary) _model.CreateLayout(_plan);
+            }
+            // Fx hvis en anden dialog (synkroniseringsrapporten) allerede er åben: vis fejlen, luk ikke appen.
+            catch (Exception ex) { _model.ErrorMessage = AppModel.Describe(ex); }
         }, accent: true);
         create.IsEnabled = _plan.Count > 0 && items.Count > 0;
         buttons.Children.Add(create);
@@ -308,6 +319,9 @@ public sealed class OnboardingView : IPane
         var discogs = new CheckBox { Content = "Præcis samme rækkefølge som i min Discogs-samling (kunstner A–Z)", IsChecked = rules.UseDiscogsOrder, FontWeight = FontWeights.SemiBold };
         discogs.Click += (_, _) => Update(r => r.UseDiscogsOrder = discogs.IsChecked == true);
         p.Children.Add(discogs);
+        var numbers = new CheckBox { Content = "Tal sidst (10cc, 2Pac efter Z og Æ Ø Å)", IsChecked = rules.NumbersLast };
+        numbers.Click += (_, _) => Update(r => r.NumbersLast = numbers.IsChecked == true);
+        p.Children.Add(numbers);
         var the = new CheckBox { Content = "Ignorér “The”", IsChecked = rules.ArtistArticles.Any(a => a.Equals("the", StringComparison.OrdinalIgnoreCase)) };
         the.Click += (_, _) => Update(r =>
         {
@@ -320,6 +334,12 @@ public sealed class OnboardingView : IPane
         within.SelectionChanged += (_, _) => Update(r => r.WithinArtist = within.SelectedIndex == 1 ? WithinArtist.Year : WithinArtist.Title);
         var label = Ui.Text("Samme kunstner:", wrap: false);
         label.VerticalAlignment = VerticalAlignment.Center;
+        var surname = Ui.Btn("Efternavn først…", async (b, _) =>
+        {
+            try { await SurnameDialog.ShowAsync(_model, ((FrameworkElement)b).XamlRoot); }
+            catch (Exception ex) { _model.ErrorMessage = AppModel.Describe(ex); }
+        }, tooltip: "Sortér personer efter efternavn (Bob Dylan under D)");
+        p.Children.Add(surname);
         var row = Ui.HStack(16, the, danish, Ui.HStack(8, label, within));
         row.Opacity = rules.UseDiscogsOrder ? 0.5 : 1;
         row.IsHitTestVisible = !rules.UseDiscogsOrder;

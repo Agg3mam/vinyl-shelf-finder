@@ -40,14 +40,24 @@ public static class MediumExtensions
 
     /// Ud fra Discogs' format, fx "Vinyl, LP" eller "2×CD, Album". Kun det første format tæller.
     /// Alt, der ikke er en cd (vinyl, kassetter, bokse …), hører til pladerne, som før.
-    public static Medium Of(string? format)
+    public static Medium Of(string? format) =>
+        CdFormats.Contains(FirstFormat(format)) ? Medium.Cd : Medium.Vinyl;
+
+    /// Første format uden antal: "2×CD, Album" → "CD", "8×File, MP3" → "FILE".
+    private static string FirstFormat(string? format)
     {
-        var first = format?.Split(',')[0].Trim().ToUpperInvariant();
-        if (string.IsNullOrEmpty(first)) return Medium.Vinyl;
+        var first = format?.Split(',')[0].Trim().ToUpperInvariant() ?? "";
         int x = first.IndexOf('×');
-        if (x >= 0) first = first[(x + 1)..];
-        return CdFormats.Contains(first) ? Medium.Cd : Medium.Vinyl;
+        return x >= 0 ? first[(x + 1)..] : first;
     }
+
+    /// Kun digitale filer (Discogs-formatet "File"). De står ikke fysisk nogen steder.
+    public static bool IsDigital(string? format) => FirstFormat(format) == "FILE";
+
+    /// Hylden, en kopi hører til: brugerens valg, ellers ud fra formatet.
+    /// null = ingen hylde (digitale filer), medmindre brugeren selv har flyttet kopien.
+    public static Medium? ShelfOf(Medium? mediumOverride, string? format) =>
+        mediumOverride ?? (IsDigital(format) ? null : Of(format));
 
     /// "Plader" / "Cd'er"
     public static string Title(this Medium m) => m == Medium.Cd ? "Cd'er" : "Plader";
@@ -55,6 +65,8 @@ public static class MediumExtensions
     public static string Singular(this Medium m) => m == Medium.Cd ? "cd" : "plade";
     /// "plader" / "cd'er"
     public static string Plural(this Medium m) => m == Medium.Cd ? "cd'er" : "plader";
+    /// "1 plade", "5 plader", "1 cd", "5 cd'er"
+    public static string Count(this Medium m, int n) => n == 1 ? $"1 {m.Singular()}" : $"{n} {m.Plural()}";
     /// "Reol" / "Cd-reol"
     public static string ShelfWord(this Medium m) => m == Medium.Cd ? "Cd-reol" : "Reol";
 }
@@ -108,7 +120,7 @@ public static class CopyStatusExtensions
 /// release (eller to pressings) altid er to forskellige rækker.
 public sealed record Copy(
     long Id,
-    int? InstanceId,
+    long? InstanceId,
     int ReleaseId,
     CopyStatus Status = CopyStatus.Home,
     string? StatusNote = null,
@@ -188,4 +200,4 @@ public sealed record RecordItem(Copy Copy, Release Release)
 }
 
 /// Én post i Discogs Collection = én fysisk kopi (instance) af en release.
-public sealed record DiscogsCollectionItem(int InstanceId, string? DateAdded, Release Release);
+public sealed record DiscogsCollectionItem(long InstanceId, string? DateAdded, Release Release);

@@ -204,7 +204,7 @@ public sealed class SectionPane : SelectableListPane
     private string Subtitle(int total, int outOfOrder)
     {
         int onShelf = Model.Library.OnShelfCount(LocationId);
-        var parts = new List<string> { Ui.Plader(onShelf) };
+        var parts = new List<string> { Model.Medium.Count(onShelf) };
         if (total > onShelf) parts.Add($"{total - onShelf} ude");
         if (outOfOrder > 0) parts.Add($"{outOfOrder} uden for sortering");
         return string.Join(" · ", parts);

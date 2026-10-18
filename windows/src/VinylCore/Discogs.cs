@@ -255,8 +255,8 @@ public sealed partial class DiscogsClient
 
     private static DiscogsCollectionItem ConvertCollectionItem(JsonElement it)
     {
-        var instanceId = Json.Int(Json.Prop(it, "instance_id")) ?? throw new FormatException();
-        _ = Json.Int(Json.Prop(it, "id")) ?? throw new FormatException();
+        var instanceId = Json.Long(Json.Prop(it, "instance_id")) ?? throw new FormatException();
+        _ = Json.Long(Json.Prop(it, "id")) ?? throw new FormatException();
         var b = Json.Prop(it, "basic_information") ?? throw new FormatException();
         var id = Json.Int(Json.Prop(b, "id")) ?? throw new FormatException();
         var title = Json.Str(Json.Prop(b, "title")) ?? throw new FormatException();

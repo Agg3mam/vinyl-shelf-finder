@@ -95,6 +95,13 @@ public partial class App : Application
                     await Shot("04b-cover-flow.png");
                     m.ShowCoverFlow = false;
                 }
+                m.Sidebar = new SidebarItem(SidebarKind.SortList);
+                if (m.Library.GlobalOrder.Count > 1) { m.SetSortChecked(m.Library.GlobalOrder[0], true); m.SetSortChecked(m.Library.GlobalOrder[1], true); }
+                await Shot("04c-sorteringsliste.png");
+                m.Medium = Medium.Cd;
+                m.Sidebar = new SidebarItem(SidebarKind.SortList);
+                await Shot("04d-sorteringsliste-cd.png");
+                m.Medium = Medium.Vinyl;
                 m.Sidebar = new SidebarItem(SidebarKind.Away);
                 await Shot("05-ude-af-reolen.png");
                 if (m.AwayItems.FirstOrDefault() is RecordItem away && m.Library.LocationOfCopy.ContainsKey(away.Id))

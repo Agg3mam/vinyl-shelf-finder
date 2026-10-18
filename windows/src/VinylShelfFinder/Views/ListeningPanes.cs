@@ -81,7 +81,7 @@ public sealed class ListenPane : IPane
         if (candidates.Count == 0)
             p.Children.Add(Ui.Label("", NoMatchMessage(items), color: Ui.Secondary));
         else
-            p.Children.Add(Ui.Text($"{candidates.Count} plader matcher · plader du ikke har hørt længe foreslås oftere · mellemrum = ny plade",
+            p.Children.Add(Ui.Text($"{_model.Medium.Count(candidates.Count)} matcher · {_model.Medium.Plural()} du ikke har hørt længe foreslås oftere · mellemrum = nyt forslag",
                 "CaptionTextBlockStyle", Ui.Secondary));
 
         if (candidates.Count > 0 && _model.CurrentPick is long pid && _model.Library.Item(pid) is RecordItem it)
