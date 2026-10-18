@@ -324,6 +324,7 @@ struct CloudSettings: View {
     @ViewState private var code = ""
     @ViewState private var codeSent = false
     @ViewState private var busy = false
+    @ViewState private var pasted = ""
 
     var body: some View {
         Form {
@@ -361,6 +362,12 @@ struct CloudSettings: View {
         }
     }
 
+    /// Linket endte på en fejlside (localhost): adressen indeholder login-oplysningerne.
+    private func usePasted() {
+        guard let url = URL(string: pasted.trimmingCharacters(in: .whitespacesAndNewlines)) else { return }
+        if model.completeCloudLink(url) { pasted = "" }
+    }
+
     @ViewBuilder private var login: some View {
         Section {
             TextField("E-mail", text: $email, prompt: Text("dig@eksempel.dk"))
@@ -391,6 +398,12 @@ struct CloudSettings: View {
                     .disabled(busy || !email.contains("@"))
                 }
                 if busy { ProgressView().controlSize(.small) }
+            }
+            if codeSent {
+                TextField("Eller indsæt adressen fra browseren", text: $pasted, prompt: Text("http://localhost:3000/#access_token=…"))
+                    .onSubmit(usePasted)
+                Button("Brug adressen", action: usePasted)
+                    .disabled(!pasted.contains("access_token="))
             }
         } header: {
             Text("Log ind på din konto")

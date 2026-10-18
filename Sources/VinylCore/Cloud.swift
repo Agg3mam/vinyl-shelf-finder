@@ -62,8 +62,13 @@ public final class CloudClient: @unchecked Sendable {
 
     /// Login fra linket i mailen: vinylshelf://auth#access_token=…&refresh_token=…&expires_at=…
     /// Bruger-ID og e-mail står i adgangsnøglen (JWT). nil, hvis adressen ikke er et login.
+    /// Virker også med en indsat adresse fra browseren (fx http://localhost:3000/#access_token=…),
+    /// hvis linket endte på Supabases standardside.
     public static func session(fromLink url: URL) throws -> CloudSession? {
-        guard url.scheme == "vinylshelf", url.host == "auth" else { return nil }
+        let isAppLink = url.scheme == "vinylshelf" && url.host == "auth"
+        let isPasted = (url.scheme == "http" || url.scheme == "https")
+            && ((url.fragment ?? "").contains("access_token=") || (url.fragment ?? "").contains("error="))
+        guard isAppLink || isPasted else { return nil }
         let raw = url.fragment ?? URLComponents(url: url, resolvingAgainstBaseURL: false)?.query ?? ""
         var p: [String: String] = [:]
         for pair in raw.split(separator: "&") {

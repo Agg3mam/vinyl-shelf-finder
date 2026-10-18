@@ -2267,6 +2267,9 @@ do { try MainActor.assumeIsolated {
     check(fromLink?.userID == "abc-123" && fromLink?.email == "a@b.dk" && fromLink?.refreshToken == "r1" && fromLink?.expiresAt == 1999999999,
           "login fra linket i mailen")
     check((try? CloudClient.session(fromLink: URL(string: "vinylshelf://section/4")!)) == .some(nil), "en QR-adresse er ikke et login")
+    let pastedURL = URL(string: "http://localhost:3000/#access_token=x.\(claims).y&refresh_token=r2&expires_in=3600&type=signup")!
+    check((try? CloudClient.session(fromLink: pastedURL))??.refreshToken == "r2", "en indsat localhost-adresse fra browseren virker også")
+    check((try? CloudClient.session(fromLink: URL(string: "https://example.com/side")!)) == .some(nil), "en almindelig webadresse er ikke et login")
     var linkError = ""
     do { _ = try CloudClient.session(fromLink: URL(string: "vinylshelf://auth#error=access_denied&error_code=otp_expired&error_description=Email+link+is+invalid+or+has+expired")!) }
     catch { linkError = error.localizedDescription }
