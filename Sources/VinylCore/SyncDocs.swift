@@ -275,7 +275,12 @@ extension ShelfStore {
         case .copy:
             let existing = try copyID(uid: d.key)
             guard d.data != nil else {
-                if let existing { try deleteCopy(existing) }
+                // Slettet på en anden enhed (der er allerede en transaktion, så ikke deleteCopy).
+                if let existing {
+                    try db.run("DELETE FROM placements WHERE copy_id = ?", existing)
+                    try db.run("DELETE FROM plays WHERE copy_id = ?", existing)
+                    try db.run("DELETE FROM copies WHERE id = ?", existing)
+                }
                 return
             }
             guard let release = int("release"),

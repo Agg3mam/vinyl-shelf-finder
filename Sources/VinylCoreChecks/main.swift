@@ -2146,6 +2146,19 @@ do {
     _ = try push(a)
     try b.applySyncDocs(Array(cloud.values))
     check(try b.loadPlays().isEmpty, "sletning følger med")
+
+    // En plade, der kun findes i appen, slettes på A: den forsvinder også på B (også fra reolen).
+    let local = try a.db.run("INSERT INTO copies(release_id, status, in_discogs) VALUES(950001, 'home', 0)")
+    try a.move(copyID: local, to: try a.loadLibrary().locations[0].id, index: 0)
+    _ = try push(a)
+    try b.applySyncDocs(Array(cloud.values))
+    let bHas = try b.loadLibrary().copies.count
+    try a.deleteCopy(local)
+    _ = try push(a)
+    try b.applySyncDocs(Array(cloud.values))
+    let lbAfter = try b.loadLibrary()
+    let laAfter = try a.loadLibrary()
+    check(bHas == 4 && lbAfter.copies.count == 3 && order(lbAfter) == order(laAfter), "slettet plade forsvinder også på den anden enhed")
 } catch { check(false, "synkronisering: \(error)") }
 
 // MARK: Kontoen i skyen (falsk Supabase, uden net)
