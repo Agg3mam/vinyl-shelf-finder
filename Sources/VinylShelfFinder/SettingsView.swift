@@ -324,7 +324,6 @@ struct CloudSettings: View {
     @ViewState private var code = ""
     @ViewState private var codeSent = false
     @ViewState private var busy = false
-    @ViewState private var pasted = ""
 
     var body: some View {
         Form {
@@ -362,11 +361,10 @@ struct CloudSettings: View {
         }
     }
 
-    /// Linket endte på en fejlside (localhost): adressen indeholder login-oplysningerne.
-    private func usePasted() {
+    private func logIn() {
         busy = true
         Task {
-            if await model.completeCloudPaste(pasted) { pasted = "" }
+            if await model.completeCloudInput(email: email, text: code) { code = "" }
             busy = false
         }
     }
@@ -377,20 +375,17 @@ struct CloudSettings: View {
                 .textContentType(.emailAddress)
                 .disabled(codeSent)
             if codeSent {
-                TextField("Kode fra mailen (hvis der er en)", text: $code, prompt: Text("6 cifre"))
-                    .textContentType(.oneTimeCode)
+                TextField("Linket fra mailen", text: $code, prompt: Text("Højreklik på linket i mailen › Kopiér link, og indsæt her"))
+                    .onSubmit(logIn)
             }
             if case .failed(let message) = model.cloudPhase {
                 Label(message, systemImage: "exclamationmark.triangle").foregroundStyle(.secondary)
             }
             HStack {
                 if codeSent {
-                    Button("Log ind") {
-                        busy = true
-                        Task { _ = await model.verifyCloudCode(email: email, code: code); busy = false }
-                    }
-                    .buttonStyle(.borderedProminent)
-                    .disabled(busy || code.filter(\.isNumber).count < 6)
+                    Button("Log ind", action: logIn)
+                        .buttonStyle(.borderedProminent)
+                        .disabled(busy || code.trimmingCharacters(in: .whitespaces).isEmpty)
                     Button("Ny mail") { codeSent = false; code = "" }
                 } else {
                     Button("Send mail") {
@@ -402,18 +397,11 @@ struct CloudSettings: View {
                 }
                 if busy { ProgressView().controlSize(.small) }
             }
-            if codeSent {
-                TextField("Indsæt linket fra mailen", text: $pasted, prompt: Text("https://…supabase.co/auth/v1/verify?token=…"))
-                    .onSubmit(usePasted)
-                Button("Log ind med linket", action: usePasted)
-                    .buttonStyle(.borderedProminent)
-                    .disabled(busy || pasted.trimmingCharacters(in: .whitespaces).isEmpty)
-            }
         } header: {
             Text("Log ind på din konto")
         } footer: {
             Text(codeSent
-                 ? "Vi har sendt en mail til \(email). Klik IKKE på linket. Højreklik på det i stedet, vælg Kopiér link, og indsæt det ovenfor. Står der en kode i mailen, kan du også skrive den. Tjek uønsket post, hvis mailen ikke kommer."
+                 ? "Vi har sendt en mail til \(email). Klik IKKE på linket – så bliver det brugt op. Højreklik på det i stedet, vælg Kopiér link, og indsæt det ovenfor. Kun den nyeste mail virker. Står der en kode i mailen, kan du også skrive den. Tjek uønsket post, hvis mailen ikke kommer."
                  : "Brug den samme e-mail på Mac, Windows og iPhone. Du får en mail med et link – ingen adgangskode. Første gang oprettes kontoen.")
         }
     }

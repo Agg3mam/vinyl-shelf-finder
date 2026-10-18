@@ -95,9 +95,15 @@ public sealed class CloudClient
     public async Task<CloudSession?> VerifyEmailLinkAsync(string text)
     {
         if (EmailLinkToken(text) is not var (token, type)) return null;
-        var data = await SendAsync("POST", "auth/v1/verify", new JsonObject { ["type"] = type, ["token_hash"] = token }, null).ConfigureAwait(false);
+        byte[] data;
+        try { data = await SendAsync("POST", "auth/v1/verify", new JsonObject { ["type"] = type, ["token_hash"] = token }, null).ConfigureAwait(false); }
+        catch (CloudException e) when (e.Message == ExpiredCode) { throw new CloudException(UsedLink); }
         return SessionFrom(data, "");
     }
+
+    internal const string ExpiredCode = "Koden er forkert eller udløbet. Bed om en ny kode.";
+    /// Hvert link virker kun én gang – også når man har klikket på det i mailen.
+    public const string UsedLink = "Linket er allerede brugt eller er ikke fra den nyeste mail. Hvert link virker kun én gang – også hvis du har klikket på det. Bed om en ny mail, og klik ikke på linket.";
 
     /// Fornyer et udløbet login.
     public async Task<CloudSession> RefreshAsync(CloudSession s)
@@ -245,7 +251,7 @@ public sealed class CloudClient
         catch (JsonException) { }
         switch (code)
         {
-            case "otp_expired": return new CloudException("Koden er forkert eller udløbet. Bed om en ny kode.");
+            case "otp_expired": return new CloudException(ExpiredCode);
             case "over_email_send_rate_limit":
             case "over_request_rate_limit": return new CloudException("Der er sendt for mange koder for nylig. Vent lidt, og prøv igen.");
             case "email_address_invalid":

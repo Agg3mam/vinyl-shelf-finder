@@ -2295,6 +2295,9 @@ do { try MainActor.assumeIsolated {
           && CloudClient.emailLinkToken("https://example.com/") == nil, "linket fra mailen genkendes")
     let viaLink = onMain { try await cloud.verifyEmailLink(mailLink) }
     check((try? viaLink.get())??.accessToken == "adgang", "indsat link fra mailen giver et login")
+    var usedError = ""
+    if case .failure(let e as CloudError) = onMain({ try await cloud.verifyEmailLink(mailLink.replacingOccurrences(of: "pkce_hash1", with: "brugt")) }) { usedError = e.message }
+    check(usedError == CloudClient.usedLink.message, "brugt link fra mailen siger, at linket er brugt (ikke koden)")
 
     // Udløbet login.
     let bad = CloudSession(accessToken: "forkert", refreshToken: "x", expiresAt: 0, userID: session.userID, email: session.email)

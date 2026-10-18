@@ -359,25 +359,62 @@ Brugeren vil have, at appsene følges ad (`CLAUDE.md`, `PARITET.md`, workflowet 
   (`AppInstance.FindOrRegisterForKey`, ny start sender adressen videre), `--restart` efter import/nulstilling.
   Ikke i `--demo`/`--smoke`. Smoke-testen tjekker `OpenScanCode`.
 
-### 18. okt: konto i skyen (gren `claude/sky-synk`)
+### 18. okt: konto i skyen (gren `claude/sky-synk`), **igangværende arbejde, start her**
 
-Brugeren ville have én konto på Mac, Windows og iPhone. Valgt: **Supabase** (gratis, EU/Frankfurt), projekt-URL og
-offentlig nøgle i `CloudConfig` (Swift og C#). Databasen i skyen: `supabase/schema.sql` (én tabel `sync_records`,
-RLS: kun ejeren). Send aldrig `service_role`/secret-nøglen eller database-adgangskoden nogen steder.
-- **Skema v6** (begge): `uid` på copies/locations/plays, tabellen `sync_state`.
+Brugeren vil have én konto på Mac, Windows og (senere) iPhone, så det, der laves på computeren, kan ses på
+telefonen. Valgt: **Supabase** (gratis, EU/Frankfurt), projekt-URL og offentlig nøgle (publishable) i `CloudConfig`
+(Swift og C#). Databasen i skyen: `supabase/schema.sql` (én tabel `sync_records`, RLS: kun ejeren). Brugeren har
+kørt skemaet. Send og bed aldrig om `service_role`/secret-nøglen eller database-adgangskoden. Andre kan bruge
+projektet med egen konto (RLS adskiller data), men hver skal have sit eget Discogs-token.
+
+**Sådan virker det**
+- **Skema v6** (begge): `uid` på copies/locations/plays, tabellen `sync_state` (det sidst synkroniserede pr. post).
 - **SyncDocs** (`.swift`/`.cs`): hele systemet som poster (release, copy, location, section = hele rækkefølgen,
-  play, setting). Ændringer findes ved at sammenligne med `sync_state`. Poster fra skyen lægges ind; egne poster,
-  der kommer tilbage, springes over. Ved samtidig ændring vinder skyen. Historik synkroniseres ikke (endnu).
-- **Cloud** (`.swift`/`.cs`): login med e-mail. Mail-skabeloner kan ikke redigeres på gratisplanen uden egen SMTP,
-  så login sker via **linket i mailen** (`redirect_to=vinylshelf://auth`, står under Redirect URLs i Supabase).
-  Ender linket på `localhost`, kan adressen indsættes i appen. Koden virker også, hvis skabelonen en dag viser den.
-  Den indbyggede mail sender **højst 2 mails i timen** for hele projektet → egen SMTP (fx Resend) senere.
+  play, setting). Ændringer findes ved at sammenligne med `sync_state`. Hver synk: hent siden markøren (−5 s
+  overlap) → læg ind → send egne ændringer → markér → ny markør. Ved samtidig ændring vinder skyen. Historik
+  synkroniseres ikke (endnu). Discogs-token og iMusic-adresse kommer **aldrig** i skyen.
 - Første gang med reoler både i skyen og lokalt spørges der (`NeedsChoice`: brug kontoens / denne enheds).
-- Apps: fanen **Konto** i Indstillinger, synkronisering ved start, 4 s efter ændringer og hvert 5. minut.
+- Apps: fanen **Konto** (første fane i Indstillinger), synk ved start, 4 s efter ændringer og hvert 5. minut.
   Login gemmes i nøgleringen / Legitimationsadministrator (`dk.vinylshelffinder.cloud`).
-- Lokal Windows-test på Mac: `~/.dotnet/dotnet run --project windows/src/VinylCore.Checks -c Release` (.NET 8 i
-  hjemmemappen). Mac: 525 checks, Windows: 611 checks.
-- **Mangler:** iPhone-appen, at brugeren logger ind første gang (afventede mailgrænsen), merge til `main`.
+- Checks: Mac `swift run -c release VinylCoreChecks` (528), Windows på Mac
+  `~/.dotnet/dotnet run --project windows/src/VinylCore.Checks -c Release` (614, .NET 8 i hjemmemappen).
+  Begge har en falsk server (`StubCloud`), så der testes aldrig mod den rigtige konto.
+
+**Login: problemet lige nu (brugeren er IKKE logget ind endnu)**
+- Gratisplanen: mail-skabeloner kan ikke redigeres uden egen SMTP, så mailen har kun et **link** (ingen kode).
+  Den indbyggede mail sender **højst 2 mails i timen** for hele projektet.
+- Linket går til Supabase `/auth/v1/verify?token=…&type=magiclink&redirect_to=vinylshelf://auth`
+  (`vinylshelf://auth` står under Redirect URLs). Når brugeren klikker, får de en blank side eller "noget gik galt,
+  kunne ikke åbne appen". `vinylshelf://` peger korrekt på `/Applications/Vinyl Shelf Finder.app` (tjekket).
+  Klikket bruger linket op.
+- Løsning 1 (commit `f704fe6`, installeret på Mac): **kopiér linket** (højreklik › Kopiér link) og indsæt i appen.
+  Appen sender selv `POST /auth/v1/verify {type, token_hash}`. Brugeren prøvede og fik "Koden er forkert eller
+  udløbet". Serveren svarer `otp_expired` for et ukendt/brugt token (afprøvet med curl og falsk token). Mulige
+  årsager: linket var allerede klikket/brugt, det var ikke den nyeste mail, eller linket blev sat i kodefeltet.
+- Løsning 2 (**ikke committet, ikke installeret endnu**): ét felt "Linket fra mailen" + én "Log ind"-knap
+  (`completeCloudInput` / `CompleteCloudInputAsync` vælger selv kode eller link). Et brugt link giver nu sin egen
+  besked (`CloudClient.usedLink` / `UsedLink`). Checks består på begge, og Mac-appen kompilerer
+  (`swift build --product VinylShelfFinder`). Windows-UI er kun tjekket af CI, når grenen er pushet.
+- Hvis det stadig fejler med en frisk mail, hvor linket ikke er klikket: bed brugeren indsætte linket i chatten
+  **med token-delen fjernet**, så formen kan tjekkes. Overvej så egen SMTP (fx Resend, brugeren skal selv oprette
+  konto) så skabelonen kan vise en 6-cifret kode (`{{ .Token }}`). Det fjerner også mailgrænsen.
+
+**Næste skridt (i rækkefølge)**
+1. Commit løsning 2 på `claude/sky-synk`, installér Mac-appen (se nedenfor), push grenen (CI bygger Windows).
+2. Få brugeren logget ind på Mac (husk mailgrænsen: vent ~1 time efter sidste mail). Tjek at "Senest
+   synkroniseret" får et tidspunkt.
+3. Merge `claude/sky-synk` til `main` og lav en ny udgivelse (push `claude/udgivelse-vX.Y.Z`), så Windows kan
+   opdatere og logge ind.
+4. iPhone-appen (Xcode og iOS 27-simulatoren er installeret; iPhone 18 Pro-simulator findes): login, søgning,
+   Find i reolen, sektioner, QR-scanning, Spillet. Genbrug `VinylCore`.
+5. Senere: egen SMTP, synk af historik.
+
+**Installation på Mac (brugerens rigtige app)**
+1. Sikkerhedskopi først: `sqlite3 "~/Library/Application Support/VinylShelfFinder/vinyl.sqlite" ".backup '…/vinyl-før-<navn>.sqlite'"`.
+2. `/usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString 1.1.0" Resources/Info.plist`,
+   `./build-app.sh --install` (tager ~12 min, kør i baggrunden og sig det til brugeren), derefter
+   `git checkout Resources/Info.plist`.
+3. Brugeren lukker appen med ⌘Q og åbner den igen.
 
 ### Ikke færdigt / næste skridt (spørg brugeren om rækkefølgen)
 

@@ -105,6 +105,14 @@ public sealed partial class AppModel
         return true;
     }
 
+    /// Feltet i fanen Konto: koden fra mailen eller det kopierede link.
+    public async Task<bool> CompleteCloudInputAsync(string email, string text)
+    {
+        var t = text.Trim();
+        if (t.Contains('/') || t.Contains(':')) return await CompleteCloudPasteAsync(t);
+        return await VerifyCloudCodeAsync(email, t);
+    }
+
     /// Indsat tekst i fanen Konto: linket fra mailen, eller adressen fra en browserside.
     public async Task<bool> CompleteCloudPasteAsync(string text)
     {

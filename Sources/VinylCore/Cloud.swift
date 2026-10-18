@@ -117,7 +117,9 @@ public final class CloudClient: @unchecked Sendable {
 
     public func verifyEmailLink(_ text: String) async throws -> CloudSession? {
         guard let (token, type) = Self.emailLinkToken(text) else { return nil }
-        let data = try await send("POST", "auth/v1/verify", body: ["type": type, "token_hash": token], token: nil)
+        let data: Data
+        do { data = try await send("POST", "auth/v1/verify", body: ["type": type, "token_hash": token], token: nil) }
+        catch let e as CloudError where e == Self.expiredCode { throw Self.usedLink }
         return try Self.session(from: data, email: "")
     }
 
@@ -205,11 +207,15 @@ public final class CloudClient: @unchecked Sendable {
         return data
     }
 
+    static let expiredCode = CloudError("Koden er forkert eller udløbet. Bed om en ny kode.")
+    /// Hvert link virker kun én gang – også når man har klikket på det i mailen.
+    public static let usedLink = CloudError("Linket er allerede brugt eller er ikke fra den nyeste mail. Hvert link virker kun én gang – også hvis du har klikket på det. Bed om en ny mail, og klik ikke på linket.")
+
     static func error(status: Int, data: Data) -> CloudError {
         let o = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] ?? [:]
         let code = (o["error_code"] as? String) ?? (o["code"] as? String) ?? (o["error"] as? String) ?? ""
         switch code {
-        case "otp_expired": return CloudError("Koden er forkert eller udløbet. Bed om en ny kode.")
+        case "otp_expired": return expiredCode
         case "over_email_send_rate_limit", "over_request_rate_limit":
             return CloudError("Der er sendt for mange koder for nylig. Vent lidt, og prøv igen.")
         case "email_address_invalid", "validation_failed": return CloudError("E-mailadressen ser forkert ud.")

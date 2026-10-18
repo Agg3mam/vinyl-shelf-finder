@@ -226,6 +226,10 @@ static class SyncChecks
         Check.That(CloudClient.EmailLinkToken(mailLink) == ("pkce_hash1", "magiclink") && CloudClient.EmailLinkToken("https://example.com/") is null,
                    "linket fra mailen genkendes");
         Check.That(cloud.VerifyEmailLinkAsync(mailLink).GetAwaiter().GetResult()?.AccessToken == "adgang", "indsat link fra mailen giver et login");
+        string usedError = "";
+        try { cloud.VerifyEmailLinkAsync(mailLink.Replace("pkce_hash1", "brugt")).GetAwaiter().GetResult(); }
+        catch (CloudException e) { usedError = e.Message; }
+        Check.That(usedError == CloudClient.UsedLink, "brugt link fra mailen siger, at linket er brugt (ikke koden)");
 
         bool needsLogin = false;
         try { cloud.FetchAsync(null, session with { AccessToken = "forkert" }).GetAwaiter().GetResult(); }

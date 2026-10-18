@@ -86,6 +86,13 @@ extension AppModel {
     }
 
     /// Indsat tekst i fanen Konto: linket fra mailen, eller adressen fra en browserside.
+    /// Feltet i fanen Konto: koden fra mailen eller det kopierede link.
+    func completeCloudInput(email: String, text: String) async -> Bool {
+        let t = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        if t.contains("/") || t.contains(":") { return await completeCloudPaste(t) }
+        return await verifyCloudCode(email: email, code: t)
+    }
+
     func completeCloudPaste(_ text: String) async -> Bool {
         do {
             if let s = try await cloud.verifyEmailLink(text) {
