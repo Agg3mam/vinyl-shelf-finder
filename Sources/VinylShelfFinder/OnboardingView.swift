@@ -234,6 +234,10 @@ struct LayoutStep: View {
                 Text("\(model.medium == .vinyl ? "Plader " : "")\(rangeText()) – i alt \(items.count).")
                     .font(.caption).foregroundStyle(.secondary)
                 Spacer()
+                if !model.forceOnboarding && !items.isEmpty {
+                    Button("Se hele rækkefølgen") { model.sidebar = .sortList }
+                        .help("Sorteringslisten: alle \(model.medium.plural) i den rækkefølge, de skal stå")
+                }
                 if model.forceOnboarding {
                     Button("Annullér") { model.forceOnboarding = false }
                 }

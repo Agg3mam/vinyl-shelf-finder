@@ -111,6 +111,13 @@ enum Snapshotter {
         }
         model.sidebar = .plays
         render(MainView().appRoot().environment(model), size: CGSize(width: 1280, height: 820), to: dir.appendingPathComponent("9-plays.png"))
+        // Sorteringslisten med to flueben. Fluebenene fjernes igen bagefter.
+        let order = SortList.build(model.library, rules: model.rules).filter { $0.number != nil }
+        for e in order.prefix(2) { model.setSortChecked(e.id, true) }
+        model.sidebar = .sortList
+        model.selection = order.dropFirst(2).first?.id
+        render(MainView().appRoot().environment(model), size: CGSize(width: 1280, height: 820), to: dir.appendingPathComponent("15-sorteringsliste.png"))
+        model.clearSortChecked()
         try? LabelsPDF.write(ShelfLabel.labels(for: model.library), to: dir.appendingPathComponent("labels.pdf"))
         model.forceOnboarding = true
         render(ContentView().appRoot().environment(model), size: CGSize(width: 1000, height: 900), to: dir.appendingPathComponent("6-onboarding.png"))

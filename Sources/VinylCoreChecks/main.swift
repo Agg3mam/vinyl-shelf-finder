@@ -1844,6 +1844,51 @@ do {
     check(demoVinyl == 43, "demo: pladerne er uændrede")
 } catch { check(false, "cd'er: \(error)") }
 
+// MARK: Sorteringsliste (samme checks som på Windows)
+do {
+    let (s, url) = try freshStore("sortlist")
+    defer { try? FileManager.default.removeItem(at: url) }
+    func it(_ i: Int, _ artist: String, _ title: String, _ format: String) -> DiscogsCollectionItem {
+        DiscogsCollectionItem(instanceID: 80_000 + i, dateAdded: nil,
+                              release: Release(id: 800_000 + i, artist: artist, title: title, format: format))
+    }
+    let first = [it(0, "ABBA", "Arrival", "Vinyl, LP"), it(1, "Blur", "Parklife", "CD, Album"),
+                 it(2, "Bowie", "Low", "Vinyl, LP"), it(3, "Radiohead", "Kid A", "CD, Album")]
+    _ = try s.applyCollection(first)
+    let rules = SortRules()
+    let vinyl = SortList.build(try s.loadLibrary(), rules: rules)
+    let cds = SortList.build(try s.loadLibrary(medium: .cd), rules: rules)
+    check(vinyl.map(\.item.title) == ["Arrival", "Low"] && vinyl.map(\.number) == [1, 2],
+          "sorteringsliste uden reoler: pladerne nummereret 1, 2 uden cd'er imellem")
+    check(cds.map(\.item.title) == ["Parklife", "Kid A"] && cds.allSatisfy { $0.location == nil }, "cd'erne har deres egen sorteringsliste")
+
+    // Med reoler: fysisk rækkefølge sektion for sektion, nye til sidst.
+    var lib = try s.loadLibrary()
+    let ids = rules.sorted(lib.allItems).map(\.id)
+    try s.createLayout([(shelf: 1, section: "A", copies: Array(ids.prefix(1))), (shelf: 1, section: "B", copies: Array(ids.dropFirst()))])
+    _ = try s.applyCollection(first + [it(4, "Air", "Moon Safari", "Vinyl, LP")])
+    lib = try s.loadLibrary()
+    let low = lib.allItems.first { $0.title == "Low" }!.id
+    try s.setStatus(copyID: low, .lent, note: "Mads")
+    let list = SortList.build(try s.loadLibrary(), rules: rules)
+    check(list.map(\.item.title) == ["Arrival", "Low", "Moon Safari"]
+          && list[0].location?.section == "A" && list[1].location?.section == "B" && list[2].location == nil,
+          "sorteringsliste med reoler: sektion A, sektion B, og ny plade uden plads til sidst")
+    check(list[1].number == nil && list[2].number == 2 && SortList.countable(list) == 2, "udlånt plade har intet nummer og tæller ikke med")
+
+    // Flueben gemmes pr. hylde.
+    let arrival = list[0].item.id
+    s.setSortChecked(.vinyl, copyID: arrival, checked: true)
+    s.setSortChecked(.vinyl, copyID: arrival, checked: true)
+    check(s.sortChecked(.vinyl) == [arrival] && s.sortChecked(.cd).isEmpty, "flueben gemmes pr. hylde")
+    check(SortList.nextUnchecked(list, done: s.sortChecked(.vinyl))?.item.title == "Moon Safari", "næste uden flueben springer udlånte over")
+    s.setSortChecked(.vinyl, copyID: arrival, checked: false)
+    check(s.sortChecked(.vinyl).isEmpty, "flueben kan fjernes")
+    s.setSortChecked(.cd, copyID: cds[0].item.id, checked: true)
+    s.clearSortChecked(.cd)
+    check(s.sortChecked(.cd).isEmpty, "start forfra rydder fluebenene")
+} catch { check(false, "sorteringsliste: \(error)") }
+
 // MARK: Opdatering fra GitHub Releases (uden net)
 do {
     check(AppVersion("v1.2.3")! > AppVersion("1.2")! && AppVersion("1.10")! > AppVersion("1.9")!

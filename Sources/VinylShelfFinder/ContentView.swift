@@ -165,6 +165,8 @@ struct ContentColumn: View {
             PlaysView()
         case .findNew:
             FindNewSearchView()
+        case .sortList:
+            SortListView()
         }
     }
 }
@@ -298,6 +300,7 @@ struct SidebarView: View {
         @Bindable var model = model
         List(selection: $model.sidebar) {
             sidebarLabel("Søg", "magnifyingglass").tag(SidebarItem.search)
+            sidebarLabel("Sorteringsliste", "checklist").tag(SidebarItem.sortList)
             sidebarLabel("Værdi", "chart.line.uptrend.xyaxis").tag(SidebarItem.value)
 
             Section("Discogs") {

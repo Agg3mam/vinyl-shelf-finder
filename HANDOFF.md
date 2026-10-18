@@ -328,6 +328,15 @@ installeret). **Kun Windows; Mac-appen har ikke fået noget af det nedenfor.** W
   UI Automation fra PowerShell (gem scripts som UTF-8 med BOM). Brugerens rigtige database
   `%LOCALAPPDATA%\VinylShelfFinder\vinyl.sqlite` er kun læst via kopier.
 
+### 18. okt: Mac-appen får sorteringslisten (gren `claude/ret-tokenfelt`)
+
+- `Sources/VinylCore/SortList.swift` (port af SortList.cs, samme settings `sort_checked_vinyl/cd`) + 8 checks.
+- `SortListView.swift` i midterkolonnen (plade-detaljen til højre), punktet "Sorteringsliste" under Søg,
+  "Se hele rækkefølgen" i opsætningens trin 3, og listen kan ses før reolerne er lavet (`needsOnboarding`).
+  Skiftet Plader/Cd'er bliver på sorteringslisten. Snapshot `15-sorteringsliste.png`.
+- Menupunktet "Søg efter opdatering…" i appmenuen (`Updater.checkFromMenu`).
+- Stadig kun på Windows: "Efternavn først", "Tal sidst", eksport/import/nulstil.
+
 ### Ikke færdigt / næste skridt (spørg brugeren om rækkefølgen)
 
 1. **Mobilside på det lokale netværk (opgave 1)**, så QR-koderne virker. Det er det største åbne punkt.

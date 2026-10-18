@@ -15,6 +15,7 @@ enum SidebarItem: Hashable {
     case plays
     /// "Find nye plader": søg, se priser og køb i hele Discogs' katalog.
     case findNew
+    case sortList
 }
 
 enum SyncState: Equatable {
@@ -44,7 +45,8 @@ final class AppModel {
             checkSection = nil
             currentPick = nil
             forceOnboarding = false
-            sidebar = .search
+            // Sorteringslisten bliver stående og viser den anden hyldes liste.
+            if sidebar != .sortList { sidebar = .search }
             reload()
         }
     }
@@ -172,6 +174,7 @@ final class AppModel {
         do {
             library = try store.loadLibrary(medium: medium)
             mediumCounts = try store.mediumCounts()
+            sortChecked = store.sortChecked(medium)
             stats = ListeningStats(plays: try store.loadPlays())
             searchIndex = SearchIndex(library: library)
             // Efter en handling (spillet, flyt, status …) må valget kun skifte, når man
@@ -188,7 +191,27 @@ final class AppModel {
             && library.copies.values.contains { $0.inDiscogs && $0.discogsRank == nil }
     }
 
-    var needsOnboarding: Bool { forceOnboarding || (!hasToken && !isDemo) || library.locations.isEmpty }
+    var needsOnboarding: Bool {
+        if forceOnboarding || (!hasToken && !isDemo) { return true }
+        // Sorteringslisten kan ses, før reolerne er lavet (så man kan se rækkefølgen først).
+        if sidebar == .sortList && !library.copies.isEmpty { return false }
+        return library.locations.isEmpty
+    }
+
+    // MARK: - Sorteringsliste
+
+    /// Kopierne med flueben i sorteringslisten for den valgte hylde.
+    private(set) var sortChecked: Set<Int64> = []
+
+    func setSortChecked(_ copyID: Int64, _ checked: Bool) {
+        store.setSortChecked(medium, copyID: copyID, checked: checked)
+        if checked { sortChecked.insert(copyID) } else { sortChecked.remove(copyID) }
+    }
+
+    func clearSortChecked() {
+        store.clearSortChecked(medium)
+        sortChecked = []
+    }
 
     var lastSync: Date? {
         store.setting("last_sync").flatMap(Double.init).map(Date.init(timeIntervalSince1970:))
