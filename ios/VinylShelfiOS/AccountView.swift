@@ -16,6 +16,15 @@ struct AccountView: View {
 
     var body: some View {
         Form {
+            if model.hasShelves && !welcome {
+                Section {
+                    NavigationLink { SortListView() } label: { Label("Sorteringsliste", systemImage: "checklist") }
+                } header: {
+                    Text("Indstillinger")
+                } footer: {
+                    Text("Hele rækkefølgen med flueben, så du kan have telefonen med, når du stiller reolen op. Fluebenene er de samme som på computeren.")
+                }
+            }
             if model.cloudLoggedIn { loggedIn } else { login }
         }
         .navigationTitle(welcome ? "Vinyl Shelf" : "Konto")

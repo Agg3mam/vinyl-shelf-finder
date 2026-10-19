@@ -3,7 +3,7 @@
 // så appen virker uden net. Webappen ændrer aldrig reolerne; den skriver kun "Spillet".
 
 import { buildLibraries, MEDIA, MEDIUM, STATUS, isOnShelf, locationName, shortName, fullName, detailLine, awayMessage,
-  FRESHNESS, genres, decades, candidates, pick, noMatchMessage } from "./core/library.js";
+  FRESHNESS, genres, decades, candidates, pick, noMatchMessage, sortList } from "./core/library.js";
 import { mountCoverFlow } from "./coverflow.js";
 import { haptic } from "./haptics.js";
 import * as cloud from "./core/cloud.js";
@@ -28,6 +28,8 @@ const state = {
   loaded: false,
   query: "",
   tab: "reol",
+  checked: { vinyl: new Set(), cd: new Set() },
+  rules: null,
   coverFlow: false,
   flowCenter: new Map(), // sektion → pladen i midten af Cover Flow
 };
@@ -56,6 +58,10 @@ const ICONS = {
   frame: '<rect x="3" y="3" width="18" height="18" rx="2"/><path d="m3 17 5-5 4 4 3-3 6 6"/><circle cx="15.5" cy="8.5" r="1.5"/>',
   box: '<path d="M3 7.5 12 3l9 4.5v9L12 21l-9-4.5zM3 7.5 12 12l9-4.5M12 12v9"/>',
   dashed: '<circle cx="12" cy="12" r="9" stroke-dasharray="3 3"/>',
+  checklist: '<path d="M10 6h11M10 12h11M10 18h11"/><path d="m3 6 1.5 1.5L7 5M3 12l1.5 1.5L7 11"/><circle cx="5" cy="18" r="1.6"/>',
+  circle: '<circle cx="12" cy="12" r="9"/>',
+  checked: '<circle cx="12" cy="12" r="10" fill="currentColor" stroke="none"/><path d="m7.5 12.5 3 3 6-6.5" stroke="#fff"/>',
+  restart: '<path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/>',
   dice: '<rect x="3" y="3" width="18" height="18" rx="4"/><circle cx="8" cy="8" r="1.3" fill="currentColor"/><circle cx="16" cy="8" r="1.3" fill="currentColor"/><circle cx="12" cy="12" r="1.3" fill="currentColor"/><circle cx="8" cy="16" r="1.3" fill="currentColor"/><circle cx="16" cy="16" r="1.3" fill="currentColor"/>',
   flow: '<rect x="8" y="5" width="8" height="12" rx="1"/><path d="M5 6.5 2.5 8v7L5 16.5M19 6.5 21.5 8v7L19 16.5M8 20h8"/>',
   list: '<path d="M8 6h13M8 12h13M8 18h13M3.5 6h.01M3.5 12h.01M3.5 18h.01"/>',
@@ -104,8 +110,10 @@ function toast(text) {
 // MARK: Data
 
 function rebuild() {
-  const { libraries, plays } = buildLibraries([...state.records.values()]);
+  const { libraries, plays, checked, rules } = buildLibraries([...state.records.values()]);
   state.libs = libraries;
+  state.checked = checked;
+  state.rules = rules;
   state.plays = plays;
   state.count = new Map();
   state.lastPlayed = new Map();
@@ -310,6 +318,7 @@ function render() {
     case "sog": html = searchPage(); break;
     case "scan": html = scanPage(); break;
     case "hor": html = listenPage(); break;
+    case "sortering": html = sortPage(); break;
     case "konto": html = accountPage(welcome); break;
     default: html = shelvesPage();
   }
@@ -534,6 +543,99 @@ function pickRecord() {
   const btn = $("[data-action=pick]");
   if (btn) btn.disabled = true;
   listenFlow.spinTo(i, () => { const b = $("[data-action=pick]"); if (b) b.disabled = false; });
+}
+
+// MARK: Sorteringsliste (som på Mac og Windows; fluebenene følger med via kontoen)
+
+function sortEntries() { return sortList(lib(state.medium), state.rules); }
+
+function sortMeta(it) {
+  const parts = [];
+  if (it.copy.status !== "home") parts.push(STATUS[it.copy.status].label);
+  if (it.release.year) parts.push(String(it.release.year));
+  const f = (it.release.format ?? "").split(",")[0]?.trim();
+  if (f) parts.push(f);
+  return parts.join(" · ");
+}
+
+function sortRow(e, done) {
+  const it = e.item, on = done.has(it.id), away = e.number == null;
+  return `<button class="row sort-row ${on ? "on" : ""} ${away ? "away" : ""}" data-action="sort-check" data-id="${it.id}" id="sort-${it.id}" ${away ? 'aria-disabled="true"' : ""}
+      aria-label="${esc(`${e.number ? e.number + ". " : ""}${fullName(it)}`)}" aria-pressed="${on}">
+    <span class="sort-check">${icon(away ? "dashed" : on ? "checked" : "circle")}</span>
+    <span class="num">${e.number ?? "–"}</span>
+    <span class="grow"><div class="t1 wrap">${esc(fullName(it))}</div>${sortMeta(it) ? `<div class="t3">${esc(sortMeta(it))}</div>` : ""}</span>
+  </button>`;
+}
+
+function sortHeader(entries, done) {
+  const m = state.medium;
+  const countable = entries.filter((e) => e.number != null);
+  const total = countable.length, n = countable.filter((e) => done.has(e.item.id)).length;
+  return `<div class="list sort-head">
+    <p>${m === "vinyl" ? "Rækkefølgen for pladehylden, fra første til sidste plade. Cd'erne har deres egen liste." : "Rækkefølgen for cd-hylden, fra første til sidste cd. Pladerne har deres egen liste."}</p>
+    <div class="progress"><span style="width:${total ? (n / total) * 100 : 0}%"></span></div>
+    <p class="count">${n === total && total > 0 ? `Alle ${total} ${MEDIUM[m].plural} står på plads` : `${n} af ${total} sat på plads`}</p>
+    <div class="sort-buttons">
+      <button class="cf-find" data-action="sort-next" ${n === total ? "disabled" : ""}>${icon("chevR")}<span>Næste</span></button>
+      <button class="glass-btn" data-action="sort-restart" ${n === 0 ? "disabled" : ""}>${icon("restart")}<span>Start forfra</span></button>
+    </div>
+  </div>`;
+}
+
+function sortPage() {
+  const m = state.medium, L = lib(m), ms = media();
+  const entries = sortEntries(), done = state.checked[m] ?? new Set();
+  const parts = [];
+  for (const e of entries) {
+    const key = e.location ? e.location.uid : "none";
+    if (!parts.length || parts.at(-1).key !== key) parts.push({ key, loc: e.location, entries: [] });
+    parts.at(-1).entries.push(e);
+  }
+  const body = parts.map((p) => {
+    let title, note;
+    if (p.loc) { const n = L.items(p.loc.id).length; title = locationName(p.loc); note = n === 1 ? `1 ${MEDIUM[m].singular}` : `${n} ${MEDIUM[m].plural}`; }
+    else if (!L.locations.length) { title = "Hele hylden"; note = null; }
+    else { title = "Uden plads endnu"; note = `Nye ${MEDIUM[m].plural}, der ikke har fået en plads. Rækkefølgen viser, hvor de hører til.`; }
+    return `<div class="group-title big" style="margin-bottom:2px">${esc(title)}</div>${note ? `<p class="footnote" style="margin:0 4px 8px">${esc(note)}</p>` : ""}
+      <div class="list">${p.entries.map((e) => sortRow(e, done)).join("")}</div>`;
+  }).join("");
+  return `<main class="page">${topbar({ backTo: "#/konto", title: "Sorteringsliste" })}
+    ${ms.length > 1 ? `<div class="segmented" role="group" aria-label="Hylde" style="margin-top:8px">${ms.map((x) => `<button data-action="medium" data-medium="${x}" aria-pressed="${x === m}">${MEDIUM[x].title}</button>`).join("")}</div>` : ""}
+    <div id="sort-head">${sortHeader(entries, done)}</div>
+    ${entries.length ? body : `<div class="empty"><h2>Ingen ${MEDIUM[m].plural}</h2><p>Der er ingen ${MEDIUM[m].plural} i samlingen endnu.</p></div>`}
+  </main>`;
+}
+
+/** Gemmer fluebenene som kontoens post `sort_checked_<hylde>` (fælles ID'er, sorteret, som på Mac). */
+async function saveChecked(m) {
+  const L = lib(m);
+  const uids = [...(state.checked[m] ?? [])].map((id) => L.copies.get(id)?.uid).filter(Boolean).sort();
+  const doc = { kind: "setting", key: `sort_checked_${m}`, data: { value: uids } };
+  const row = { ...doc, updated_at: new Date().toISOString() };
+  mergeRows([row]);
+  if (DEMO) return;
+  await db.applyRows([row]);
+  const pending = ((await db.getMeta("pending")) ?? []).filter((d) => !(d.kind === doc.kind && d.key === doc.key));
+  pending.push(doc);
+  await db.setMeta("pending", pending);
+  syncSoon();
+}
+
+function toggleSortCheck(id) {
+  const m = state.medium, L = lib(m), it = L.item(id);
+  if (!it || !isOnShelf(it)) return;
+  const set = state.checked[m] ??= new Set();
+  if (set.has(id)) set.delete(id); else set.add(id);
+  haptic("tick");
+  // Kun linjen og tælleren tegnes om, så listen ikke hopper.
+  const e = sortEntries();
+  const entry = e.find((x) => x.item.id === id);
+  const el = $(`#sort-${id}`);
+  if (el && entry) el.outerHTML = sortRow(entry, set);
+  const head = $("#sort-head");
+  if (head) head.innerHTML = sortHeader(e, set);
+  saveChecked(m);
 }
 
 // MARK: Pladen ("Find i reolen")
@@ -762,10 +864,20 @@ function lastSyncText() {
   return state.lastSync ? new Date(state.lastSync).toLocaleString("da-DK", { dateStyle: "medium", timeStyle: "short" }) : "Ikke endnu";
 }
 
+/** "Indstillinger" øverst under Konto (som i iPhone-appen). */
+function settingsGroup(welcome) {
+  if (welcome || !hasShelves()) return "";
+  return `<div class="group-title">Indstillinger</div>
+    <div class="list"><a class="row" href="#/sortering" data-nav>${icon("checklist")}<span class="grow">Sorteringsliste</span><span class="chev">${icon("chevR")}</span></a></div>
+    <p class="footnote">Hele rækkefølgen med flueben, så du kan have telefonen med, når du stiller reolen op. Fluebenene er de samme som på computeren.</p>`;
+}
+
 function accountPage(welcome) {
   const msg = failed() ? `<div class="message">${icon("warn")}<span>${esc(failed())}</span></div>` : "";
   if (state.session) {
     return `<main class="page">${topbar({})}<h1 class="large-title">Konto</h1>
+      ${settingsGroup(false)}
+      <div class="group-title">Konto</div>
       <div class="list">
         <div class="row kv"><span>Logget ind som</span><span class="v">${esc(state.email || state.session.email)}</span></div>
         <div class="row kv"><span>Senest synkroniseret</span><span class="v" id="last-sync">${state.phase === "syncing" ? '<span class="spinner"></span>' : esc(lastSyncText())}</span></div>
@@ -799,6 +911,7 @@ function accountPage(welcome) {
   }
   if (L.useMail) buttons += `<button class="row btn-row" data-action="use-password">${icon("key")}<span>Log ind med adgangskode i stedet</span></button>`;
   return `<main class="page">${topbar({})}<h1 class="large-title">${welcome ? "Vinyl Shelf" : "Konto"}</h1>
+    ${settingsGroup(welcome)}
     ${welcome ? `<div class="welcome"><div class="big-icon">${icon("books")}</div><h2>Find dine plader i reolen</h2>
       <p>Log ind med den samme e-mail og adgangskode som i appen på din computer. Så kommer dine reoler, placeringer og lyttelog hertil.</p></div>` : ""}
     <div class="group-title">Log ind på din konto</div>
@@ -905,6 +1018,19 @@ document.addEventListener("click", async (ev) => {
   else if (a === "signin") doSignIn();
   else if (a === "toggle-flow") { state.coverFlow = !state.coverFlow; safeLocal.set("coverFlow", state.coverFlow ? "1" : ""); lastRendered = ""; render(); }
   else if (a === "pick") pickRecord();
+  else if (a === "sort-check") toggleSortCheck(Number(el.dataset.id));
+  else if (a === "sort-next") {
+    const next = sortEntries().find((e) => e.number != null && !(state.checked[state.medium] ?? new Set()).has(e.item.id));
+    if (next) $(`#sort-${next.item.id}`)?.scrollIntoView({ behavior: "smooth", block: "center" });
+  }
+  else if (a === "sort-restart") {
+    if (confirm(`Fjern fluebenene ved alle ${MEDIUM[state.medium].plural} på denne hylde?`)) {
+      state.checked[state.medium] = new Set();
+      saveChecked(state.medium);
+      lastRendered = "";
+      render();
+    }
+  }
   else if (a === "send-mail") doSendMail();
   else if (a === "complete") doComplete();
   else if (a === "use-mail") { login.useMail = true; state.phase = "idle"; render(); }

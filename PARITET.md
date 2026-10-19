@@ -50,6 +50,7 @@ Data kommer kun fra kontoen i skyen (ingen Discogs-forbindelse på telefonen).
 | "Spillet" | ✅ | Synkroniseres til Mac og Windows |
 | Søg på en sang og se sanglisten | ✅ | Sanglisterne kommer fra computeren via kontoen |
 | Cover Flow i en sektion | ✅ | Knap øverst til højre (liste/Cover Flow). Samme geometri (`CoverFlowGeometry`), hvid baggrund, haptik for hver plade og ved enden |
+| Sorteringsliste med flueben (Konto › Indstillinger) | ✅ | Samme liste (`SortList.build`) og flueben som Mac/Windows; følger med via kontoen (`sort_checked_…`) |
 | Hvad skal jeg høre? (fanen "Hør") | ✅ | Samme filtre og `ListenPicker` som Mac. Cover Flow snurrer hen til forslaget |
 | Flytte plader, sektioner, Discogs, Værdi, Find nye plader | ❌ | Laves på computeren |
 
@@ -57,7 +58,7 @@ Data kommer kun fra kontoen i skyen (ingen Discogs-forbindelse på telefonen).
 ## Webappen (`web/`)
 
 En fjerde udgave: en webside, der lægges på telefonens hjemmeskærm ("Føj til hjemmeskærm"). Gratis, uden App Store
-og uden 7-dages grænse. Den kan det samme som iPhone-appen og ændrer heller ikke reolerne. Søgning og "Find i
+og uden 7-dages grænse. Den kan det samme som iPhone-appen og ændrer heller ikke reolerne (den skriver kun "Spillet" og fluebenene i sorteringslisten). Søgning og "Find i
 reolen" er en JavaScript-port af `Search.swift` og `Library.swift` (`web/core/`); checken "Webappens checks"
 (`web/checks/run.sh`) sammenligner med Swift ved hver push: samme top-20 og samme tekster.
 
@@ -70,5 +71,6 @@ reolen" er en JavaScript-port af `Search.swift` og `Library.swift` (`web/core/`)
 | Scan QR-koden på et reolskilt | ✅ | I webappen med kameraet (jsQR i `web/vendor`). Kamera-appen åbner `vinylshelf://` i den rigtige app, ikke i webappen |
 | "Spillet" | ✅ | Samme post som iPhone (enhed `web`); gemmes og sendes senere, hvis der ikke er net |
 | Cover Flow i en sektion og "Hør" (Hvad skal jeg høre?) | ✅ | Som iPhone. Port af `CoverFlowGeometry` og `ListenPicker` i `core/library.js`. Haptik: Android vibrerer; iPhone bruger iOS' kontakt-klik (iOS 18+), da Safari ikke har et haptik-API |
+| Sorteringsliste med flueben (Konto › Indstillinger) | ✅ | Samme opdeling og flueben som Mac (posten `sort_checked_…`). Plader uden plads sorteres med en forenklet udgave af reglerne (Discogs' rækkefølge, ellers kunstner/titel) |
 | Log ud | ✅ | Fjerner også reolerne fra telefonen (iPhone-appen beholder dem), da en webside kan deles af flere |
 | Flytte plader, sektioner, Discogs, Værdi, Find nye plader | ❌ | Laves på computeren |

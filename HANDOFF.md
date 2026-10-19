@@ -527,6 +527,13 @@ projektet med egen konto (RLS adskiller data), men hver skal have sit eget Disco
   op (`fling`, 0,45 s × fart); "Giv mig en plade" glider med ease-out og popper ved landing. Haptik for hver plade
   hele vejen (højst én pr. 35 ms). I webappen kører haptikken kun, hvor browseren tillader det.
 
+### 19. okt (sen aften): sorteringslisten på telefonen
+
+- Konto › Indstillinger › Sorteringsliste på iPhone (`SortListView.swift`, `PhoneModel.setSortChecked`) og i webappen
+  (`#/sortering`, `sortList`/`parseRules` i `core/library.js`). Et tryk på en linje sætter fluebenet; "Næste" og
+  "Start forfra" som på Mac. Fluebenene er posterne `sort_checked_vinyl`/`_cd` (fælles ID'er), så Mac, Windows og
+  telefonen ser de samme. Webappen skriver nu "Spillet" og disse flueben – stadig aldrig placeringer.
+
 ### Ikke færdigt / næste skridt (spørg brugeren om rækkefølgen)
 
 1. **Mobilside på det lokale netværk (opgave 1)**, så QR-koderne virker. Det er det største åbne punkt.

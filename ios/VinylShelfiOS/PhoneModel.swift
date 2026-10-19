@@ -29,6 +29,23 @@ final class PhoneModel {
     var media: [Medium] { Medium.allCases.filter { !(libraries[$0]?.locations.isEmpty ?? true) } }
     var errorMessage: String?
 
+    /// Sorteringsreglerne fra computeren (følger med via kontoen) og fluebenene i sorteringslisten pr. hylde.
+    private(set) var rules = SortRules()
+    private(set) var sortChecked: [Medium: Set<Int64>] = [:]
+
+    /// Flueben i sorteringslisten (som på Mac); følger med til de andre enheder via kontoen.
+    func setSortChecked(_ m: Medium, _ copyID: Int64, _ checked: Bool) {
+        store.setSortChecked(m, copyID: copyID, checked: checked)
+        sortChecked[m] = store.sortChecked(m)
+        cloudChanged()
+    }
+
+    func clearSortChecked(_ m: Medium) {
+        store.clearSortChecked(m)
+        sortChecked[m] = []
+        cloudChanged()
+    }
+
     /// "Hvad skal jeg høre?": filtre og de seneste forslag (som på Mac).
     var listenFilter = ListenFilter()
     private(set) var recentPicks: [Int64] = []
@@ -75,6 +92,8 @@ final class PhoneModel {
                 indexes[m] = SearchIndex(library: lib)
             }
             stats = ListeningStats(plays: try store.loadPlays())
+            rules = store.loadSortRules()
+            for m in Medium.allCases { sortChecked[m] = store.sortChecked(m) }
             if !media.contains(medium), let first = media.first { medium = first }
         } catch {
             errorMessage = error.localizedDescription

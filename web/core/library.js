@@ -318,6 +318,7 @@ export function buildLibraries(records) {
   const locs = [];
   const sectionDocs = [];
   const plays = [];
+  const settings = new Map();
   const sorted = [...records].sort((a, b) => (a.updated_at < b.updated_at ? -1 : a.updated_at > b.updated_at ? 1 : 0));
   let nextCopyID = 1;
   for (const r of sorted) {
@@ -339,6 +340,7 @@ export function buildLibraries(records) {
       copies.set(r.key, {
         id: inst ? Number(inst[1]) : -(nextCopyID++), uid: r.key, releaseID: d.release,
         status: statusOf(d.status), statusNote: d.note ?? null, medium: d.medium ?? null,
+        rank: Number.isFinite(d.rank) ? d.rank : null,
       });
     } else if (r.kind === "location") {
       locs.push({
@@ -348,6 +350,8 @@ export function buildLibraries(records) {
       });
     } else if (r.kind === "section") {
       sectionDocs.push(r);
+    } else if (r.kind === "setting") {
+      settings.set(r.key, d.value);
     } else if (r.kind === "play") {
       if (typeof d.copy === "string" && Number.isFinite(d.at)) plays.push({ uid: r.key, copyUID: d.copy, at: d.at });
     }
@@ -385,7 +389,13 @@ export function buildLibraries(records) {
   const copyByUID = new Map([...copies.values()].map((c) => [c.uid, c]));
   const playList = plays.map((p) => ({ ...p, copyID: copyByUID.get(p.copyUID)?.id })).filter((p) => p.copyID !== undefined)
     .sort((a, b) => b.at - a.at);
-  return { libraries, plays: playList, copyByID: new Map([...copies.values()].map((c) => [c.id, c])) };
+  // Fluebenene i sorteringslisten (fælles ID'er i kontoen → kopier her).
+  const checked = {};
+  for (const m of MEDIA) {
+    const uids = settings.get(`sort_checked_${m}`);
+    checked[m] = new Set((Array.isArray(uids) ? uids : []).map((u) => copyByUID.get(u)?.id).filter((id) => id !== undefined));
+  }
+  return { libraries, plays: playList, copyByID: new Map([...copies.values()].map((c) => [c.id, c])), settings, checked, rules: parseRules(settings.get("sort_rules")) };
 }
 
 // MARK: "Hvad skal jeg høre?" (port af ListenPicker i Listening.swift)
@@ -476,3 +486,56 @@ export const CF = {
     return { center: c, shift: s };
   },
 };
+
+// MARK: Sorteringslisten (som SortList.swift)
+
+/** Sorteringsreglerne fra computeren (setting "sort_rules"). Manglende valg er slået fra, som på Mac. */
+export function parseRules(json) {
+  const r = { useDiscogsOrder: true, artistArticles: ["The"], ignorePunctuation: true, numbersLast: false, various: "alphabetical" };
+  try {
+    const o = typeof json === "string" ? JSON.parse(json) : null;
+    if (o && typeof o === "object") {
+      if (typeof o.useDiscogsOrder === "boolean") r.useDiscogsOrder = o.useDiscogsOrder;
+      if (Array.isArray(o.artistArticles)) r.artistArticles = o.artistArticles.filter((a) => typeof a === "string");
+      if (typeof o.ignorePunctuation === "boolean") r.ignorePunctuation = o.ignorePunctuation;
+      if (typeof o.numbersLast === "boolean") r.numbersLast = o.numbersLast;
+      if (typeof o.various === "string") r.various = o.various;
+    }
+  } catch { /* standardreglerne */ }
+  return r;
+}
+
+/** Rækkefølge for plader uden plads endnu: Discogs' rækkefølge, ellers kunstner og titel (forenklet udgave af
+ *  SortRules på Mac; bruges kun til listen "Uden plads endnu"). */
+function sortUnplaced(items, rules) {
+  const isVarious = (a) => { const x = a.trim().toLowerCase(); return x === "various" || x === "various artists" || x.startsWith("various "); };
+  const sortArtist = (a) => {
+    let s = a.trim();
+    for (const art of rules.artistArticles) {
+      if (art && s.toLowerCase().startsWith(art.toLowerCase() + " ") && s.length > art.length + 1) { s = s.slice(art.length + 1); break; }
+    }
+    return rules.ignorePunctuation ? (s.replace(/[^\p{L}\p{N}\s]/gu, "").replace(/\s+/g, " ").trim() || s) : s;
+  };
+  const key = (it) => {
+    const a = sortArtist(it.release.artist);
+    const group = isVarious(it.release.artist) ? (rules.various === "first" ? 0 : rules.various === "last" ? 2 : 1) : 1;
+    return {
+      num: rules.numbersLast && /^\p{Nd}/u.test(a) ? 1 : 0,
+      rank: rules.useDiscogsOrder && it.copy.rank != null ? it.copy.rank : Number.MAX_SAFE_INTEGER,
+      group, artist: a, title: it.release.title, year: it.release.year > 0 ? it.release.year : 9999,
+    };
+  };
+  const coll = new Intl.Collator("da", { numeric: true, sensitivity: "base" });
+  return items.map((it) => ({ it, k: key(it) })).sort((x, y) => x.k.num - y.k.num || x.k.rank - y.k.rank || x.k.group - y.k.group
+    || coll.compare(x.k.artist, y.k.artist) || coll.compare(x.k.title, y.k.title) || x.k.year - y.k.year || x.it.id - y.it.id).map((x) => x.it);
+}
+
+/** Hele rækkefølgen for én hylde: sektion for sektion, og til sidst dem uden plads. `number` kun for plader i reolen. */
+export function sortList(lib, rules) {
+  const entries = [];
+  let n = 0;
+  const add = (it, loc) => entries.push({ number: isOnShelf(it) ? ++n : null, item: it, location: loc });
+  for (const loc of lib.locations) for (const it of lib.items(loc.id)) add(it, loc);
+  for (const it of sortUnplaced(lib.unplaced.map((id) => lib.item(id)).filter(Boolean), rules)) add(it, null);
+  return entries;
+}

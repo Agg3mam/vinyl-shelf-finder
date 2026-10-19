@@ -288,3 +288,19 @@ body:has(.cf-page) { background: #FFFFFF; }
 .filters select { appearance: none; -webkit-appearance: none; border: 0; background: none; font-size: 17px; text-align: right; text-align-last: right; color: var(--secondary); max-width: 60%; cursor: pointer; }
 .cf-cover.cf-pop img, .cf-cover.cf-pop .cf-ph { animation: cf-pop 0.45s cubic-bezier(0.3, 1.6, 0.5, 1); }
 @keyframes cf-pop { 40% { transform: scale(1.07); } 100% { transform: scale(1); } }
+
+/* Sorteringsliste */
+.sort-head { padding: 14px 16px; margin-top: 12px; }
+.sort-head p { margin: 0 0 10px; color: var(--secondary); font-size: 15px; line-height: 1.35; }
+.sort-head .count { font-variant-numeric: tabular-nums; margin-top: 8px; }
+.progress { height: 6px; border-radius: 3px; background: var(--fill); overflow: hidden; }
+.progress span { display: block; height: 100%; background: var(--accent); border-radius: 3px; transition: width 0.25s; }
+.sort-buttons { display: flex; gap: 10px; flex-wrap: wrap; }
+.sort-buttons .cf-find, .sort-buttons .glass-btn { margin-top: 0; border: 0; cursor: pointer; font: inherit; font-size: 15px; font-weight: 600; }
+.sort-buttons button:disabled { opacity: 0.4; cursor: default; }
+.sort-row { align-items: center; }
+.sort-row .sort-check { font-size: 26px; color: var(--tertiary); display: grid; place-items: center; }
+.sort-row.on .sort-check { color: var(--accent); }
+.sort-row.on .grow, .sort-row.on .num { opacity: 0.55; }
+.sort-row.away { opacity: 0.5; cursor: default; }
+.t1.wrap { white-space: normal; font-weight: 500; }
