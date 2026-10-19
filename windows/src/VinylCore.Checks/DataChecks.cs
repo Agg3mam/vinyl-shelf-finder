@@ -968,13 +968,13 @@ static class DataChecks
         var path = TempDb("schema");
         using (var s = new ShelfStore(path))
         {
-            Check.That(s.Db.UserVersion == 6, "skema v6");
+            Check.That(s.Db.UserVersion == 7, "skema v7");
             s.ApplyCollection(new[] { Item(1, 1, "O'Brien", "Robert'); DROP TABLE copies;--") });
         }
         using var reopened = new ShelfStore(path);
         Check.That(reopened.LoadLibrary().AllItems.FirstOrDefault()?.Title == "Robert'); DROP TABLE copies;--", "genåbning + strenge bindes sikkert");
         var tables = reopened.Db.Query("SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name").Select(r => r.Text("name")).ToList();
-        Check.That(new[] { "artist_sort_overrides", "copies", "history", "locations", "placements", "plays", "release_market", "releases", "scan_codes", "settings" }
+        Check.That(new[] { "artist_sort_overrides", "copies", "history", "locations", "placements", "plays", "release_market", "release_tracks", "releases", "scan_codes", "settings" }
                    .All(t => tables.Contains(t)), $"samme tabeller som på Mac: {string.Join(",", tables)}");
     });
 
@@ -991,7 +991,7 @@ static class DataChecks
         var cid = up.LoadLibrary().Copies.Keys.First();
         bool ok;
         try { up.LogPlay(cid); ok = true; } catch (DatabaseException) { ok = false; }
-        Check.That(up.Db.UserVersion == 6 && ok, "migration v3→v6 opretter plays og bevarer kopier");
+        Check.That(up.Db.UserVersion == 7 && ok, "migration v3→v7 opretter plays og bevarer kopier");
     });
 
     // Søgning: Unicode og grænsetilfælde

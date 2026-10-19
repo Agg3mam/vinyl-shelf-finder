@@ -16,16 +16,29 @@ public struct Release: Equatable, Hashable {
     public var coverURL: String?
     public var thumbURL: String?
     public var genres: String?
+    /// Sanglisten fra Discogs (tom, indtil den er hentet).
+    public var tracks: [Track]
 
     public init(id: Int, artist: String, title: String, year: Int? = nil, label: String? = nil,
                 catalogNumber: String? = nil, format: String? = nil, coverURL: String? = nil,
-                thumbURL: String? = nil, genres: String? = nil) {
+                thumbURL: String? = nil, genres: String? = nil, tracks: [Track] = []) {
         self.id = id; self.artist = artist; self.title = title; self.year = year
         self.label = label; self.catalogNumber = catalogNumber; self.format = format
-        self.coverURL = coverURL; self.thumbURL = thumbURL; self.genres = genres
+        self.coverURL = coverURL; self.thumbURL = thumbURL; self.genres = genres; self.tracks = tracks
     }
 
     public var discogsURL: URL { URL(string: "https://www.discogs.com/release/\(id)")! }
+}
+
+/// Én sang på en udgivelse, som Discogs skriver den, fx position "B1" (side B, nummer 1) eller "3" på en cd.
+public struct Track: Equatable, Hashable, Sendable {
+    public var position: String
+    public var title: String
+    public var duration: String?
+
+    public init(position: String, title: String, duration: String? = nil) {
+        self.position = position; self.title = title; self.duration = duration
+    }
 }
 
 // MARK: - Plader og cd'er

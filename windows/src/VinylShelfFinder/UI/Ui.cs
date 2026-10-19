@@ -18,6 +18,7 @@ public static class Ui
 
     public static class Glyph
     {
+        public const string Music = "\uEC4F";
         public const string Search = "";
         public const string Value = "";
         public const string Bag = "";

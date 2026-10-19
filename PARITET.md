@@ -30,6 +30,7 @@ Hvad hver app kan. Målet er ✅ i begge kolonner. Opdatér tabellen i samme com
 | `vinylshelf://`-adresser (QR åbner appen) | ✅ | ✅ | Windows registrerer adressen for brugeren og kører kun ét vindue |
 | Konto i skyen (Supabase): log ind med e-mail, synkronisering | ✅ | ✅ | Samme poster og felter, sikkerhedskopi før reoler slettes. iPhone-appen bruger samme konto (se nedenfor) |
 | Adgangskode til kontoen (vælges under Konto; login uden mail) | ✅ | ✅ | `setPassword`/`SetPasswordAsync`, `signIn`/`SignInAsync`. Også på iPhone, hvor det er første valg |
+| Søg på en sang (sanglister fra Discogs, hentes i baggrunden) | ✅ | ✅ | Skema v7 (`release_tracks`). Sangen vises under resultatet og fremhæves i "Sange" på pladen. Status og "Hent sanglister" under Indstillinger › Discogs. Følger med via kontoen (feltet `tracks`) |
 | QR-koden på et trykt skilt følger sektionen til andre enheder | ✅ | ✅ | Feltet `code` i sektionens post (`locations.scan_code`). Mac gemmer koden, når skiltene laves; Windows bruger sektionens nummer, som før |
 | Mobilside på lokalnettet | ❌ | ❌ | Halvt lavet (kun ruter), ingen server endnu |
 
@@ -46,5 +47,6 @@ Data kommer kun fra kontoen i skyen (ingen Discogs-forbindelse på telefonen).
 | Reoler og sektioner (plader og cd'er) | ✅ | Kun visning |
 | Scan QR-koden på et reolskilt | ✅ | I appen (VisionKit) eller med Kamera-appen |
 | "Spillet" | ✅ | Synkroniseres til Mac og Windows |
+| Søg på en sang og se sanglisten | ✅ | Sanglisterne kommer fra computeren via kontoen |
 | Flytte plader, sektioner, Discogs, Værdi, Find nye plader | ❌ | Laves på computeren |
 

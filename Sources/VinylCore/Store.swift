@@ -180,6 +180,26 @@ public final class ShelfStore {
             try db.execute("PRAGMA user_version = 6")
             }
         }
+        if db.userVersion < 7 {
+            // Sanglister fra Discogs, så man kan søge på en sang. `tracks_fetched_at` er sat, når listen er hentet
+            // (også hvis den er tom). Samme skema på Windows. Kan køres igen uden fejl.
+            try db.transaction {
+            if !(try hasColumn("releases", "tracks_fetched_at")) {
+                try db.execute("ALTER TABLE releases ADD COLUMN tracks_fetched_at REAL")
+            }
+            try db.execute("""
+            CREATE TABLE IF NOT EXISTS release_tracks (
+                release_id INTEGER NOT NULL,
+                idx INTEGER NOT NULL,
+                position TEXT NOT NULL,
+                title TEXT NOT NULL,
+                duration TEXT,
+                PRIMARY KEY (release_id, idx)
+            );
+            """)
+            try db.execute("PRAGMA user_version = 7")
+            }
+        }
     }
 
     private func hasColumn(_ table: String, _ column: String) throws -> Bool {
@@ -199,6 +219,7 @@ public final class ShelfStore {
                 catalogNumber: r["catalog_number"]?.text, format: r["format"]?.text,
                 coverURL: r["cover_url"]?.text, thumbURL: r["thumb_url"]?.text, genres: r["genres"]?.text)
         }
+        for (id, tracks) in try loadTracks() { releases[id]?.tracks = tracks }
         var copies: [Int64: Copy] = [:]
         for r in try db.query("SELECT * FROM copies") {
             let c = copy(from: r)

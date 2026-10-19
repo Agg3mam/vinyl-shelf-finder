@@ -119,12 +119,21 @@ extension ShelfStore {
         try ensureSyncIDs()
         var docs: [SyncDoc] = []
 
+        let allTracks = try loadTracks()
         for r in try db.query("SELECT * FROM releases") {
-            docs.append(SyncDoc(kind: .release, key: String(r["discogs_release_id"]!.int!), data: [
+            let id = r["discogs_release_id"]!.int!
+            var data: [String: JSONValue] = [
                 "artist": .from(r["artist"]), "title": .from(r["title"]), "year": .from(r["year"]),
                 "label": .from(r["label"]), "catalog": .from(r["catalog_number"]), "format": .from(r["format"]),
                 "cover": .from(r["cover_url"]), "thumb": .from(r["thumb_url"]), "genres": .from(r["genres"]),
-            ]))
+            ]
+            // Sanglisten kun, når den er hentet: en enhed uden liste må ikke sende en tom liste op.
+            if r["tracks_fetched_at"]?.double != nil {
+                data["tracks"] = .array((allTracks[Int(id)] ?? []).map { t in
+                    .object(["p": .string(t.position), "t": .string(t.title), "d": t.duration.map(JSONValue.string) ?? .null])
+                })
+            }
+            docs.append(SyncDoc(kind: .release, key: String(id), data: data))
         }
 
         var uidOfCopy: [Int64: String] = [:]
@@ -280,6 +289,13 @@ extension ShelfStore {
                     cover_url = excluded.cover_url, thumb_url = excluded.thumb_url, genres = excluded.genres
                 """, id, text("artist") ?? "", text("title") ?? "", int("year"), text("label"), text("catalog"), text("format"),
                        text("cover"), text("thumb"), text("genres"), Date().timeIntervalSince1970)
+            // Uden feltet "tracks" (en enhed, der ikke har hentet listen) beholdes den lokale sangliste.
+            if let list = v["tracks"]?.array {
+                try writeTracks(releaseID: Int(id), list.compactMap { t -> Track? in
+                    guard case .object(let o) = t, let title = o["t"]?.string else { return nil }
+                    return Track(position: o["p"]?.string ?? "", title: title, duration: o["d"]?.string)
+                })
+            }
 
         case .copy:
             let existing = try copyID(uid: d.key)

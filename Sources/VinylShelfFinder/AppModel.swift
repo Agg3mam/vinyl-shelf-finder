@@ -58,6 +58,11 @@ final class AppModel {
     var sidebar: SidebarItem? = .search
     var query = "" { didSet { runSearch(autoSelect: true) } }
     private(set) var results: [Int64] = []
+    /// Sangen, der passede, når et resultat er fundet på en sang (ikke på pladen selv).
+    private(set) var resultTracks: [Int64: Track] = [:]
+    /// Hentning af sanglister fra Discogs (se fetchTracks).
+    var trackProgress: (done: Int, total: Int) = (0, 0)
+    @ObservationIgnored var trackTask: Task<Void, Never>?
     var selection: Int64?
 
     var neighborCount: Int {
@@ -247,11 +252,15 @@ final class AppModel {
         let q = query.trimmingCharacters(in: .whitespaces)
         if q.isEmpty {
             if !results.isEmpty { results = [] }
+            if !resultTracks.isEmpty { resultTracks = [:] }
             return
         }
-        let new = searchIndex.search(q)
+        let hits = searchIndex.hits(q)
+        let new = hits.map(\.id)
+        let tracks = Dictionary(hits.compactMap { h in h.track.map { (h.id, $0) } }, uniquingKeysWith: { a, _ in a })
         // Kun ændringer sendes videre: samme liste må ikke få listen til at opdatere igen.
         if new != results { results = new }
+        if tracks != resultTracks { resultTracks = tracks }
         guard autoSelect else { return }
         // Ingen resultater: højre side må ikke blive ved med at vise den forrige plade.
         guard let first = results.first else {
@@ -548,6 +557,7 @@ final class AppModel {
             let report = try store.applyCollection(items)
             syncState = .idle
             reload()
+            fetchTracks(token: token)
             lastReport = report
             if showReport && !library.locations.isEmpty { showSyncReport = true }
             if !report.newCopies.isEmpty && !library.locations.isEmpty { sidebar = .newRecords }

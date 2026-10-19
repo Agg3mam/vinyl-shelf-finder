@@ -131,6 +131,8 @@ public sealed partial class AppModel : INotifyPropertyChanged
 
     private IReadOnlyList<long> _results = Array.Empty<long>();
     public IReadOnlyList<long> Results { get => _results; private set => Set(ref _results, value); }
+    /// Sangen, der passede, når et resultat er fundet på en sang (ikke på pladen selv).
+    public IReadOnlyDictionary<long, Track> ResultTracks { get; private set; } = new Dictionary<long, Track>();
 
     private long? _selection;
     public long? Selection { get => _selection; set => Set(ref _selection, value); }
@@ -211,11 +213,16 @@ public sealed partial class AppModel : INotifyPropertyChanged
         var q = Query.Trim();
         if (q.Length == 0)
         {
+            ResultTracks = new Dictionary<long, Track>();
             if (Results.Count > 0) Results = Array.Empty<long>();
             return;
         }
-        var found = _searchIndex.Search(q);
+        var hits = _searchIndex.Hits(q);
+        var found = hits.Select(h => h.Id).ToList();
+        // Sættes før Results, så listen tegner sanglinjerne med det samme.
+        ResultTracks = hits.Where(h => h.Track is not null).GroupBy(h => h.Id).ToDictionary(g => g.Key, g => g.First().Track!);
         if (!found.SequenceEqual(Results)) Results = found;
+        else OnChanged(nameof(ResultTracks));
         if (!autoSelect) return;
         if (Results.Count == 0)
         {
@@ -403,6 +410,7 @@ public sealed partial class AppModel : INotifyPropertyChanged
     /// <summary>Ved start og derefter hver time: tag dagens kopi, hvis den mangler. Aldrig i demo.</summary>
     public void StartBackups()
     {
+        RefreshTrackProgress();
         if (IsDemo) return;
         try { LastBackup = DatabaseBackup.Latest(BackupFolder); } catch { }
         BackupIfDue();
@@ -754,10 +762,11 @@ public sealed partial class AppModel : INotifyPropertyChanged
                     // Kan nå frem efter at sync er færdig – må ikke sætte tilstanden tilbage til "running".
                     if (SyncState.Phase == SyncPhase.Running) SyncState = new SyncState(SyncPhase.Running, done, total);
                 }));
-            token = null;
             var report = Store.ApplyCollection(items);
             SyncState = SyncState.Idle;
             Reload();
+            FetchTracks(token);
+            token = null;
             if (showReport && Library.Locations.Count > 0) SyncReportToShow = report;
             if (report.NewCopies.Count > 0 && Library.Locations.Count > 0) Sidebar = new SidebarItem(SidebarKind.NewRecords);
         }

@@ -97,9 +97,56 @@ static class SyncChecks
     public static void Run()
     {
         Docs();
+        Tracks();
         Cloud();
         foreach (var d in Dirs) { try { Directory.Delete(d, true); } catch { } }
     }
+
+    private static void Tracks() => Check.Section("sanglister (søg på en sang)", () =>
+    {
+        var json = """{"id":1,"tracklist":[{"position":"","type_":"heading","title":"Side 1"},{"position":"A1","type_":"track","title":"Shine On You Crazy Diamond (Parts I-V)","duration":"13:30"},{"position":"A2","type_":"track","title":"Welcome To The Machine","duration":""},{"position":"","type_":"index","title":"Suite","sub_tracks":[{"position":"B1a","type_":"track","title":"Have A Cigar"},{"position":"B1b","type_":"track","title":"Wish You Were Here"}]}]}""";
+        var tracks = DiscogsClient.ParseTracklist(System.Text.Encoding.UTF8.GetBytes(json));
+        Check.That(tracks.Select(t => t.Position).SequenceEqual(new[] { "A1", "A2", "B1a", "B1b" }) && tracks[0].Duration == "13:30" && tracks[1].Duration is null,
+                   "sanglisten læses: overskrifter springes over, delte numre giver delene");
+        Check.That(DiscogsClient.ParseTracklist("{}"u8.ToArray()).Count == 0, "udgivelse uden sangliste giver en tom liste");
+
+        using var s = new ShelfStore(TempDb("tracks"));
+        s.ApplyCollection(new[]
+        {
+            new DiscogsCollectionItem(7_000_001, null, new Release(970_001, "Pink Floyd", "Wish You Were Here", Format: "Vinyl, LP")),
+            new DiscogsCollectionItem(7_000_002, null, new Release(970_002, "Pink Floyd", "Animals", Format: "Vinyl, LP")),
+            new DiscogsCollectionItem(7_000_003, null, new Release(970_003, "The Beatles", "Help!", Format: "Vinyl, LP")),
+        });
+        Check.That(s.Db.UserVersion >= 7 && s.TrackProgress() == (0, 3) && s.ReleasesWithoutTracks().SequenceEqual(new[] { 970_001, 970_002, 970_003 }),
+                   "ny database har tabellen til sanglister, og intet er hentet endnu");
+        s.SaveTracks(970_002, new[] { new Track("A1", "Pigs On The Wing (Part One)"), new Track("B1", "Dogs") });
+        s.SaveTracks(970_003, new[] { new Track("A1", "Help!"), new Track("B7", "Yesterday") });
+        s.SaveTracks(970_001, Array.Empty<Track>());
+        Check.That(s.TrackProgress() == (3, 3) && s.ReleasesWithoutTracks().Count == 0, "hentede (også tomme) lister tælles som hentet");
+        var lib = s.LoadLibrary();
+        var index = new SearchIndex(lib);
+        (string? Title, string? Track) First(string q) => index.Hits(q).FirstOrDefault() is { } h ? (lib.Item(h.Id)?.Title, h.Track?.Title) : (null, null);
+        Check.That(First("dogs") == ("Animals", "Dogs"), $"en sang findes, og sangen vises: {First("dogs")}");
+        Check.That(First("floyd dogs") == ("Animals", "Dogs"), $"kunstner + sang: {First("floyd dogs")}");
+        Check.That(First("yesturday") == ("Help!", "Yesterday"), $"sang med stavefejl: {First("yesturday")}");
+        Check.That(First("help") == ("Help!", null), $"pladens egen titel vinder over en sang med samme navn: {First("help")}");
+        Check.That(First("wish you were here").Track is null, "pladen selv vises uden sang, når det er albummet");
+        Check.That(index.Search("dogs").SequenceEqual(index.Hits("dogs").Select(h => h.Id)), "Search og Hits giver samme plader");
+
+        // Sanglisten følger med til en anden enhed – og en enhed uden liste sletter den ikke.
+        var docs = s.ExportSyncDocs();
+        var animals = docs.First(d => d.Kind == SyncKind.Release && d.Key == "970002");
+        Check.That((animals.Data?["tracks"] as JsonArray)?.Count == 2, "sanglisten er med i udgivelsens post");
+        using var b = new ShelfStore(TempDb("tracks-b"));
+        b.ApplySyncDocs(docs);
+        Check.That(b.LoadLibrary().Releases[970_002].Tracks.Select(t => t.Title).SequenceEqual(new[] { "Pigs On The Wing (Part One)", "Dogs" }) && b.PendingSyncDocs().Count == 0,
+                   "en anden enhed får sanglisten og sender intet tilbage");
+        var noTracks = (JsonObject)JsonNode.Parse(animals.Data!.ToJsonString())!;
+        noTracks.Remove("tracks"); noTracks["title"] = "Animals (2018 Remix)";
+        b.ApplySyncDocs(new List<SyncDoc> { new(SyncKind.Release, "970002", noTracks) });
+        var afterOld = b.LoadLibrary().Releases[970_002];
+        Check.That(afterOld.Title == "Animals (2018 Remix)" && afterOld.Tracks.Count == 2, "en post uden sangliste (ældre app) sletter ikke listen");
+    });
 
     private static void Docs() => Check.Section("synkronisering (poster)", () =>
     {

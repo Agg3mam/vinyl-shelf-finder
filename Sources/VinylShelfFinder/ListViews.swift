@@ -60,7 +60,10 @@ struct SearchResultsView: View {
     private var resultsList: some View {
         List(model.results, id: \.self, selection: selectionBinding) { id in
             if let it = model.library.item(id) {
-                RecordRow(item: it, showLocation: true)
+                VStack(alignment: .leading, spacing: 2) {
+                    RecordRow(item: it, showLocation: true)
+                    if let t = model.resultTracks[id] { SongLine(track: t) }
+                }
             }
         }
         .listStyle(.inset)
@@ -465,5 +468,23 @@ struct CoverFlowToggle: View {
         }
         .toggleStyle(.button)
         .help(model.showCoverFlow ? "Vis plade-detaljen igen" : "Bladr i sektionen med Cover Flow (← →)")
+    }
+}
+
+/// Under et søgeresultat, der er fundet på en sang: "♪ Wish You Were Here · B1".
+struct SongLine: View {
+    let track: Track
+
+    var body: some View {
+        Label {
+            Text(track.position.isEmpty ? track.title : "\(track.title) · \(track.position)")
+        } icon: {
+            Image(systemName: "music.note")
+        }
+        .font(.caption)
+        .foregroundStyle(.secondary)
+        .lineLimit(1)
+        .padding(.leading, 4)
+        .accessibilityLabel("Sangen \(track.title)")
     }
 }

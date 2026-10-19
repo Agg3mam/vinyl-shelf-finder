@@ -2,7 +2,12 @@ import SwiftUI
 import VinylCore
 
 /// Navigation: en plade eller en sektion på en bestemt hylde (plader eller cd'er).
-struct RecordRoute: Hashable { let medium: Medium; let copyID: Int64 }
+struct RecordRoute: Hashable {
+    let medium: Medium
+    let copyID: Int64
+    /// Sangen, man søgte på (fremhæves i sanglisten).
+    var track: Track? = nil
+}
 struct SectionRoute: Hashable { let medium: Medium; let locationID: Int64 }
 
 struct RootView: View {
@@ -69,7 +74,7 @@ struct RootView: View {
                         .navigationDestination(for: RecordRoute.self) { RecordView(route: $0) }
                         .navigationDestination(for: SectionRoute.self) { SectionView(route: $0) }
                 }
-                .searchable(text: $query, placement: .navigationBarDrawer(displayMode: .always), prompt: "Kunstner, titel, katalognummer …")
+                .searchable(text: $query, placement: .navigationBarDrawer(displayMode: .always), prompt: "Kunstner, titel, sang …")
             }
         }
         .tabBarMinimizeBehavior(.onScrollDown)

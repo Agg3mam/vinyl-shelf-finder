@@ -162,7 +162,21 @@ public sealed class SearchPane : IPane
         foreach (var id in _shown)
         {
             if (_model.Library.Item(id) is RecordItem it)
-                _list.Items.Add(RecordRow.Build(_model, it, showLocation: true));
+            {
+                var row = RecordRow.Build(_model, it, showLocation: true);
+                if (_model.ResultTracks.TryGetValue(id, out var t))
+                {
+                    // "♪ Wish You Were Here · B1" under et resultat, der er fundet på en sang.
+                    var song = Ui.Label(Ui.Glyph.Music, t.Position.Length == 0 ? t.Title : $"{t.Title} · {t.Position}", "CaptionTextBlockStyle", Ui.Secondary, 12);
+                    song.Margin = new Thickness(4, -4, 0, 4);
+                    Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(song, $"Sangen {t.Title}");
+                    var stack = new StackPanel();
+                    stack.Children.Add(row);
+                    stack.Children.Add(song);
+                    _list.Items.Add(stack);
+                }
+                else _list.Items.Add(row);
+            }
             else
                 _list.Items.Add(new Grid());
         }

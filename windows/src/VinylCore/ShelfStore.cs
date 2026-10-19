@@ -220,6 +220,26 @@ public sealed partial class ShelfStore : IDisposable
                 Db.Execute("PRAGMA user_version = 6");
             });
         }
+        if (Db.UserVersion < 7)
+        {
+            // Sanglister fra Discogs, så man kan søge på en sang. tracks_fetched_at er sat, når listen er hentet
+            // (også hvis den er tom). Samme skema på Mac. Kan køres igen.
+            Db.Transaction(() =>
+            {
+                if (!HasColumn("releases", "tracks_fetched_at")) Db.Execute("ALTER TABLE releases ADD COLUMN tracks_fetched_at REAL");
+                Db.Execute("""
+                    CREATE TABLE IF NOT EXISTS release_tracks (
+                        release_id INTEGER NOT NULL,
+                        idx INTEGER NOT NULL,
+                        position TEXT NOT NULL,
+                        title TEXT NOT NULL,
+                        duration TEXT,
+                        PRIMARY KEY (release_id, idx)
+                    );
+                    """);
+                Db.Execute("PRAGMA user_version = 7");
+            });
+        }
     }
 
     private bool HasColumn(string table, string column) =>
@@ -236,6 +256,8 @@ public sealed partial class ShelfStore : IDisposable
             var rel = ReleaseFrom(r);
             releases[rel.Id] = rel;
         }
+        foreach (var (id, tracks) in LoadTracks())
+            if (releases.TryGetValue(id, out var rel)) releases[id] = rel with { Tracks = tracks };
         var copies = new Dictionary<long, Copy>();
         foreach (var r in Db.Query("SELECT * FROM copies"))
         {

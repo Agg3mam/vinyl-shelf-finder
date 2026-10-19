@@ -13,7 +13,7 @@ struct SearchView: View {
                 let recent = recentlyPlayed
                 if recent.isEmpty {
                     ContentUnavailableView("Søg i din samling", systemImage: "magnifyingglass",
-                                           description: Text("Skriv kunstner, titel, pladeselskab eller katalognummer."))
+                                           description: Text("Skriv kunstner, titel, en sang, pladeselskab eller katalognummer."))
                         .listRowBackground(Color.clear)
                 } else {
                     Section("Senest spillet") { rows(recent) }
@@ -23,7 +23,22 @@ struct SearchView: View {
                 if hits.isEmpty {
                     ContentUnavailableView.search(text: q).listRowBackground(Color.clear)
                 } else {
-                    rows(hits)
+                    ForEach(hits, id: \.item.id) { hit in
+                        NavigationLink(value: RecordRoute(medium: hit.medium, copyID: hit.item.id, track: hit.track)) {
+                            VStack(alignment: .leading, spacing: 4) {
+                                RecordRow(item: hit.item, location: model.library(hit.medium).location(of: hit.item.id))
+                                if let t = hit.track {
+                                    HStack(spacing: 4) {
+                                        Image(systemName: "music.note")
+                                        Text(t.position.isEmpty ? t.title : "\(t.title) · \(t.position)")
+                                    }
+                                    .font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                                        .padding(.leading, 60)
+                                        .accessibilityLabel("Sangen \(t.title)")
+                                }
+                            }
+                        }
+                    }
                 }
             }
         }

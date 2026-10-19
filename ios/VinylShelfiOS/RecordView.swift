@@ -8,6 +8,7 @@ struct RecordView: View {
     let route: RecordRoute
     @State private var playedTick = 0
     @State private var skippedTick = 0
+    @State private var showTracks = false
     /// Kort bekræftelse på knappen efter "Spillet".
     @State private var feedback: String?
 
@@ -49,6 +50,7 @@ struct RecordView: View {
                         .background(.regularMaterial, in: .rect(cornerRadius: 20))
                 }
                 playLine(item)
+                if !item.release.tracks.isEmpty { trackList(item.release.tracks) }
             }
             .padding()
             .padding(.bottom, 60)
@@ -99,6 +101,27 @@ struct RecordView: View {
         }
         .font(.callout)
         .foregroundStyle(.secondary)
+    }
+
+    /// Sanglisten. Sangen, man søgte på, er fremhævet.
+    private func trackList(_ tracks: [Track]) -> some View {
+        DisclosureGroup("Sange (\(tracks.count))", isExpanded: $showTracks) {
+            VStack(alignment: .leading, spacing: 6) {
+                ForEach(Array(tracks.enumerated()), id: \.offset) { _, t in
+                    HStack(alignment: .firstTextBaseline, spacing: 10) {
+                        Text(t.position).monospacedDigit().foregroundStyle(.secondary).frame(minWidth: 30, alignment: .leading)
+                        Text(t.title).fontWeight(t == route.track ? .semibold : .regular)
+                        Spacer(minLength: 8)
+                        if let d = t.duration { Text(d).monospacedDigit().foregroundStyle(.secondary) }
+                    }
+                    .font(.callout)
+                }
+            }
+            .padding(.top, 8)
+        }
+        .padding(16)
+        .background(.thinMaterial, in: .rect(cornerRadius: 18))
+        .onAppear { if route.track != nil { showTracks = true } }
     }
 
     @ViewBuilder private func playLine(_ item: RecordItem) -> some View {

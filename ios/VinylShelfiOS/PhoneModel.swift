@@ -73,10 +73,11 @@ final class PhoneModel {
 
     var hasShelves: Bool { !media.isEmpty }
 
-    /// Søgning i plader og cd'er. Plader først ved samme relevans.
-    func search(_ query: String) -> [(medium: Medium, item: RecordItem)] {
+    /// Søgning i plader og cd'er (også på sange). Plader først ved samme relevans.
+    /// `track` er sangen, der passede, når resultatet er fundet på en sang.
+    func search(_ query: String) -> [(medium: Medium, item: RecordItem, track: Track?)] {
         Medium.allCases.flatMap { m in
-            (indexes[m]?.search(query) ?? []).compactMap { id in library(m).item(id).map { (m, $0) } }
+            (indexes[m]?.hits(query) ?? []).compactMap { h in library(m).item(h.id).map { (m, $0, h.track) } }
         }
     }
 

@@ -20,7 +20,12 @@ public sealed record Release(
     string? Genres = null)
 {
     public Uri DiscogsUrl => new($"https://www.discogs.com/release/{Id}");
+    /// Sanglisten fra Discogs (tom, indtil den er hentet).
+    public IReadOnlyList<Track> Tracks { get; init; } = Array.Empty<Track>();
 }
+
+/// Én sang på en udgivelse, som Discogs skriver den, fx position "B1" (side B, nummer 1) eller "3" på en cd.
+public sealed record Track(string Position, string Title, string? Duration = null);
 
 // MARK: Plader og cd'er
 

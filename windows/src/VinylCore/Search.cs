@@ -19,7 +19,12 @@ public sealed class SearchIndex
         string ReleaseId,
         string Full,
         /// Plads i reolens rækkefølge (sektion, position). Uplacerede plader får int.MaxValue.
-        int ShelfOrder);
+        int ShelfOrder,
+        /// Sangene på udgivelsen (tom, indtil sanglisten er hentet).
+        (Track Track, string[] Words, string Full)[] Tracks);
+
+    /// Et søgeresultat. Track er sat, når det er en sang på pladen, der passer (ikke pladen selv).
+    public sealed record Hit(long Id, Track? Track);
 
     private readonly List<Entry> _entries;
 
@@ -39,7 +44,8 @@ public sealed class SearchIndex
                 Normalize(r.Artist).Replace(" ", ""),
                 r.Id.ToString(CultureInfo.InvariantCulture),
                 Normalize($"{r.Artist} {r.Title} {r.Label ?? ""} {r.CatalogNumber ?? ""}"),
-                library.GlobalIndex.TryGetValue(it.Id, out var g) ? g : int.MaxValue);
+                library.GlobalIndex.TryGetValue(it.Id, out var g) ? g : int.MaxValue,
+                r.Tracks.Select(t => (t, Words(t.Title), Normalize(t.Title))).ToArray());
         }).ToList();
     }
 
@@ -62,16 +68,21 @@ public sealed class SearchIndex
 
     /// Returnerer kopi-id'er sorteret efter relevans. Ved samme relevans kommer pladerne i
     /// reolens rækkefølge (sektion, derefter position), og uplacerede plader til sidst.
-    public List<long> Search(string query, int limit = 60)
+    public List<long> Search(string query, int limit = 60) => Hits(query, limit).Select(h => h.Id).ToList();
+
+    /// Som Search, men fortæller også, hvilken sang der passede, når det er en sang og ikke pladen.
+    /// En sang findes på sin titel, evt. sammen med kunstneren ("floyd wish you were here").
+    public List<Hit> Hits(string query, int limit = 60)
     {
         var tokens = Words(query).Where(t => t.Length > 0).ToArray();
         if (tokens.Length == 0) return new();
         var phrase = string.Join(" ", tokens);
         var compactQuery = string.Concat(tokens);
 
-        var scored = new List<(long Id, int Score, int Order)>();
+        var scored = new List<(long Id, int Score, int Order, Track? Track)>();
         foreach (var e in _entries)
         {
+            var song = BestTrack(tokens, phrase, e);
             int total = 0;
             bool allMatched = true;
             foreach (var t in tokens)
@@ -84,17 +95,66 @@ public sealed class SearchIndex
             {
                 // Katalognummer skrevet med/uden mellemrum: "shvl 804" / "shvl804".
                 if (compactQuery.Length >= 3 && e.CompactCatalog.Contains(compactQuery, StringComparison.Ordinal))
-                    scored.Add((e.Id, 25, e.ShelfOrder));
+                    scored.Add((e.Id, 25, e.ShelfOrder, null));
                 else if (tokens.Length == 1 && tokens[0] == e.ReleaseId)
-                    scored.Add((e.Id, 100, e.ShelfOrder));
+                    scored.Add((e.Id, 100, e.ShelfOrder, null));
+                else if (song is var (st, ss))
+                    scored.Add((e.Id, ss, e.ShelfOrder, st));
                 continue;
             }
             if (e.Full.Contains(phrase, StringComparison.Ordinal)) total += 6;
             if (tokens.Length == 1 && tokens[0] == e.ReleaseId) total += 100;
-            scored.Add((e.Id, total, e.ShelfOrder));
+            // Passer en sang bedre end pladen (fx en sang med samme navn som en kunstner), vises sangen.
+            if (song is var (t2, s2) && s2 > total + 4) scored.Add((e.Id, s2, e.ShelfOrder, t2));
+            else scored.Add((e.Id, total, e.ShelfOrder, null));
         }
         return scored.OrderByDescending(x => x.Score).ThenBy(x => x.Order).ThenBy(x => x.Id)
-                     .Take(Math.Max(0, limit)).Select(x => x.Id).ToList();
+                     .Take(Math.Max(0, limit)).Select(x => new Hit(x.Id, x.Track)).ToList();
+    }
+
+    /// Den sang på pladen, der passer bedst: hvert ord i søgningen skal stå i sangens titel eller kunstneren,
+    /// og mindst ét i sangens titel. Lidt lavere vægt end pladens egen titel, så albummet vinder ved lighed.
+    private static (Track Track, int Score)? BestTrack(string[] tokens, string phrase, Entry e)
+    {
+        (Track Track, int Score)? best = null;
+        foreach (var t in e.Tracks)
+        {
+            int total = 0;
+            bool inTitle = false;
+            foreach (var tok in tokens)
+            {
+                int inTrack = WordScore(tok, t.Words, 3);
+                int s = Math.Max(inTrack, WordScore(tok, e.ArtistWords, 2));
+                if (s == 0) { total = 0; break; }
+                if (inTrack > 0) inTitle = true;
+                total += s;
+            }
+            if (total == 0 || !inTitle) continue;
+            if (t.Full.Contains(phrase, StringComparison.Ordinal)) total += 6;
+            if (t.Full == phrase) total += 4;
+            if (best is null || total > best.Value.Score) best = (t.Track, total);
+        }
+        return best;
+    }
+
+    /// Ordets bedste træf blandt words (også med én-to stavefejl, som ellers i søgningen).
+    private static int WordScore(string t, string[] words, int weight)
+    {
+        int best = 0;
+        foreach (var w in words)
+        {
+            if (w == t) best = Math.Max(best, 10 * weight);
+            else if (w.StartsWith(t, StringComparison.Ordinal)) best = Math.Max(best, 7 * weight);
+            else if (t.Length >= 3 && w.Contains(t, StringComparison.Ordinal)) best = Math.Max(best, 4 * weight);
+        }
+        if (best > 0 || t.Length < 4) return best;
+        int maxDist = t.Length >= 7 ? 2 : 1;
+        foreach (var w in words)
+        {
+            if (Math.Abs(w.Length - t.Length) <= maxDist && EditDistance(t, w, maxDist) <= maxDist) return 5;
+            if (w.Length > t.Length && EditDistance(t, w[..t.Length], maxDist) <= maxDist) return 3;
+        }
+        return 0;
     }
 
     private static int Score(string t, Entry e)

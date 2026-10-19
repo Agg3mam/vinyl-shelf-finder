@@ -8,6 +8,7 @@ struct RecordDetailView: View {
     @Environment(AppModel.self) private var model
     let copyID: Int64
     @ViewState private var showSortEditor = false
+    @ViewState private var showTracks = false
     @ViewState private var confirmDelete = false
     /// Visningen genbruges, når man skifter plade (ingen `.id` på hele skærmen – så kan
     /// baggrund og farvetone krydsfade). Derfor nulstilles pladespecifik tilstand og
@@ -36,6 +37,7 @@ struct RecordDetailView: View {
             .navigationTitle(n.target.title)
             .onChange(of: copyID) {
                 showSortEditor = false
+                showTracks = model.resultTracks[copyID] != nil
                 confirmDelete = false
                 scrollPosition.scrollTo(edge: .top)
             }
@@ -53,6 +55,13 @@ struct RecordDetailView: View {
                 DetailActions(item: n.target)
             } else {
                 UnplacedPanel(copyID: copyID)
+            }
+            if !n.target.release.tracks.isEmpty {
+                DisclosureGroup("Sange (\(n.target.release.tracks.count))", isExpanded: $showTracks) {
+                    TrackList(tracks: n.target.release.tracks, highlight: model.resultTracks[copyID])
+                        .padding(.top, Spacing.xs)
+                }
+                .foregroundStyle(Ink.secondary)
             }
             DisclosureGroup("Sortering", isExpanded: $showSortEditor) {
                 SortOverrideEditor(item: n.target).padding(.top, Spacing.xs)
@@ -546,6 +555,27 @@ struct SortOverrideEditor: View {
             artist = item.copy.sortArtistOverride ?? ""
             title = item.copy.sortTitleOverride ?? ""
             artistRule = model.rules.artistOverrides[item.artist] ?? ""
+        }
+    }
+}
+
+/// Sanglisten på pladen. Sangen, man søgte på, er fremhævet.
+struct TrackList: View {
+    let tracks: [Track]
+    var highlight: Track?
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: Spacing.xxs) {
+            ForEach(Array(tracks.enumerated()), id: \.offset) { _, t in
+                HStack(alignment: .firstTextBaseline, spacing: Spacing.s) {
+                    Text(t.position).monospacedDigit().foregroundStyle(Ink.tertiary).frame(minWidth: 30, alignment: .leading)
+                    Text(t.title).foregroundStyle(t == highlight ? Ink.primary : Ink.secondary)
+                        .fontWeight(t == highlight ? .semibold : .regular)
+                    Spacer(minLength: Spacing.s)
+                    if let d = t.duration { Text(d).monospacedDigit().foregroundStyle(Ink.tertiary) }
+                }
+                .font(.callout)
+            }
         }
     }
 }

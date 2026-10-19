@@ -25,6 +25,7 @@ public sealed class DetailPane
     };
     private long? _shownCopy;
     private bool _sortOpen;
+    private bool _tracksOpen;
     // Smal kolonne (lille vindue): mindre cover og luft, knapperne fordelt over bredden.
     private const double NarrowWidth = 560;
     private bool _narrow;
@@ -71,6 +72,7 @@ public sealed class DetailPane
         if (id != _shownCopy)
         {
             _sortOpen = false;
+            _tracksOpen = id is long sel && _model.ResultTracks.ContainsKey(sel);
             _toast.IsOpen = false;
             _scroll.ChangeView(null, 0, null, true);
         }
@@ -101,6 +103,7 @@ public sealed class DetailPane
         {
             p.Children.Add(UnplacedPanel(it));
         }
+        if (it.Release.Tracks.Count > 0) p.Children.Add(TrackList(it));
         p.Children.Add(SortEditor(it));
 
         var link = new HyperlinkButton
@@ -304,6 +307,39 @@ public sealed class DetailPane
             p.Children.Add(Ui.Text("Opret først reoler og sektioner."));
         }
         return p;
+    }
+
+    /// <summary>"Sange": sanglisten fra Discogs. Sangen, man søgte på, er fremhævet.</summary>
+    private FrameworkElement TrackList(RecordItem it)
+    {
+        _model.ResultTracks.TryGetValue(it.Id, out var highlight);
+        var grid = new Grid { ColumnSpacing = 12, RowSpacing = 4 };
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(36) });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        for (int i = 0; i < it.Release.Tracks.Count; i++)
+        {
+            var t = it.Release.Tracks[i];
+            int row = i;
+            grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            void Cell(FrameworkElement e, int col) { Grid.SetRow(e, row); Grid.SetColumn(e, col); grid.Children.Add(e); }
+            Cell(Ui.Text(t.Position, color: Ui.Secondary, wrap: false), 0);
+            var title = Ui.Text(t.Title);
+            if (t == highlight) title.FontWeight = Microsoft.UI.Text.FontWeights.SemiBold;
+            Cell(title, 1);
+            if (t.Duration is string d) Cell(Ui.Text(d, color: Ui.Secondary, wrap: false), 2);
+        }
+        var expander = new Expander
+        {
+            Header = $"Sange ({it.Release.Tracks.Count})",
+            Content = grid,
+            IsExpanded = _tracksOpen,
+            HorizontalAlignment = HorizontalAlignment.Stretch,
+            HorizontalContentAlignment = HorizontalAlignment.Stretch,
+        };
+        expander.Expanding += (_, _) => _tracksOpen = true;
+        expander.Collapsed += (_, _) => _tracksOpen = false;
+        return expander;
     }
 
     /// <summary>"Sortering": hvordan pladen sorteres, og regler for kunstner og denne plade.</summary>

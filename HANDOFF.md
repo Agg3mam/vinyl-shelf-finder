@@ -464,6 +464,17 @@ projektet med egen konto (RLS adskiller data), men hver skal have sit eget Disco
   Supabase; apps åbner `/auth/v1/authorize?provider=google&redirect_to=vinylshelf://auth`). Apple-login kræver
   Apple Developer Program. Morfars iPhone: valget står mellem en gratis webudgave og TestFlight (betalt).
 
+### 19. okt: søg på en sang (gren `claude/sange`, bygget oven på `claude/iphone-app`)
+
+- **Skema v7** (begge): tabellen `release_tracks` og `releases.tracks_fetched_at`. `Tracks.swift` / `Tracks.cs`:
+  `parseTracklist` (springer `heading` over, folder `index`-delnumre ud), `saveTracks`, `releasesWithoutTracks`, `trackProgress`.
+- **Hentning:** `AppModel+Tracks.swift` / `AppModel.Tracks.cs` henter manglende lister én ad gangen efter hver Discogs-
+  synkronisering, eller med "Hent sanglister" under Indstillinger › Discogs. 404 gemmes som tom liste.
+- **Søgning:** `SearchIndex.hits` / `Hits` giver også sangen, der passede (`track`). Pladens egen titel vinder ved lighed.
+  Mac/Windows viser "♪ Sang · B1" under resultatet og en sammenklappelig "Sange (N)" på pladen. Det samme på iPhone.
+- **Synk:** udgivelsens post har feltet `tracks` (kun når listen er hentet). En post uden feltet sletter ikke en lokal liste.
+- Afprøvet: Discogs' rigtige svar har samme form (offentlig udgivelse, uden token), og iPhone-simulatoren med demo-data.
+
 ### Ikke færdigt / næste skridt (spørg brugeren om rækkefølgen)
 
 1. **Mobilside på det lokale netværk (opgave 1)**, så QR-koderne virker. Det er det største åbne punkt.

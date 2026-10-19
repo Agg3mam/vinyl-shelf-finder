@@ -42,8 +42,25 @@ struct AccountSettings: View {
             }
             Text("Tokenet vises aldrig, logges ikke og gemmes kun i macOS' nøglering.")
                 .font(.caption).foregroundStyle(.secondary)
+            if model.hasToken {
+                Section {
+                    LabeledContent("Sanglister") {
+                        Text(model.trackProgress.total == 0 ? "Ingen plader endnu"
+                             : "\(model.trackProgress.done) af \(model.trackProgress.total) hentet")
+                            .monospacedDigit()
+                    }
+                    if model.fetchingTracks {
+                        ProgressView(value: Double(model.trackProgress.done), total: Double(max(model.trackProgress.total, 1)))
+                    } else if model.trackProgress.done < model.trackProgress.total {
+                        Button("Hent sanglister") { model.fetchTracksNow() }
+                    }
+                } footer: {
+                    Text("Sanglisterne gør, at du kan søge på en sang. De hentes fra Discogs i baggrunden efter hver synkronisering (ca. 45 plader i minuttet) og deles med dine andre enheder via kontoen.")
+                }
+            }
         }
         .formStyle(.grouped)
+        .onAppear { model.refreshTrackProgress() }
     }
 }
 

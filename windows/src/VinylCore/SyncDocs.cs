@@ -91,13 +91,24 @@ public sealed partial class ShelfStore
         var docs = new List<SyncDoc>();
         static JsonNode? V(SqlRow r, string c) => SyncDoc.From(r[c]);
 
+        var allTracks = LoadTracks();
         foreach (var r in Db.Query("SELECT * FROM releases"))
-            docs.Add(new SyncDoc(SyncKind.Release, r.Long("discogs_release_id")!.Value.ToString(CultureInfo.InvariantCulture), new JsonObject
+        {
+            var id = r.Long("discogs_release_id")!.Value;
+            var data = new JsonObject
             {
                 ["artist"] = V(r, "artist"), ["title"] = V(r, "title"), ["year"] = V(r, "year"),
                 ["label"] = V(r, "label"), ["catalog"] = V(r, "catalog_number"), ["format"] = V(r, "format"),
                 ["cover"] = V(r, "cover_url"), ["thumb"] = V(r, "thumb_url"), ["genres"] = V(r, "genres"),
-            }));
+            };
+            // Sanglisten kun, når den er hentet: en enhed uden liste må ikke sende en tom liste op.
+            if (r.Double("tracks_fetched_at") is not null)
+                data["tracks"] = new JsonArray((allTracks.TryGetValue((int)id, out var tl) ? tl : new()).Select(t => (JsonNode?)new JsonObject
+                {
+                    ["p"] = t.Position, ["t"] = t.Title, ["d"] = t.Duration,
+                }).ToArray());
+            docs.Add(new SyncDoc(SyncKind.Release, id.ToString(CultureInfo.InvariantCulture), data));
+        }
 
         var uidOfCopy = new Dictionary<long, string>();
         foreach (var r in Db.Query("SELECT * FROM copies"))
@@ -265,6 +276,10 @@ public sealed partial class ShelfStore
                         cover_url = excluded.cover_url, thumb_url = excluded.thumb_url, genres = excluded.genres
                     """, rid, Text(v, "artist") ?? "", Text(v, "title") ?? "", Long(v, "year"), Text(v, "label"), Text(v, "catalog"),
                     Text(v, "format"), Text(v, "cover"), Text(v, "thumb"), Text(v, "genres"), Unix(DateTimeOffset.Now));
+                // Uden feltet "tracks" (en enhed, der ikke har hentet listen) beholdes den lokale sangliste.
+                if (v["tracks"] is JsonArray list)
+                    WriteTracks(rid, list.OfType<JsonObject>().Select(t => Text(t, "t") is string title ? new Track(Text(t, "p") ?? "", title, Text(t, "d")) : null)
+                                         .OfType<Track>().ToList());
                 break;
 
             case SyncKind.Copy:

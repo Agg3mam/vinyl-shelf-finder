@@ -568,7 +568,7 @@ do {
     check(SQLValue.double(.nan).int == nil && SQLValue.double(1e300).int == nil && SQLValue.double(3.9).int == 3, "REAL→Int crasher ikke")
     let (s, url) = try freshStore("schema")
     defer { try? FileManager.default.removeItem(at: url) }
-    check(s.db.userVersion == 6, "skema v6")
+    check(s.db.userVersion == 7, "skema v7")
     _ = try s.applyCollection([item(1, 1, "O'Brien", "Robert'); DROP TABLE copies;--")])
     let reopened = try ShelfStore(path: url.path)
     check((try? reopened.loadLibrary())?.allItems.first?.title == "Robert'); DROP TABLE copies;--", "genåbning + strenge bindes sikkert")
@@ -582,7 +582,7 @@ do {
     try s.db.execute("DROP TABLE plays; PRAGMA user_version = 3;")
     let up = try ShelfStore(path: url.path)
     let cid = try up.loadLibrary().copies.keys.first!
-    check(up.db.userVersion == 6 && (try? up.logPlay(copyID: cid)) != nil, "migration v3→v6 opretter plays og bevarer kopier")
+    check(up.db.userVersion == 7 && (try? up.logPlay(copyID: cid)) != nil, "migration v3→v7 opretter plays og bevarer kopier")
 }
 
 // Søgning: Unicode og grænsetilfælde
@@ -2174,6 +2174,55 @@ do {
     try b.applySyncDocs([SyncDoc(kind: .play, key: "ukendt-afspilning", data: ["copy": .string("findes-ikke"), "at": .double(1)])])
     check(!(try b.pendingSyncDocs()).contains { $0.key == "ukendt-afspilning" }, "en post, der ikke kunne lægges ind, slettes ikke i skyen")
 } catch { check(false, "synkronisering: \(error)") }
+
+// MARK: Sanglister (søg på en sang)
+do {
+    let json = #"{"id":1,"tracklist":[{"position":"","type_":"heading","title":"Side 1"},{"position":"A1","type_":"track","title":"Shine On You Crazy Diamond (Parts I-V)","duration":"13:30"},{"position":"A2","type_":"track","title":"Welcome To The Machine","duration":""},{"position":"","type_":"index","title":"Suite","sub_tracks":[{"position":"B1a","type_":"track","title":"Have A Cigar"},{"position":"B1b","type_":"track","title":"Wish You Were Here"}]}]}"#
+    let tracks = try DiscogsClient.parseTracklist(Data(json.utf8))
+    check(tracks.map(\.position) == ["A1", "A2", "B1a", "B1b"] && tracks[0].duration == "13:30" && tracks[1].duration == nil,
+          "sanglisten læses: overskrifter springes over, delte numre giver delene: \(tracks.map(\.position))")
+    check((try? DiscogsClient.parseTracklist(Data("{}".utf8)))?.isEmpty == true, "udgivelse uden sangliste giver en tom liste")
+
+    let (s, url) = try freshStore("tracks"); defer { try? FileManager.default.removeItem(at: url) }
+    _ = try s.applyCollection([
+        DiscogsCollectionItem(instanceID: 7_000_001, dateAdded: nil, release: Release(id: 970_001, artist: "Pink Floyd", title: "Wish You Were Here", format: "Vinyl, LP")),
+        DiscogsCollectionItem(instanceID: 7_000_002, dateAdded: nil, release: Release(id: 970_002, artist: "Pink Floyd", title: "Animals", format: "Vinyl, LP")),
+        DiscogsCollectionItem(instanceID: 7_000_003, dateAdded: nil, release: Release(id: 970_003, artist: "The Beatles", title: "Help!", format: "Vinyl, LP")),
+    ])
+    let p0 = try s.trackProgress(), missing0 = try s.releasesWithoutTracks()
+    check(s.db.userVersion >= 7 && p0 == (0, 3) && missing0 == [970_001, 970_002, 970_003],
+          "ny database har tabellen til sanglister, og intet er hentet endnu")
+    try s.saveTracks(releaseID: 970_002, [Track(position: "A1", title: "Pigs On The Wing (Part One)"), Track(position: "B1", title: "Dogs")])
+    try s.saveTracks(releaseID: 970_003, [Track(position: "A1", title: "Help!"), Track(position: "B7", title: "Yesterday")])
+    try s.saveTracks(releaseID: 970_001, [])
+    let p1 = try s.trackProgress(), missing1 = try s.releasesWithoutTracks()
+    check(p1 == (3, 3) && missing1.isEmpty, "hentede (også tomme) lister tælles som hentet")
+    let lib = try s.loadLibrary()
+    let index = SearchIndex(library: lib)
+    func first(_ q: String) -> (title: String?, track: String?) {
+        guard let h = index.hits(q).first else { return (nil, nil) }
+        return (lib.item(h.id)?.title, h.track?.title)
+    }
+    check(first("dogs") == ("Animals", "Dogs"), "en sang findes, og sangen vises: \(first("dogs"))")
+    check(first("floyd dogs") == ("Animals", "Dogs"), "kunstner + sang: \(first("floyd dogs"))")
+    check(first("yesturday") == ("Help!", "Yesterday"), "sang med stavefejl: \(first("yesturday"))")
+    check(first("help") == ("Help!", nil), "pladens egen titel vinder over en sang med samme navn: \(first("help"))")
+    check(first("wish you were here").track == nil, "pladen selv vises uden sang, når det er albummet")
+    check(index.search("dogs") == index.hits("dogs").map(\.id), "search og hits giver samme plader")
+
+    // Sanglisten følger med til en anden enhed – og en enhed uden liste sletter den ikke.
+    let docs = try s.exportSyncDocs()
+    let animals = docs.first { $0.kind == .release && $0.key == "970002" }
+    check(animals?.data?["tracks"]?.array?.count == 2, "sanglisten er med i udgivelsens post")
+    let (b, burl) = try freshStore("tracks-b"); defer { try? FileManager.default.removeItem(at: burl) }
+    try b.applySyncDocs(docs)
+    check(try b.loadLibrary().releases[970_002]?.tracks.map(\.title) == ["Pigs On The Wing (Part One)", "Dogs"] && (try b.pendingSyncDocs()).isEmpty,
+          "en anden enhed får sanglisten og sender intet tilbage")
+    var noTracks = animals!.data!; noTracks["tracks"] = nil; noTracks["title"] = .string("Animals (2018 Remix)")
+    try b.applySyncDocs([SyncDoc(kind: .release, key: "970002", data: noTracks)])
+    let afterOld = try b.loadLibrary().releases[970_002]
+    check(afterOld?.title == "Animals (2018 Remix)" && afterOld?.tracks.count == 2, "en post uden sangliste (ældre app) sletter ikke listen")
+} catch { check(false, "sanglister: \(error)") }
 
 // MARK: Kontoen i skyen (falsk Supabase, uden net)
 /// Svarer som Supabase: login med koden 123456, og en tabel med poster, hvor serveren sætter updated_at.

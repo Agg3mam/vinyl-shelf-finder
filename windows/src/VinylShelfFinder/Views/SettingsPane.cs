@@ -55,6 +55,8 @@ public sealed class SettingsPane : IPane
         else if (_tab == "cloud" && property is nameof(AppModel.CloudLoggedIn) or nameof(AppModel.CloudEmail) or nameof(AppModel.CloudSyncing)
                  or nameof(AppModel.CloudMessage) or nameof(AppModel.CloudLastSync))
             Rebuild();
+        else if (_tab == "discogs" && property is nameof(AppModel.TrackProgress) or nameof(AppModel.FetchingTracks))
+            Rebuild();
         else if (property == nameof(AppModel.Rules) && _tab == "sort" && !_building)
             Rebuild();
     }
@@ -220,6 +222,14 @@ public sealed class SettingsPane : IPane
         rows.Add(Footer("Tokenet vises aldrig, logges ikke og gemmes kun i Windows' Legitimationsadministrator."));
         if (_model.IsDemo) rows.Add(Footer("Demo-tilstanden forbinder ikke til Discogs."));
         p.Children.Add(Group(rows.ToArray()));
+
+        if (!_model.HasToken) return;
+        var (done, total) = _model.TrackProgress;
+        var tracks = new List<UIElement> { Row("Sanglister", total == 0 ? "Ingen plader endnu" : $"{done} af {total} hentet") };
+        if (_model.FetchingTracks) tracks.Add(new ProgressBar { Maximum = Math.Max(total, 1), Value = done, MaxWidth = 420, HorizontalAlignment = HorizontalAlignment.Left });
+        else if (done < total) tracks.Add(Ui.Btn("Hent sanglister", (_, _) => _model.FetchTracksNow()));
+        tracks.Add(Footer("Sanglisterne gør, at du kan søge på en sang. De hentes fra Discogs i baggrunden efter hver synkronisering (ca. 45 plader i minuttet) og deles med dine andre enheder via kontoen."));
+        p.Children.Add(Group(tracks.ToArray()));
     }
 
     // MARK: Sortering
