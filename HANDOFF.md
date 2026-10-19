@@ -475,6 +475,16 @@ projektet med egen konto (RLS adskiller data), men hver skal have sit eget Disco
 - **Synk:** udgivelsens post har feltet `tracks` (kun når listen er hentet). En post uden feltet sletter ikke en lokal liste.
 - Afprøvet: Discogs' rigtige svar har samme form (offentlig udgivelse, uden token), og iPhone-simulatoren med demo-data.
 
+### 19. okt: ny søgning (gren `claude/sange`)
+
+- `Search.swift` / `Search.cs` er skrevet om efter research (Algolia, Meilisearch, Typesense, Elasticsearch, Spotify):
+  en fast rækkefølge af regler (se kommentaren øverst i `Search.swift`), en ordliste, så hvert ord kun sammenlignes én
+  gang pr. søgning, romertal, sammentrukne ord ("acdc", "okcomputer"), "aa"/"oe"/"ue", højst 10 ord pr. søgning.
+- Målt på 360 + 246 søgninger (495 rigtige albummer med sanglister): rigtigt øverst 93 % → 98 % og 91 % → 96 %;
+  ca. 10 ms pr. tastetryk ved 500 plader og 15–25 ms ved 2.500 (før 36 og 194 ms). Tre test-agenter (kodegennemgang,
+  djævlens advokat, pladesamler) godkendte. Mac og Windows gav identisk top-20 på 907 søgninger.
+- Testsættet ligger kun lokalt (ikke i repoet); de vigtigste tilfælde er faste checks ("søgning ...") på begge platforme.
+
 ### Ikke færdigt / næste skridt (spørg brugeren om rækkefølgen)
 
 1. **Mobilside på det lokale netværk (opgave 1)**, så QR-koderne virker. Det er det største åbne punkt.

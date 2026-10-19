@@ -147,6 +147,28 @@ static class SyncChecks
         Check.That(blue.Count >= 4 && blue[0] == ("Blue", null) && blue[1] == ("Kind Of Blue", null) && blue.Skip(2).All(b => b.Item2 is not null),
                    $"albummer før sange, og et album med præcis den titel øverst: {string.Join("; ", blue)}");
 
+        // Søgereglerne (samme checks på Mac): faste tilfælde fra testene af den nye søgning.
+        using var rs = new ShelfStore(TempDb("search-rules"));
+        DiscogsCollectionItem R2(int i, string artist, string title, string? cat = null, int? year = null) =>
+            new(7_200_000 + i, null, new Release(972_000 + i, artist, title, year, CatalogNumber: cat, Format: "Vinyl, LP"));
+        rs.ApplyCollection(new[] { R2(1, "The Beatles", "Please Please Me"), R2(2, "The Beatles", "Beatles For Sale"),
+                                   R2(3, "Led Zeppelin", "Led Zeppelin II"), R2(4, "AC/DC", "Back In Black", cat: "K 50735"),
+                                   R2(5, "Amy Winehouse", "Back To Black"), R2(6, "Prince", "1999", year: 1982),
+                                   R2(7, "Bryan Adams", "Reckless", year: 1999), R2(8, "Elvis Costello", "This Year's Model", cat: "RAD 3"),
+                                   R2(9, "Radiohead", "OK Computer") });
+        rs.SaveTracks(972_007, new[] { new Track("A1", "Summer Of '69") });
+        var rlib = rs.LoadLibrary(); var ridx = new SearchIndex(rlib);
+        List<string> Top(string q) => ridx.Hits(q).Select(h => rlib.Item(h.Id)!.Title + (h.Track is { } t ? " ♪ " + t.Title : "")).ToList();
+        var ruleCases = new (string Q, string[] Want)[]
+        {
+            ("rad", new[] { "OK Computer" }), ("1999", new[] { "1999" }), ("back i", new[] { "Back In Black" }), ("led zeppelin 2", new[] { "Led Zeppelin II" }),
+            ("acdc", new[] { "Back In Black" }), ("okcomputer", new[] { "OK Computer" }), ("k50735", new[] { "Back In Black" }), ("summer of 69", new[] { "Reckless ♪ Summer Of '69" }),
+            ("beatles", new[] { "Please Please Me", "Beatles For Sale" }), ("beetles", new[] { "Please Please Me", "Beatles For Sale" }), ("zepelin", new[] { "Led Zeppelin II" }),
+        };
+        foreach (var (q, want) in ruleCases)
+            Check.That(Top(q).Take(want.Length).SequenceEqual(want), $"søgning \"{q}\" giver {string.Join(", ", want)}: {string.Join(", ", Top(q).Take(3))}");
+        Check.That(Top("the zzzzzz").Count == 0 && Top("!!!").Count == 0, "en artikel alene (eller tegn) giver ingen resultater");
+
         // Sanglisten følger med til en anden enhed – og en enhed uden liste sletter den ikke.
         var docs = s.ExportSyncDocs();
         var animals = docs.First(d => d.Kind == SyncKind.Release && d.Key == "970002");

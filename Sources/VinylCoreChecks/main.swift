@@ -2227,6 +2227,30 @@ do {
           && blue.dropFirst(2).allSatisfy { $0.1 != nil },
           "albummer før sange, og et album med præcis den titel øverst: \(blue)")
 
+    // Søgereglerne (samme checks på Windows): faste tilfælde fra testene af den nye søgning.
+    let (rs, rurl) = try freshStore("search-rules"); defer { try? FileManager.default.removeItem(at: rurl) }
+    func r2(_ i: Int, _ artist: String, _ title: String, cat: String? = nil, year: Int? = nil) -> DiscogsCollectionItem {
+        DiscogsCollectionItem(instanceID: 7_200_000 + i, dateAdded: nil, release: Release(id: 972_000 + i, artist: artist, title: title, year: year,
+                                                                                           catalogNumber: cat, format: "Vinyl, LP"))
+    }
+    _ = try rs.applyCollection([r2(1, "The Beatles", "Please Please Me"), r2(2, "The Beatles", "Beatles For Sale"),
+                                r2(3, "Led Zeppelin", "Led Zeppelin II"), r2(4, "AC/DC", "Back In Black", cat: "K 50735"),
+                                r2(5, "Amy Winehouse", "Back To Black"), r2(6, "Prince", "1999", year: 1982),
+                                r2(7, "Bryan Adams", "Reckless", year: 1999), r2(8, "Elvis Costello", "This Year's Model", cat: "RAD 3"),
+                                r2(9, "Radiohead", "OK Computer")])
+    try rs.saveTracks(releaseID: 972_007, [Track(position: "A1", title: "Summer Of '69")])
+    let rlib = try rs.loadLibrary(), ridx = SearchIndex(library: rlib)
+    func top(_ q: String) -> [String] { ridx.hits(q).map { h in rlib.item(h.id)!.title + (h.track.map { " ♪ " + $0.title } ?? "") } }
+    let ruleCases: [(String, [String])] = [
+        ("rad", ["OK Computer"]), ("1999", ["1999"]), ("back i", ["Back In Black"]), ("led zeppelin 2", ["Led Zeppelin II"]),
+        ("acdc", ["Back In Black"]), ("okcomputer", ["OK Computer"]), ("k50735", ["Back In Black"]), ("summer of 69", ["Reckless ♪ Summer Of '69"]),
+        ("beatles", ["Please Please Me", "Beatles For Sale"]), ("beetles", ["Please Please Me", "Beatles For Sale"]), ("zepelin", ["Led Zeppelin II"]),
+    ]
+    for (q, want) in ruleCases {
+        check(Array(top(q).prefix(want.count)) == want, "søgning \"\(q)\" giver \(want): \(top(q).prefix(3))")
+    }
+    check(top("the zzzzzz").isEmpty && top("!!!").isEmpty, "en artikel alene (eller tegn) giver ingen resultater")
+
     // Sanglisten følger med til en anden enhed – og en enhed uden liste sletter den ikke.
     let docs = try s.exportSyncDocs()
     let animals = docs.first { $0.kind == .release && $0.key == "970002" }
