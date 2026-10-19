@@ -33,7 +33,15 @@ sealed class StubCloud : HttpMessageHandler
                     if (body?["token"]?.GetValue<string>() == "123456" || body?["token_hash"]?.GetValue<string>() == "pkce_hash1") output = session;
                     else { status = 403; output = new JsonObject { ["code"] = 403, ["error_code"] = "otp_expired" }; }
                     break;
+                case ("POST", "/auth/v1/token") when q.GetValueOrDefault("grant_type") == "password":
+                    if (body?["email"]?.GetValue<string>() == "test@example.com" && body?["password"]?.GetValue<string>() == "hemmelig-kode") output = session;
+                    else { status = 400; output = new JsonObject { ["code"] = 400, ["error_code"] = "invalid_credentials" }; }
+                    break;
                 case ("POST", "/auth/v1/token"): output = session; break;
+                case ("PUT", "/auth/v1/user"):
+                    if (!request.Headers.TryGetValues("Authorization", out var a) || a.First() != "Bearer adgang") { status = 401; break; }
+                    output = new JsonObject { ["id"] = "00000000-0000-0000-0000-000000000001", ["email"] = "test@example.com" };
+                    break;
                 case ("GET", "/rest/v1/sync_records"):
                 {
                     if (!request.Headers.TryGetValues("Authorization", out var auth) || auth.First() != "Bearer adgang")
@@ -262,6 +270,13 @@ static class SyncChecks
         try { cloud.VerifyEmailLinkAsync(mailLink.Replace("pkce_hash1", "brugt")).GetAwaiter().GetResult(); }
         catch (CloudException e) { usedError = e.Message; }
         Check.That(usedError == CloudClient.UsedLink, "brugt link fra mailen siger, at linket er brugt (ikke koden)");
+
+        // Adgangskode: vælges, mens man er logget ind, og bruges til at logge ind på en ny enhed uden mail.
+        Check.That(Err(() => cloud.SetPasswordAsync("hemmelig-kode", session)) is null, "adgangskode kan vælges");
+        Check.That(Err(() => cloud.SetPasswordAsync("kort", session)) == CloudClient.ShortPassword, "for kort adgangskode afvises på dansk");
+        var viaPassword = cloud.SignInAsync("test@example.com", "hemmelig-kode").GetAwaiter().GetResult();
+        Check.That(viaPassword.AccessToken == "adgang" && viaPassword.Email == "test@example.com", "login med e-mail og adgangskode");
+        Check.That(Err(() => cloud.SignInAsync("test@example.com", "forkert-kode")) == CloudClient.WrongPassword, "forkert adgangskode giver en dansk besked");
 
         bool needsLogin = false;
         try { cloud.FetchAsync(null, session with { AccessToken = "forkert" }).GetAwaiter().GetResult(); }

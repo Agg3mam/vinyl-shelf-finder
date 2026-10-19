@@ -16,7 +16,11 @@
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
-		A10000000000000000000040 /* VinylShelfiOS */ = {isa = PBXFileSystemSynchronizedRootGroup; path = VinylShelfiOS; sourceTree = "<group>"; };
+		A10000000000000000000040 /* VinylShelfiOS */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = VinylShelfiOS;
+			sourceTree = "<group>";
+		};
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */

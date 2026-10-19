@@ -94,6 +94,20 @@ public sealed partial class AppModel
         catch (Exception ex) { CloudMessage = ex.Message; return false; }
     }
 
+    /// Login med e-mail og adgangskode (ingen mail).
+    public async Task<bool> SignInCloudAsync(string email, string password)
+    {
+        try { LoggedIn(await _cloud.SignInAsync(email.Trim().ToLowerInvariant(), password)); return true; }
+        catch (Exception ex) { CloudMessage = ex.Message; return false; }
+    }
+
+    /// Vælger kontoens adgangskode, så andre enheder kan logge ind uden mail. null = gemt, ellers fejlbeskeden.
+    public async Task<string?> SetCloudPasswordAsync(string password)
+    {
+        try { await _cloud.SetPasswordAsync(password, await ValidCloudSessionAsync()); return null; }
+        catch (Exception ex) { return ex is CloudException ? ex.Message : Describe(ex); }
+    }
+
     /// Linket i login-mailen (vinylshelf://auth#…) eller en indsat adresse fra browseren.
     /// Returnerer true, hvis adressen var et login.
     public bool CompleteCloudLink(string link)

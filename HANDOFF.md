@@ -454,6 +454,16 @@ projektet med egen konto (RLS adskiller data), men hver skal have sit eget Disco
 - **På brugerens egen iPhone:** kræver, at brugeren selv tilføjer sit Apple-id i Xcode (Indstillinger › Konti) og
   vælger det som Team under Signing. Med et gratis Apple-id skal appen installeres igen efter 7 dage.
 
+### 19. okt: login med adgangskode (gren `claude/iphone-app`)
+
+- Gratisplanens mails (højst 2 i timen, kun link) gjorde login på telefonen for svært. Nu kan man vælge en
+  adgangskode under Konto, mens man er logget ind (`PUT auth/v1/user`), og logge ind med e-mail og adgangskode
+  (`grant_type=password`) uden mail. Mac, Windows og iPhone. Mail-linket virker stadig som reserve.
+- Status: brugerens Mac (v1.2.0-build med adgangskode) og iPhone er logget ind på samme konto.
+- Google-login kan tilføjes gratis (brugeren opretter selv et OAuth-klient-id i Google Cloud og indsætter det i
+  Supabase; apps åbner `/auth/v1/authorize?provider=google&redirect_to=vinylshelf://auth`). Apple-login kræver
+  Apple Developer Program. Morfars iPhone: valget står mellem en gratis webudgave og TestFlight (betalt).
+
 ### Ikke færdigt / næste skridt (spørg brugeren om rækkefølgen)
 
 1. **Mobilside på det lokale netværk (opgave 1)**, så QR-koderne virker. Det er det største åbne punkt.

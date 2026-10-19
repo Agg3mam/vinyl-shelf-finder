@@ -123,6 +123,13 @@ final class PhoneModel {
         catch { cloudPhase = .failed(error.localizedDescription); return false }
     }
 
+    /// Login med e-mail og adgangskode (adgangskoden vælges under Konto i appen på computeren).
+    func signInCloud(email: String, password: String) async -> Bool {
+        let e = email.trimmingCharacters(in: .whitespaces).lowercased()
+        do { loggedIn(try await cloud.signIn(email: e, password: password)); return true }
+        catch { cloudPhase = .failed(error.localizedDescription); return false }
+    }
+
     /// Feltet under Konto: koden fra mailen eller det kopierede link.
     func completeCloudInput(email: String, text: String) async -> Bool {
         let t = text.trimmingCharacters(in: .whitespacesAndNewlines)

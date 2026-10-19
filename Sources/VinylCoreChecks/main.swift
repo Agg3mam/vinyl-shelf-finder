@@ -2208,7 +2208,14 @@ final class StubCloud: URLProtocol, @unchecked Sendable {
             let j = json as? [String: Any]
             if (j?["token"] as? String) == "123456" || (j?["token_hash"] as? String) == "pkce_hash1" { out = session }
             else { status = 403; out = ["code": 403, "error_code": "otp_expired", "msg": "Token has expired or is invalid"] }
+        case ("POST", "/auth/v1/token") where q["grant_type"] == "password":
+            let j = json as? [String: Any]
+            if (j?["email"] as? String) == "test@example.com" && (j?["password"] as? String) == "hemmelig-kode" { out = session }
+            else { status = 400; out = ["code": 400, "error_code": "invalid_credentials", "msg": "Invalid login credentials"] }
         case ("POST", "/auth/v1/token"): out = session
+        case ("PUT", "/auth/v1/user"):
+            if request.value(forHTTPHeaderField: "Authorization") != "Bearer adgang" { status = 401; out = ["code": 401]; break }
+            out = ["id": "00000000-0000-0000-0000-000000000001", "email": "test@example.com"]
         case ("GET", "/rest/v1/sync_records"):
             if request.value(forHTTPHeaderField: "Authorization") != "Bearer adgang" { status = 401; out = ["code": "PGRST301"]; break }
             let from = (q["updated_at"] ?? "").replacingOccurrences(of: "gte.", with: "")
@@ -2331,6 +2338,16 @@ do { try MainActor.assumeIsolated {
     var usedError = ""
     if case .failure(let e as CloudError) = onMain({ try await cloud.verifyEmailLink(mailLink.replacingOccurrences(of: "pkce_hash1", with: "brugt")) }) { usedError = e.message }
     check(usedError == CloudClient.usedLink.message, "brugt link fra mailen siger, at linket er brugt (ikke koden)")
+
+    // Adgangskode: vælges, mens man er logget ind, og bruges til at logge ind på en ny enhed uden mail.
+    check(errorText(onMain { try await cloud.setPassword("hemmelig-kode", session: session) }) == nil, "adgangskode kan vælges")
+    check(errorText(onMain { try await cloud.setPassword("kort", session: session) }) == CloudClient.shortPassword.message, "for kort adgangskode afvises på dansk")
+    guard case .success(let viaPassword) = onMain({ try await cloud.signIn(email: "test@example.com", password: "hemmelig-kode") }) else {
+        throw CloudError("login med adgangskode fejlede i testen")
+    }
+    check(viaPassword.accessToken == "adgang" && viaPassword.email == "test@example.com", "login med e-mail og adgangskode")
+    check(errorText(onMain { try await cloud.signIn(email: "test@example.com", password: "forkert-kode") }) == CloudClient.wrongPassword.message,
+          "forkert adgangskode giver en dansk besked")
 
     // Udløbet login.
     let bad = CloudSession(accessToken: "forkert", refreshToken: "x", expiresAt: 0, userID: session.userID, email: session.email)

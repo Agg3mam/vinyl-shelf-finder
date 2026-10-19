@@ -123,6 +123,27 @@ public final class CloudClient: @unchecked Sendable {
         return try Self.session(from: data, email: "")
     }
 
+    // MARK: Adgangskode
+
+    /// Mindste længde på en adgangskode (tjekkes i appen, før den sendes).
+    public static let minPasswordLength = 8
+
+    /// Login med e-mail og adgangskode. Adgangskoden vælges i appen, mens man er logget ind (`setPassword`),
+    /// så en ny enhed kan logge ind uden en mail.
+    public func signIn(email: String, password: String) async throws -> CloudSession {
+        let data = try await send("POST", "auth/v1/token?grant_type=password", body: ["email": email, "password": password], token: nil)
+        return try Self.session(from: data, email: email)
+    }
+
+    /// Vælger eller skifter kontoens adgangskode. Kræver login.
+    public func setPassword(_ password: String, session s: CloudSession) async throws {
+        guard password.count >= Self.minPasswordLength else { throw Self.shortPassword }
+        _ = try await send("PUT", "auth/v1/user", body: ["password": password], token: s.accessToken)
+    }
+
+    public static let wrongPassword = CloudError("Forkert e-mail eller adgangskode. Har du valgt en adgangskode under Konto i appen på computeren?")
+    public static let shortPassword = CloudError("Adgangskoden er for kort. Brug mindst 8 tegn.")
+
     /// Fornyer et udløbet login.
     public func refresh(_ s: CloudSession) async throws -> CloudSession {
         let data = try await send("POST", "auth/v1/token?grant_type=refresh_token", body: ["refresh_token": s.refreshToken], token: nil)
@@ -216,6 +237,9 @@ public final class CloudClient: @unchecked Sendable {
         let code = (o["error_code"] as? String) ?? (o["code"] as? String) ?? (o["error"] as? String) ?? ""
         switch code {
         case "otp_expired": return expiredCode
+        case "invalid_credentials": return wrongPassword
+        case "weak_password": return shortPassword
+        case "same_password": return CloudError("Det er allerede din adgangskode.")
         case "over_email_send_rate_limit", "over_request_rate_limit":
             return CloudError("Der er sendt for mange koder for nylig. Vent lidt, og prøv igen.")
         case "email_address_invalid", "validation_failed": return CloudError("E-mailadressen ser forkert ud.")

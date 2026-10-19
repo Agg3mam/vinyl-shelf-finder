@@ -10,6 +10,9 @@ struct AccountView: View {
     @State private var code = ""
     @State private var codeSent = false
     @State private var busy = false
+    @State private var password = ""
+    /// Uden adgangskode: log ind med et link på mail.
+    @State private var useMail = false
 
     var body: some View {
         Form {
@@ -34,7 +37,7 @@ struct AccountView: View {
                 Label(message, systemImage: "exclamationmark.triangle").foregroundStyle(.secondary)
             }
         } footer: {
-            Text("Reoler, placeringer og lyttelog er de samme som på din Mac. Appen synkroniserer selv, når den åbnes, kort efter \"Spillet\" og hvert 5. minut.")
+            Text("Reoler, placeringer og lyttelog er de samme som på din computer (Mac eller Windows). Appen synkroniserer selv, når den åbnes, kort efter \"Spillet\" og hvert 5. minut.")
         }
         Section {
             Button("Synkronisér nu", systemImage: "arrow.triangle.2.circlepath") { Task { await model.syncCloud(userInitiated: true) } }
@@ -49,7 +52,7 @@ struct AccountView: View {
                 VStack(alignment: .leading, spacing: 8) {
                     Image(systemName: "books.vertical.fill").font(.largeTitle).foregroundStyle(AppAccent.color)
                     Text("Find dine plader i reolen").font(.title2.weight(.bold))
-                    Text("Log ind med den samme e-mail som på din Mac. Så kommer dine reoler, placeringer og lyttelog hertil.")
+                    Text("Log ind med den samme e-mail og adgangskode som i appen på din computer. Så kommer dine reoler, placeringer og lyttelog hertil.")
                         .foregroundStyle(.secondary)
                 }
                 .padding(.vertical, 6)
@@ -62,7 +65,11 @@ struct AccountView: View {
                 .textInputAutocapitalization(.never)
                 .autocorrectionDisabled()
                 .disabled(codeSent)
-            if codeSent {
+            if !useMail {
+                SecureField("Adgangskode", text: $password)
+                    .textContentType(.password)
+                    .onSubmit(signIn)
+            } else if codeSent {
                 TextField("Linket eller koden fra mailen", text: $code, axis: .vertical)
                     .textInputAutocapitalization(.never)
                     .autocorrectionDisabled()
@@ -75,12 +82,23 @@ struct AccountView: View {
         } header: {
             Text("Log ind på din konto")
         } footer: {
-            Text(codeSent
+            Text(!useMail
+                 ? "Adgangskoden vælger du under Konto i appen på din computer, mens du er logget ind der."
+                 : codeSent
                  ? "Vi har sendt en mail til \(email). Åbn mailen her på telefonen, og tryk på linket – så åbner appen og logger ind. Virker det ikke: hold fingeren på linket, vælg Kopiér, og sæt det ind ovenfor. Kun den nyeste mail virker."
                  : "Du får en mail med et link – ingen adgangskode. Der kan højst sendes 2 mails i timen.")
         }
         Section {
-            if codeSent {
+            if !useMail {
+                Button(action: signIn) {
+                    HStack {
+                        Label("Log ind", systemImage: "person.crop.circle.badge.checkmark")
+                        if busy { Spacer(); ProgressView() }
+                    }
+                }
+                .disabled(busy || !email.contains("@") || password.isEmpty)
+                Button("Har ingen adgangskode – send en mail i stedet", systemImage: "envelope") { useMail = true }
+            } else if codeSent {
                 Button(action: logIn) {
                     Label("Log ind", systemImage: "person.crop.circle.badge.checkmark")
                 }
@@ -98,6 +116,18 @@ struct AccountView: View {
                 }
                 .disabled(busy || !email.contains("@"))
             }
+            if useMail {
+                Button("Log ind med adgangskode i stedet", systemImage: "key") { useMail = false; codeSent = false; code = "" }
+            }
+        }
+    }
+
+    private func signIn() {
+        guard !password.isEmpty else { return }
+        busy = true
+        Task {
+            if await model.signInCloud(email: email, password: password) { password = "" }
+            busy = false
         }
     }
 

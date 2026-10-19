@@ -324,6 +324,9 @@ struct CloudSettings: View {
     @ViewState private var code = ""
     @ViewState private var codeSent = false
     @ViewState private var busy = false
+    @ViewState private var password = ""
+    @ViewState private var newPassword = ""
+    @ViewState private var passwordNote: String?
 
     var body: some View {
         Form {
@@ -359,6 +362,42 @@ struct CloudSettings: View {
         } footer: {
             Text("Reoler, placeringer, flueben, lyttelog og sorteringsregler er de samme på alle dine enheder. Appen synkroniserer selv ved start, kort efter hver ændring og hvert 5. minut. Discogs-tokenet og iMusic-adressen bliver på denne Mac.")
         }
+        Section {
+            SecureField("Ny adgangskode", text: $newPassword, prompt: Text("Mindst \(CloudClient.minPasswordLength) tegn"))
+                .onSubmit(savePassword)
+            if let passwordNote {
+                Label(passwordNote, systemImage: passwordNote.hasPrefix("Adgangskoden er gemt") ? "checkmark.circle" : "exclamationmark.triangle")
+                    .foregroundStyle(.secondary)
+            }
+            Button("Gem adgangskode", action: savePassword)
+                .disabled(busy || newPassword.count < CloudClient.minPasswordLength)
+        } header: {
+            Text("Adgangskode")
+        } footer: {
+            Text("Med en adgangskode kan du logge ind på telefonen eller en anden computer med samme e-mail – uden at vente på en mail.")
+        }
+    }
+
+    private func savePassword() {
+        guard newPassword.count >= CloudClient.minPasswordLength else { return }
+        busy = true
+        Task {
+            if let error = await model.setCloudPassword(newPassword) {
+                passwordNote = error
+            } else {
+                passwordNote = "Adgangskoden er gemt. Log ind med den på telefonen."
+                newPassword = ""
+            }
+            busy = false
+        }
+    }
+
+    private func signIn() {
+        busy = true
+        Task {
+            if await model.signInCloud(email: email, password: password) { password = "" }
+            busy = false
+        }
     }
 
     private func logIn() {
@@ -377,6 +416,9 @@ struct CloudSettings: View {
             if codeSent {
                 TextField("Linket fra mailen", text: $code, prompt: Text("Højreklik på linket i mailen › Kopiér link, og indsæt her"))
                     .onSubmit(logIn)
+            } else {
+                SecureField("Adgangskode", text: $password, prompt: Text("Hvis du har valgt en"))
+                    .onSubmit { if !password.isEmpty { signIn() } }
             }
             if case .failed(let message) = model.cloudPhase {
                 Label(message, systemImage: "exclamationmark.triangle").foregroundStyle(.secondary)
@@ -387,6 +429,10 @@ struct CloudSettings: View {
                         .buttonStyle(.borderedProminent)
                         .disabled(busy || code.trimmingCharacters(in: .whitespaces).isEmpty)
                     Button("Ny mail") { codeSent = false; code = "" }
+                } else if !password.isEmpty {
+                    Button("Log ind", action: signIn)
+                        .buttonStyle(.borderedProminent)
+                        .disabled(busy || !email.contains("@"))
                 } else {
                     Button("Send mail") {
                         busy = true
@@ -402,7 +448,7 @@ struct CloudSettings: View {
         } footer: {
             Text(codeSent
                  ? "Vi har sendt en mail til \(email). Klik IKKE på linket – så bliver det brugt op. Højreklik på det i stedet, vælg Kopiér link, og indsæt det ovenfor. Kun den nyeste mail virker. Står der en kode i mailen, kan du også skrive den. Tjek uønsket post, hvis mailen ikke kommer."
-                 : "Brug den samme e-mail på Mac, Windows og iPhone. Du får en mail med et link – ingen adgangskode. Første gang oprettes kontoen.")
+                 : "Brug den samme e-mail på Mac, Windows og iPhone. Har du valgt en adgangskode, kan du logge ind med den. Ellers får du en mail med et link. Første gang oprettes kontoen.")
         }
     }
 }

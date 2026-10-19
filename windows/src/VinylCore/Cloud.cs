@@ -105,6 +105,29 @@ public sealed class CloudClient
     /// Hvert link virker kun én gang – også når man har klikket på det i mailen.
     public const string UsedLink = "Linket er allerede brugt eller er ikke fra den nyeste mail. Hvert link virker kun én gang – også hvis du har klikket på det. Bed om en ny mail, og klik ikke på linket.";
 
+    // MARK: Adgangskode
+
+    /// Mindste længde på en adgangskode (tjekkes i appen, før den sendes).
+    public const int MinPasswordLength = 8;
+
+    /// Login med e-mail og adgangskode. Adgangskoden vælges i appen, mens man er logget ind (SetPasswordAsync),
+    /// så en ny enhed kan logge ind uden en mail.
+    public async Task<CloudSession> SignInAsync(string email, string password)
+    {
+        var data = await SendAsync("POST", "auth/v1/token?grant_type=password", new JsonObject { ["email"] = email, ["password"] = password }, null).ConfigureAwait(false);
+        return SessionFrom(data, email);
+    }
+
+    /// Vælger eller skifter kontoens adgangskode. Kræver login.
+    public async Task SetPasswordAsync(string password, CloudSession s)
+    {
+        if (password.Length < MinPasswordLength) throw new CloudException(ShortPassword);
+        await SendAsync("PUT", "auth/v1/user", new JsonObject { ["password"] = password }, s.AccessToken).ConfigureAwait(false);
+    }
+
+    public const string WrongPassword = "Forkert e-mail eller adgangskode. Har du valgt en adgangskode under Konto i appen på computeren?";
+    public const string ShortPassword = "Adgangskoden er for kort. Brug mindst 8 tegn.";
+
     /// Fornyer et udløbet login.
     public async Task<CloudSession> RefreshAsync(CloudSession s)
     {
@@ -252,6 +275,9 @@ public sealed class CloudClient
         switch (code)
         {
             case "otp_expired": return new CloudException(ExpiredCode);
+            case "invalid_credentials": return new CloudException(WrongPassword);
+            case "weak_password": return new CloudException(ShortPassword);
+            case "same_password": return new CloudException("Det er allerede din adgangskode.");
             case "over_email_send_rate_limit":
             case "over_request_rate_limit": return new CloudException("Der er sendt for mange koder for nylig. Vent lidt, og prøv igen.");
             case "email_address_invalid":

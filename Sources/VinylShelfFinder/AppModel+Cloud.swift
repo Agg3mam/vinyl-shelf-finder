@@ -66,6 +66,34 @@ extension AppModel {
         }
     }
 
+    /// Login med e-mail og adgangskode (ingen mail).
+    func signInCloud(email: String, password: String) async -> Bool {
+        let e = email.trimmingCharacters(in: .whitespaces).lowercased()
+        do {
+            let s = try await cloud.signIn(email: e, password: password)
+            try saveCloudSession(s)
+            cloudLoggedIn = true
+            cloudEmail = s.email.isEmpty ? e : s.email
+            store.setSetting("cloud_email", cloudEmail)
+            cloudPhase = .idle
+            startCloud()
+            return true
+        } catch {
+            cloudPhase = .failed(error.localizedDescription)
+            return false
+        }
+    }
+
+    /// Vælger kontoens adgangskode, så andre enheder kan logge ind uden mail. `nil` = gemt, ellers fejlbeskeden.
+    func setCloudPassword(_ password: String) async -> String? {
+        do {
+            try await cloud.setPassword(password, session: try await validCloudSession())
+            return nil
+        } catch {
+            return error.localizedDescription
+        }
+    }
+
     /// Linket i login-mailen åbner appen (vinylshelf://auth#…). Returnerer true, hvis adressen var et login.
     @discardableResult
     func completeCloudLink(_ url: URL) -> Bool {

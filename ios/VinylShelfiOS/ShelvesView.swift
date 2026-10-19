@@ -29,7 +29,7 @@ struct ShelvesView: View {
                     }
                     if !lib.unplaced.isEmpty {
                         Section {
-                            Text("\(lib.unplaced.count) \(model.medium.plural) har endnu ingen plads. De får en plads på Mac'en.")
+                            Text("\(lib.unplaced.count) \(model.medium.plural) har endnu ingen plads. De får en plads i appen på computeren.")
                                 .font(.footnote).foregroundStyle(.secondary)
                         }
                     }
@@ -42,7 +42,7 @@ struct ShelvesView: View {
                 }
             } else {
                 ContentUnavailableView("Ingen reoler endnu", systemImage: "books.vertical",
-                                       description: Text("Reolerne laves på Mac'en og kommer hertil via din konto. Træk ned for at hente dem."))
+                                       description: Text("Reolerne laves i appen på computeren og kommer hertil via din konto. Træk ned for at hente dem."))
             }
         }
         .navigationTitle("Reol")

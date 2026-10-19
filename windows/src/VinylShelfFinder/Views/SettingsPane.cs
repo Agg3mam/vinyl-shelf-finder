@@ -119,6 +119,9 @@ public sealed class SettingsPane : IPane
     private readonly TextBox _cloudEmail = new() { Header = "E-mail", PlaceholderText = "dig@eksempel.dk", MinWidth = 320, MaxWidth = 420, HorizontalAlignment = HorizontalAlignment.Left };
     private readonly TextBox _cloudCode = new() { Header = "Linket fra mailen", PlaceholderText = "Højreklik på linket i mailen › Kopiér link, og indsæt her", MinWidth = 320, MaxWidth = 520, HorizontalAlignment = HorizontalAlignment.Left };
     private bool _cloudSent;
+    private readonly PasswordBox _cloudPassword = new() { Header = "Adgangskode", PlaceholderText = "Hvis du har valgt en", MinWidth = 320, MaxWidth = 420, HorizontalAlignment = HorizontalAlignment.Left };
+    private readonly PasswordBox _cloudNewPassword = new() { Header = "Ny adgangskode", PlaceholderText = $"Mindst {CloudClient.MinPasswordLength} tegn", MinWidth = 320, MaxWidth = 420, HorizontalAlignment = HorizontalAlignment.Left };
+    private string? _passwordNote;
 
     private void Cloud(StackPanel p)
     {
@@ -138,10 +141,23 @@ public sealed class SettingsPane : IPane
             rows.Add(Ui.HStack(8, now, Ui.Btn("Log ud", (_, _) => _model.LogOutCloud())));
             rows.Add(Footer("Reoler, placeringer, flueben, lyttelog og sorteringsregler er de samme på alle dine enheder. Appen synkroniserer selv ved start, kort efter hver ændring og hvert 5. minut. Discogs-tokenet og iMusic-adressen bliver på denne pc."));
             p.Children.Add(Group(rows.ToArray()));
+
+            Detach(_cloudNewPassword);
+            var pw = new List<UIElement> { Ui.Text("Adgangskode", "BodyStrongTextBlockStyle"), _cloudNewPassword };
+            if (_passwordNote is string note) pw.Add(Ui.Label(note.StartsWith("Adgangskoden er gemt", StringComparison.Ordinal) ? Ui.Glyph.Check : Ui.Glyph.Warning, note, color: Ui.Secondary));
+            pw.Add(Ui.Btn("Gem adgangskode", async (b, _) =>
+            {
+                ((Button)b).IsEnabled = false;
+                if (await _model.SetCloudPasswordAsync(_cloudNewPassword.Password) is string error) _passwordNote = error;
+                else { _passwordNote = "Adgangskoden er gemt. Log ind med den på telefonen."; _cloudNewPassword.Password = ""; }
+                Rebuild();
+            }));
+            pw.Add(Footer("Med en adgangskode kan du logge ind på telefonen eller en anden computer med samme e-mail – uden at vente på en mail."));
+            p.Children.Add(Group(pw.ToArray()));
             return;
         }
         rows.Add(Ui.Text("Log ind på din konto", "BodyStrongTextBlockStyle"));
-        Detach(_cloudEmail); Detach(_cloudCode);
+        Detach(_cloudEmail); Detach(_cloudCode); Detach(_cloudPassword);
         if (_cloudEmail.Text.Length == 0) _cloudEmail.Text = _model.CloudEmail ?? "";
         _cloudEmail.IsEnabled = !_cloudSent;
         rows.Add(_cloudEmail);
@@ -157,17 +173,25 @@ public sealed class SettingsPane : IPane
         }
         else
         {
-            rows.Add(Ui.Btn("Send mail", async (b, _) =>
+            rows.Add(_cloudPassword);
+            var signIn = Ui.Btn("Log ind", async (b, _) =>
+            {
+                if (_cloudPassword.Password.Length == 0) return;
+                ((Button)b).IsEnabled = false;
+                if (await _model.SignInCloudAsync(_cloudEmail.Text, _cloudPassword.Password)) _cloudPassword.Password = ""; else ((Button)b).IsEnabled = true;
+            }, accent: true);
+            var mail = Ui.Btn("Send mail i stedet", async (b, _) =>
             {
                 ((Button)b).IsEnabled = false;
                 _cloudSent = await _model.RequestCloudCodeAsync(_cloudEmail.Text);
                 if (_cloudSent) Rebuild(); else ((Button)b).IsEnabled = true;
-            }, accent: true));
+            });
+            rows.Add(Ui.HStack(8, signIn, mail));
         }
         if (_model.CloudMessage is string msg) rows.Add(Ui.Label(Ui.Glyph.Warning, msg, color: Ui.Secondary));
         rows.Add(Footer(_cloudSent
             ? $"Vi har sendt en mail til {_cloudEmail.Text}. Klik IKKE på linket – så bliver det brugt op. Højreklik på det i stedet, vælg Kopiér link, og indsæt det ovenfor. Kun den nyeste mail virker. Står der en kode i mailen, kan du også skrive den. Tjek uønsket post, hvis mailen ikke kommer."
-            : "Brug den samme e-mail på Mac, Windows og iPhone. Du får en mail med et link – ingen adgangskode. Første gang oprettes kontoen."));
+            : "Brug den samme e-mail på Mac, Windows og iPhone. Har du valgt en adgangskode, kan du logge ind med den. Ellers får du en mail med et link. Første gang oprettes kontoen."));
         p.Children.Add(Group(rows.ToArray()));
     }
 

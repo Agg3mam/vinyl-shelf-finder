@@ -29,6 +29,7 @@ Hvad hver app kan. Målet er ✅ i begge kolonner. Opdatér tabellen i samme com
 | Eksport / import / nulstil | ✅ | ✅ | Samme filformat: en eksport fra den ene kan importeres i den anden |
 | `vinylshelf://`-adresser (QR åbner appen) | ✅ | ✅ | Windows registrerer adressen for brugeren og kører kun ét vindue |
 | Konto i skyen (Supabase): log ind med e-mail, synkronisering | ✅ | ✅ | Samme poster og felter, sikkerhedskopi før reoler slettes. iPhone-appen bruger samme konto (se nedenfor) |
+| Adgangskode til kontoen (vælges under Konto; login uden mail) | ✅ | ✅ | `setPassword`/`SetPasswordAsync`, `signIn`/`SignInAsync`. Også på iPhone, hvor det er første valg |
 | QR-koden på et trykt skilt følger sektionen til andre enheder | ✅ | ✅ | Feltet `code` i sektionens post (`locations.scan_code`). Mac gemmer koden, når skiltene laves; Windows bruger sektionens nummer, som før |
 | Mobilside på lokalnettet | ❌ | ❌ | Halvt lavet (kun ruter), ingen server endnu |
 
