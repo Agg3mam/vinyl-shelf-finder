@@ -1,6 +1,6 @@
 # Handoff: Vinyl Shelf Finder (hele projektet)
 
-**Opdateret:** 18. oktober 2026 (Windows: rettelser, sorteringsliste, eksport/import, efternavn, gren `claude/ret-tokenfelt`).
+**Opdateret:** 19. oktober 2026 (webapp til telefonen, gren `claude/webapp` oven på `claude/sange`).
 
 **Dette er den eneste handoff-fil.** Den indeholder alt, en ny Claude-session skal vide for at
 arbejde videre på projektet, uanset hvad opgaven er. Giv den videre som den første besked,
@@ -484,6 +484,34 @@ projektet med egen konto (RLS adskiller data), men hver skal have sit eget Disco
   ca. 10 ms pr. tastetryk ved 500 plader og 15–25 ms ved 2.500 (før 36 og 194 ms). Tre test-agenter (kodegennemgang,
   djævlens advokat, pladesamler) godkendte. Mac og Windows gav identisk top-20 på 907 søgninger.
 - Testsættet ligger kun lokalt (ikke i repoet); de vigtigste tilfælde er faste checks ("søgning ...") på begge platforme.
+
+### 19. okt: webapp til telefonen (gren `claude/webapp`, bygget oven på `claude/sange`)
+
+- **Hvorfor:** iPhone-appen kræver Xcode og holder kun 7 dage med et gratis Apple-id; TestFlight koster penge. Webappen
+  lægges på hjemmeskærmen ("Føj til hjemmeskærm") og virker på alle telefoner, også for andre med deres egen konto.
+- **Filer:** `web/index.html`, `app.css`, `app.js` (skærmene: Reol, Sektion, Plade/Find i reolen, Søg, Scan, Konto),
+  `core/search.js` (port af `Search.swift`), `core/library.js` (reoler, naboer, `referenceAdvice`/`returnAdvice`, poster →
+  hylder som `applySyncDocs` + `loadLibrary`), `core/cloud.js` (Supabase: adgangskode, mail-link, hent, send "Spillet"),
+  `core/store.js` (IndexedDB), `sw.js` (virker uden net), `manifest.webmanifest`, `icons/` (fra iPhone-ikonet),
+  `vendor/jsQR.js` (QR-læser, Apache-2.0, npm `jsqr` 1.4.0, integritet tjekket), `demo-records.json` (eksempeldata, `?demo`).
+- **Ens med Swift:** `web/checks/run.sh` bygger facit med `Sources/VinylCore` (`web/checks/dump/main.swift`) og sammenligner
+  i JavaScriptCore (samme motor som Safari på iPhone): 635 søgninger og "Find i reolen"/"Sæt tilbage" for 69 plader, 711
+  checks. Kører i `checks.yml`. Også afprøvet mod hele det lokale testsæt (`design-work/searchbench`): 907 af 907 søgninger
+  giver identisk top-20 som Swift. "Paritet"-workflowet giver en note, når søgning/Find ændres i Swift uden `web/core/`.
+- **Regler:** kun læsning plus "Spillet" (post `play` med `{copy, at}`, enhed `web`, som iPhone). Kun den offentlige nøgle.
+  Log ud fjerner reolerne fra telefonen. En anden konto end sidst starter forfra. "Spillet" uden net gemmes og sendes senere.
+- **Mail-link:** en hjemmeskærm-app deler ikke login med Safari, så teksten beder om at kopiere linket og sætte det ind
+  (byttes med `token_hash`, som på Mac). Skal linket kunne klikkes direkte, skal webappens adresse stå under Redirect URLs i
+  Supabase (Authentication › URL Configuration) – det gør brugeren selv.
+- **Windows-rettelse:** "Udskriv reolskilte" gemmer nu skiltets kode på sektionen (`SetScanCode`, som Mac), så skilte
+  trykt på Windows virker på telefonen via kontoen. På Windows skal skiltene åbnes én gang efter opdateringen (koden er den samme
+  som på de skilte, der allerede er trykt). Kun tjekket af CI (WinUI kan ikke bygges på Mac).
+- **Udgivelse:** `.github/workflows/webapp.yml` lægger `web/` (uden `checks/`) på GitHub Pages ved push til `main`. Kræver,
+  at Pages er slået til med kilden "GitHub Actions" (Settings › Pages) – spørg brugeren. Adressen bliver
+  `https://agg3mam.github.io/vinyl-shelf-finder/`.
+- **Afprøvning lokalt:** `python3 -m http.server 8766 --directory web` og åbn `http://localhost:8766/?demo`. Login og synk
+  er afprøvet mod en falsk Supabase i browseren (aldrig mod den rigtige konto). Kameraet kan kun afprøves på en rigtig
+  telefon over https; QR-afkodningen er afprøvet med et genereret skilt.
 
 ### Ikke færdigt / næste skridt (spørg brugeren om rækkefølgen)
 

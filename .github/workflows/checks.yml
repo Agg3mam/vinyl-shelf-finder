@@ -23,6 +23,7 @@ jobs:
             Sources
             Resources
             ios
+            web
       - name: Vis værktøjer
         run: |
           sw_vers
@@ -31,6 +32,9 @@ jobs:
         run: swift build
       - name: Checks
         run: swift run VinylCoreChecks
+      # Webappen (web/) skal søge og finde præcis som Swift: facit fra Swift, sammenlignet i JavaScriptCore.
+      - name: Webappens checks
+        run: web/checks/run.sh
       # iPhone-appen (ios/) bygges til simulatoren, så kernen også altid kan bruges på iPhone.
       - name: Byg iPhone-appen
         run: |

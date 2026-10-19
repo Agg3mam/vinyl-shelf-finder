@@ -69,6 +69,9 @@ public static class LabelsPrint
             Directory.CreateDirectory(dir);
             var path = Path.Combine(dir, "Reolskilte.html");
             await File.WriteAllTextAsync(path, Html(labels), Encoding.UTF8);
+            // Koden på skiltet gemmes på sektionen (som på Mac), så skiltet også virker på telefonen via kontoen.
+            foreach (var l in labels) model.Store.SetScanCode(l.Location.Id, l.ScanCode);
+            model.Reload();
             await Windows.System.Launcher.LaunchUriAsync(new Uri(path));
         }
         catch (Exception ex)

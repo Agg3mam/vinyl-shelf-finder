@@ -32,7 +32,7 @@ Hvad hver app kan. Målet er ✅ i begge kolonner. Opdatér tabellen i samme com
 | Adgangskode til kontoen (vælges under Konto; login uden mail) | ✅ | ✅ | `setPassword`/`SetPasswordAsync`, `signIn`/`SignInAsync`. Også på iPhone, hvor det er første valg |
 | Ny søgning: faste rangeringsregler (som Algolia/Meilisearch), stavefejl efter ordlængde, romertal, "acdc"/"okcomputer", albummer før sange | ✅ | ✅ | `Search.swift` / `Search.cs` giver identisk rækkefølge (afprøvet på 907 søgninger; fælles checks "søgning ...") |
 | Søg på en sang (sanglister fra Discogs, hentes i baggrunden) | ✅ | ✅ | Skema v7 (`release_tracks`). Sangen vises under resultatet og fremhæves i "Sange" på pladen. Status og "Hent sanglister" under Indstillinger › Discogs. Følger med via kontoen (feltet `tracks`) |
-| QR-koden på et trykt skilt følger sektionen til andre enheder | ✅ | ✅ | Feltet `code` i sektionens post (`locations.scan_code`). Mac gemmer koden, når skiltene laves; Windows bruger sektionens nummer, som før |
+| QR-koden på et trykt skilt følger sektionen til andre enheder | ✅ | ✅ | Feltet `code` i sektionens post (`locations.scan_code`). Begge gemmer koden, når skiltene laves (Windows fra 19. okt; allerede trykte skilte virker, når skiltene er åbnet én gang efter opdateringen) |
 | Mobilside på lokalnettet | ❌ | ❌ | Halvt lavet (kun ruter), ingen server endnu |
 
 ## iPhone-appen (`ios/`)
@@ -51,3 +51,21 @@ Data kommer kun fra kontoen i skyen (ingen Discogs-forbindelse på telefonen).
 | Søg på en sang og se sanglisten | ✅ | Sanglisterne kommer fra computeren via kontoen |
 | Flytte plader, sektioner, Discogs, Værdi, Find nye plader | ❌ | Laves på computeren |
 
+
+## Webappen (`web/`)
+
+En fjerde udgave: en webside, der lægges på telefonens hjemmeskærm ("Føj til hjemmeskærm"). Gratis, uden App Store
+og uden 7-dages grænse. Den kan det samme som iPhone-appen og ændrer heller ikke reolerne. Søgning og "Find i
+reolen" er en JavaScript-port af `Search.swift` og `Library.swift` (`web/core/`); checken "Webappens checks"
+(`web/checks/run.sh`) sammenligner med Swift ved hver push: samme top-20 og samme tekster.
+
+| Funktion | Web | Bemærkning |
+|---|---|---|
+| Log ind med e-mail og adgangskode, mail-link som reserve | ✅ | Linket fra mailen kopieres og sættes ind (en hjemmeskærm-app deler ikke login med Safari) |
+| Hentning fra kontoen, gemt i browseren (virker uden net) | ✅ | IndexedDB. Synk ved start, når appen kommer frem, kort efter "Spillet" og hvert 5. minut |
+| Søg (tåler stavefejl), også sange | ✅ | Identisk med Swift (`web/checks`) |
+| Reoler og sektioner (plader og cd'er), Find i reolen, naboer | ✅ | Samme tekster som Mac (`referenceAdvice`) |
+| Scan QR-koden på et reolskilt | ✅ | I webappen med kameraet (jsQR i `web/vendor`). Kamera-appen åbner `vinylshelf://` i den rigtige app, ikke i webappen |
+| "Spillet" | ✅ | Samme post som iPhone (enhed `web`); gemmes og sendes senere, hvis der ikke er net |
+| Log ud | ✅ | Fjerner også reolerne fra telefonen (iPhone-appen beholder dem), da en webside kan deles af flere |
+| Flytte plader, sektioner, Discogs, Værdi, Find nye plader | ❌ | Laves på computeren |

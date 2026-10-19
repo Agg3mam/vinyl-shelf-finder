@@ -1,0 +1,41 @@
+name: Webapp
+
+# Lægger webappen (web/) på GitHub Pages, når main ændres. Den kan så lægges på en telefons
+# hjemmeskærm ("Føj til hjemmeskærm") uden App Store. Kun webappens egne filer kommer med.
+on:
+  push:
+    branches: [main]
+    paths: ["web/**", ".github/workflows/webapp.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: web
+      - name: Saml filerne (uden checks)
+        run: |
+          mkdir _site
+          cp -R web/. _site/
+          rm -rf _site/checks
+          ls -R _site | head -40
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+      - id: deploy
+        uses: actions/deploy-pages@v4

@@ -34,6 +34,11 @@ jobs:
           if [ -n "$win" ] && [ -z "$mac" ]; then
             echo "::warning title=Kun Windows-appen er ændret::Lav det samme i Sources/, eller skriv i PARITET.md hvorfor det kun gælder Windows."
           fi
+          core=$(echo "$files" | grep -E '^Sources/VinylCore/(Search|Library|Models|SyncDocs|Cloud)\.swift$' || true)
+          web=$(echo "$files" | grep -E '^web/core/' || true)
+          if [ -n "$core" ] && [ -z "$web" ]; then
+            echo "::notice title=Webappen er ikke ændret::Søgning, Find-tekster eller poster er ændret i Swift. Tjek web/core (checken 'Webappens checks' fanger forskelle i søgning og Find)."
+          fi
           if { [ -n "$mac" ] || [ -n "$win" ]; } && [ -z "$par" ]; then
             echo "::notice title=PARITET.md er ikke opdateret::Tjek om tabellen stadig passer."
           fi
