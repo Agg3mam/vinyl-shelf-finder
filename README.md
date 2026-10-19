@@ -5,6 +5,15 @@ Discogs fortæller, hvad du ejer. Den lokale database fortæller, hvor det står
 
 > **Find X. Din plade står lige efter X og lige før Y.**
 
+## På telefonen
+
+**Webapp: <https://agg3mam.github.io/vinyl-shelf-finder/>** (gratis, ingen App Store)
+
+Åbn linket i Safari på iPhone (eller Chrome på Android), tryk **Del › Føj til hjemmeskærm**, og log ind med den
+samme e-mail og adgangskode som under Konto i appen på computeren. Så kan du søge, finde pladen i reolen, scanne
+reolskilte, bruge Cover Flow og "Hvad skal jeg høre?", sætte flueben i sorteringslisten og registrere "Spillet".
+Vil du bare se den, så prøv eksempeldata: <https://agg3mam.github.io/vinyl-shelf-finder/?demo>
+
 ## Kom i gang
 
 ```bash
