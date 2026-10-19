@@ -91,15 +91,17 @@ public struct SearchIndex {
                 } else if tokens.count == 1, tokens[0] == e.releaseID {
                     scored.append((e.id, 100, e.shelfOrder, nil))
                 } else if let song {
-                    scored.append((e.id, song.score, e.shelfOrder, song.track))
+                    scored.append((e.id, song.score - Self.songPenalty, e.shelfOrder, song.track))
                 }
                 continue
             }
             if e.full.contains(phrase) { total += 6 }
+            // Et album, der hedder præcis det, man søger på ("blue" → Joni Mitchell – Blue), kommer først.
+            if e.titleWords.joined(separator: " ") == phrase { total += 4 }
             if tokens.count == 1, tokens[0] == e.releaseID { total += 100 }
             // Passer en sang bedre end pladen (fx en sang med samme navn som en kunstner), vises sangen.
-            if let song, song.score > total + 4 {
-                scored.append((e.id, song.score, e.shelfOrder, song.track))
+            if let song, song.score - Self.songPenalty > total {
+                scored.append((e.id, song.score - Self.songPenalty, e.shelfOrder, song.track))
             } else {
                 scored.append((e.id, total, e.shelfOrder, nil))
             }
@@ -107,6 +109,10 @@ public struct SearchIndex {
         return scored.sorted { ($1.score, $0.order, $0.id) < ($0.score, $1.order, $1.id) }.prefix(limit)
             .map { Hit(id: $0.id, track: $0.track) }
     }
+
+    /// Et træf på en sang tæller mindre end samme træf på pladen, så albummer kommer før sange
+    /// ("blue": albummet Blue og Kind of Blue før alle sangene med "blue" i titlen).
+    static let songPenalty = 10
 
     /// Den sang på pladen, der passer bedst: hvert ord i søgningen skal stå i sangens titel eller kunstneren,
     /// og mindst ét i sangens titel. Lidt lavere vægt end pladens egen titel, så albummet vinder ved lighed.

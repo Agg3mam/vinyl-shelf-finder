@@ -99,18 +99,24 @@ public sealed class SearchIndex
                 else if (tokens.Length == 1 && tokens[0] == e.ReleaseId)
                     scored.Add((e.Id, 100, e.ShelfOrder, null));
                 else if (song is var (st, ss))
-                    scored.Add((e.Id, ss, e.ShelfOrder, st));
+                    scored.Add((e.Id, ss - SongPenalty, e.ShelfOrder, st));
                 continue;
             }
             if (e.Full.Contains(phrase, StringComparison.Ordinal)) total += 6;
+            // Et album, der hedder præcis det, man søger på ("blue" → Joni Mitchell – Blue), kommer først.
+            if (string.Join(" ", e.TitleWords) == phrase) total += 4;
             if (tokens.Length == 1 && tokens[0] == e.ReleaseId) total += 100;
             // Passer en sang bedre end pladen (fx en sang med samme navn som en kunstner), vises sangen.
-            if (song is var (t2, s2) && s2 > total + 4) scored.Add((e.Id, s2, e.ShelfOrder, t2));
+            if (song is var (t2, s2) && s2 - SongPenalty > total) scored.Add((e.Id, s2 - SongPenalty, e.ShelfOrder, t2));
             else scored.Add((e.Id, total, e.ShelfOrder, null));
         }
         return scored.OrderByDescending(x => x.Score).ThenBy(x => x.Order).ThenBy(x => x.Id)
                      .Take(Math.Max(0, limit)).Select(x => new Hit(x.Id, x.Track)).ToList();
     }
+
+    /// Et træf på en sang tæller mindre end samme træf på pladen, så albummer kommer før sange
+    /// ("blue": albummet Blue og Kind of Blue før alle sangene med "blue" i titlen).
+    private const int SongPenalty = 10;
 
     /// Den sang på pladen, der passer bedst: hvert ord i søgningen skal stå i sangens titel eller kunstneren,
     /// og mindst ét i sangens titel. Lidt lavere vægt end pladens egen titel, så albummet vinder ved lighed.

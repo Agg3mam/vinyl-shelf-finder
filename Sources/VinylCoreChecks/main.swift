@@ -2210,6 +2210,23 @@ do {
     check(first("wish you were here").track == nil, "pladen selv vises uden sang, når det er albummet")
     check(index.search("dogs") == index.hits("dogs").map(\.id), "search og hits giver samme plader")
 
+    // Albummer før sange: "blue" giver Joni Mitchell – Blue øverst, derefter Kind Of Blue, og først så sangene.
+    let (bs, burl2) = try freshStore("tracks-blue"); defer { try? FileManager.default.removeItem(at: burl2) }
+    func rel(_ i: Int, _ artist: String, _ title: String) -> DiscogsCollectionItem {
+        DiscogsCollectionItem(instanceID: 7_100_000 + i, dateAdded: nil, release: Release(id: 971_000 + i, artist: artist, title: title, format: "Vinyl, LP"))
+    }
+    _ = try bs.applyCollection([rel(1, "Abba", "Arrival"), rel(2, "Miles Davis", "Kind Of Blue"), rel(3, "Joni Mitchell", "Blue"),
+                                rel(4, "Elvis Presley", "Elvis"), rel(5, "Bill Evans", "Portrait In Jazz")])
+    try bs.saveTracks(releaseID: 971_002, [Track(position: "A1", title: "So What"), Track(position: "B1", title: "Blue In Green")])
+    try bs.saveTracks(releaseID: 971_003, [Track(position: "A1", title: "All I Want"), Track(position: "B1", title: "Blue")])
+    try bs.saveTracks(releaseID: 971_004, [Track(position: "A1", title: "Blue Suede Shoes"), Track(position: "B1", title: "Blue Moon")])
+    try bs.saveTracks(releaseID: 971_005, [Track(position: "A1", title: "Blue In Green")])
+    let blib = try bs.loadLibrary()
+    let blue = SearchIndex(library: blib).hits("blue").map { (blib.item($0.id)!.title, $0.track?.title) }
+    check(blue.first?.0 == "Blue" && blue.first?.1 == nil && blue.dropFirst().first?.0 == "Kind Of Blue" && blue.dropFirst().first?.1 == nil
+          && blue.dropFirst(2).allSatisfy { $0.1 != nil },
+          "albummer før sange, og et album med præcis den titel øverst: \(blue)")
+
     // Sanglisten følger med til en anden enhed – og en enhed uden liste sletter den ikke.
     let docs = try s.exportSyncDocs()
     let animals = docs.first { $0.kind == .release && $0.key == "970002" }

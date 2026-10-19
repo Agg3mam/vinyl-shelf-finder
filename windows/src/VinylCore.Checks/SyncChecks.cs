@@ -133,6 +133,20 @@ static class SyncChecks
         Check.That(First("wish you were here").Track is null, "pladen selv vises uden sang, når det er albummet");
         Check.That(index.Search("dogs").SequenceEqual(index.Hits("dogs").Select(h => h.Id)), "Search og Hits giver samme plader");
 
+        // Albummer før sange: "blue" giver Joni Mitchell – Blue øverst, derefter Kind Of Blue, og først så sangene.
+        using var bs = new ShelfStore(TempDb("tracks-blue"));
+        DiscogsCollectionItem Rel(int i, string artist, string title) => new(7_100_000 + i, null, new Release(971_000 + i, artist, title, Format: "Vinyl, LP"));
+        bs.ApplyCollection(new[] { Rel(1, "Abba", "Arrival"), Rel(2, "Miles Davis", "Kind Of Blue"), Rel(3, "Joni Mitchell", "Blue"),
+                                   Rel(4, "Elvis Presley", "Elvis"), Rel(5, "Bill Evans", "Portrait In Jazz") });
+        bs.SaveTracks(971_002, new[] { new Track("A1", "So What"), new Track("B1", "Blue In Green") });
+        bs.SaveTracks(971_003, new[] { new Track("A1", "All I Want"), new Track("B1", "Blue") });
+        bs.SaveTracks(971_004, new[] { new Track("A1", "Blue Suede Shoes"), new Track("B1", "Blue Moon") });
+        bs.SaveTracks(971_005, new[] { new Track("A1", "Blue In Green") });
+        var blib = bs.LoadLibrary();
+        var blue = new SearchIndex(blib).Hits("blue").Select(h => (blib.Item(h.Id)!.Title, h.Track?.Title)).ToList();
+        Check.That(blue.Count >= 4 && blue[0] == ("Blue", null) && blue[1] == ("Kind Of Blue", null) && blue.Skip(2).All(b => b.Item2 is not null),
+                   $"albummer før sange, og et album med præcis den titel øverst: {string.Join("; ", blue)}");
+
         // Sanglisten følger med til en anden enhed – og en enhed uden liste sletter den ikke.
         var docs = s.ExportSyncDocs();
         var animals = docs.First(d => d.Kind == SyncKind.Release && d.Key == "970002");
