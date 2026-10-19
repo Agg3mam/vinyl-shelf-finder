@@ -534,6 +534,14 @@ projektet med egen konto (RLS adskiller data), men hver skal have sit eget Disco
   "Start forfra" som på Mac. Fluebenene er posterne `sort_checked_vinyl`/`_cd` (fælles ID'er), så Mac, Windows og
   telefonen ser de samme. Webappen skriver nu "Spillet" og disse flueben – stadig aldrig placeringer.
 
+### 19. okt (nat): statistik over brugerne
+
+- **I Supabase:** `supabase/admin-views.sql` laver skemaet `statistik` med oversigterne `brugere`, `overblik` og
+  `spillet_pr_uge` (Table Editor › skema "statistik"). Skemaet er ikke delt med API'et; brugeren kører filen selv.
+- **I webappen (valgfrit):** `supabase/admin-stats.sql` laver `admin_users`, `is_admin()` og `admin_stats()` (security
+  definer, kun for administratorer). Står brugeren i `admin_users`, viser Konto "Statistik over brugerne" (`#/statistik`).
+  Afprøvet mod en falsk Supabase i browseren.
+
 ### Ikke færdigt / næste skridt (spørg brugeren om rækkefølgen)
 
 1. **Mobilside på det lokale netværk (opgave 1)**, så QR-koderne virker. Det er det største åbne punkt.

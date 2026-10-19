@@ -29,6 +29,8 @@ const state = {
   query: "",
   tab: "reol",
   checked: { vinyl: new Set(), cd: new Set() },
+  isAdmin: false,
+  stats: null, // { data, error, loading }
   rules: null,
   coverFlow: false,
   flowCenter: new Map(), // sektion → pladen i midten af Cover Flow
@@ -58,6 +60,7 @@ const ICONS = {
   frame: '<rect x="3" y="3" width="18" height="18" rx="2"/><path d="m3 17 5-5 4 4 3-3 6 6"/><circle cx="15.5" cy="8.5" r="1.5"/>',
   box: '<path d="M3 7.5 12 3l9 4.5v9L12 21l-9-4.5zM3 7.5 12 12l9-4.5M12 12v9"/>',
   dashed: '<circle cx="12" cy="12" r="9" stroke-dasharray="3 3"/>',
+  chart: '<path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/>',
   checklist: '<path d="M10 6h11M10 12h11M10 18h11"/><path d="m3 6 1.5 1.5L7 5M3 12l1.5 1.5L7 11"/><circle cx="5" cy="18" r="1.6"/>',
   circle: '<circle cx="12" cy="12" r="9"/>',
   checked: '<circle cx="12" cy="12" r="10" fill="currentColor" stroke="none"/><path d="m7.5 12.5 3 3 6-6.5" stroke="#fff"/>',
@@ -197,6 +200,9 @@ async function sync(userInitiated = false) {
       await db.applyRows(rows);
       mergeRows(rows);
       if (cursor) await db.setMeta("cursor", cursor);
+      // Administrator? (Så vises Statistik under Konto.) Mangler funktionen i databasen, er svaret bare nej.
+      try { state.isAdmin = (await cloud.rpc("is_admin", s)) === true; } catch { state.isAdmin = false; }
+      await db.setMeta("isAdmin", state.isAdmin);
       state.lastSync = Date.now();
       await db.setMeta("lastSync", state.lastSync);
       state.phase = "idle";
@@ -319,6 +325,7 @@ function render() {
     case "scan": html = scanPage(); break;
     case "hor": html = listenPage(); break;
     case "sortering": html = sortPage(); break;
+    case "statistik": html = statsPage(); break;
     case "konto": html = accountPage(welcome); break;
     default: html = shelvesPage();
   }
@@ -329,6 +336,7 @@ function render() {
   if (r.name === "plade") drawSpines();
   if (r.name === "scan") unmount = startScanner();
   if (r.name === "hor") unmount = mountListenFlow();
+  if (r.name === "statistik") mountStats();
   if (r.name === "sektion" && state.coverFlow) unmount = mountSectionFlow(r.arg);
 }
 
@@ -638,6 +646,110 @@ function toggleSortCheck(id) {
   saveChecked(m);
 }
 
+// MARK: Statistik over brugerne (kun for administratorer; se supabase/admin-stats.sql)
+
+const DEVICE_NAMES = { mac: "Mac", windows: "Windows", iphone: "iPhone", web: "Webapp" };
+const daysAgo = (iso) => (iso ? (Date.now() - new Date(iso).getTime()) / 86400000 : Infinity);
+const shortDate = (iso) => (iso ? new Date(iso).toLocaleDateString("da-DK", { day: "numeric", month: "short", year: "numeric" }) : "–");
+
+async function loadStats(force = false) {
+  if (!state.session || (state.stats?.loading) || (state.stats?.data && !force)) return;
+  state.stats = { ...(state.stats ?? {}), loading: true, error: null };
+  try {
+    const s = await validSession();
+    state.stats = { data: await cloud.rpc("admin_stats", s), loading: false, error: null, at: Date.now() };
+  } catch (e) {
+    state.stats = { data: null, loading: false, error: e.message };
+  }
+  if (parseRoute().name === "statistik") { lastRendered = ""; render(); }
+}
+
+function mountStats() { loadStats(); }
+
+/** Søjlediagram (én serie, accentfarven). Tryk eller hold over en søjle for tallet; ellers vises den seneste. */
+function barChart(id, points, unit) {
+  if (!points.length) return `<p class="footnote">Ingen data endnu.</p>`;
+  const W = 340, H = 120, pad = 18, gap = 2;
+  const max = Math.max(1, ...points.map((p) => p.value));
+  const bw = (W - gap * (points.length - 1)) / points.length;
+  const bars = points.map((p, i) => {
+    const h = p.value ? Math.max(3, (p.value / max) * (H - pad)) : 0;
+    const x = i * (bw + gap), y = H - h, r = Math.min(4, bw / 2, h);
+    const path = h ? `M${x},${H}V${y + r}Q${x},${y} ${x + r},${y}H${x + bw - r}Q${x + bw},${y} ${x + bw},${y + r}V${H}Z` : "";
+    return `<g class="bar" data-chart="${id}" data-tip="${esc(`${p.label}: ${p.value} ${unit(p.value)}`)}">
+      <rect x="${x}" y="0" width="${bw + gap}" height="${H}" fill="transparent"/>${path ? `<path d="${path}"/>` : ""}</g>`;
+  }).join("");
+  const last = points.at(-1);
+  return `<div class="chart" id="chart-${id}">
+    <svg viewBox="0 0 ${W} ${H + 1}" preserveAspectRatio="none" role="img" aria-label="${esc(points.map((p) => `${p.label}: ${p.value}`).join(", "))}">
+      <line x1="0" x2="${W}" y1="${pad}" y2="${pad}" class="grid"/><line x1="0" x2="${W}" y1="${H}" y2="${H}" class="base"/>${bars}
+    </svg>
+    <div class="chart-axis"><span>${esc(points[0].label)}</span><span>højst ${max}</span><span>${esc(last.label)}</span></div>
+    <div class="chart-tip" id="tip-${id}">${esc(`${last.label}: ${last.value} ${unit(last.value)}`)}</div>
+  </div>`;
+}
+
+function weekLabel(d) {
+  const t = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+  const day = t.getUTCDay() || 7;
+  t.setUTCDate(t.getUTCDate() + 4 - day);
+  const week = Math.ceil(((t - Date.UTC(t.getUTCFullYear(), 0, 1)) / 86400000 + 1) / 7);
+  return `Uge ${week}`;
+}
+
+function statsPage() {
+  const st = state.stats;
+  const head = topbar({ backTo: "#/konto", title: "Statistik", right: `<button class="icon-btn" data-action="stats-refresh" aria-label="Opdatér">${st?.loading ? '<span class="spinner"></span>' : icon("sync")}</button>` });
+  if (!state.session) return `<main class="page">${head}<div class="empty"><h2>Log ind først</h2></div></main>`;
+  if (!st || (st.loading && !st.data)) return `<main class="page">${head}<div class="empty"><span class="spinner"></span></div></main>`;
+  if (st.error) {
+    return `<main class="page">${head}<div class="empty"><div class="big-icon">${icon("warn")}</div><h2>Statistikken kunne ikke hentes</h2>
+      <p>${esc(st.error)} Er <b>supabase/admin-stats.sql</b> kørt i Supabase, og står du i admin_users?</p></div></main>`;
+  }
+  const users = st.data.users ?? [];
+  const active7 = users.filter((u) => daysAgo(u.last_active) <= 7).length;
+  const active30 = users.filter((u) => daysAgo(u.last_active) <= 30).length;
+  const now = new Date();
+  const newMonth = users.filter((u) => { const d = new Date(u.created_at); return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth(); }).length;
+
+  // Afspilninger pr. uge: de seneste 26 uger, også uger uden afspilninger.
+  const byWeek = new Map((st.data.plays_by_week ?? []).map((w) => [w.week, w.plays]));
+  const monday = new Date(now); monday.setHours(0, 0, 0, 0); monday.setDate(monday.getDate() - ((monday.getDay() + 6) % 7));
+  const weeks = [];
+  for (let i = 25; i >= 0; i--) {
+    const d = new Date(monday); d.setDate(d.getDate() - i * 7);
+    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+    weeks.push({ label: weekLabel(d), value: byWeek.get(key) ?? 0 });
+  }
+  // Nye brugere pr. måned: de seneste 12 måneder.
+  const months = [];
+  for (let i = 11; i >= 0; i--) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    const value = users.filter((u) => { const c = new Date(u.created_at); return c.getFullYear() === d.getFullYear() && c.getMonth() === d.getMonth(); }).length;
+    months.push({ label: d.toLocaleDateString("da-DK", { month: "short", year: "2-digit" }), value });
+  }
+  const devices = Object.keys(DEVICE_NAMES).map((k) => ({ k, n: users.filter((u) => (u.devices ?? []).includes(k)).length }));
+  const tile = (n, label) => `<div class="tile"><div class="tile-n">${n}</div><div class="tile-l">${esc(label)}</div></div>`;
+  return `<main class="page">${head}
+    <h1 class="large-title">Statistik</h1>
+    <div class="tiles">${tile(users.length, users.length === 1 ? "bruger i alt" : "brugere i alt")}${tile(active7, "aktive de sidste 7 dage")}${tile(active30, "aktive de sidste 30 dage")}${tile(newMonth, "nye i denne måned")}</div>
+    <h2 class="group-title big">Spillet pr. uge</h2>
+    <div class="list chart-card">${barChart("plays", weeks, (n) => (n === 1 ? "afspilning" : "afspilninger"))}</div>
+    <h2 class="group-title big">Nye brugere pr. måned</h2>
+    <div class="list chart-card">${barChart("signups", months, (n) => (n === 1 ? "ny bruger" : "nye brugere"))}</div>
+    <h2 class="group-title big">Enheder</h2>
+    <div class="list">${devices.map((d) => `<div class="row kv"><span>${DEVICE_NAMES[d.k]}</span><span class="v">${d.n} ${d.n === 1 ? "bruger" : "brugere"}</span></div>`).join("")}</div>
+    <p class="footnote">En bruger tælles med på en enhed, når den har sendt noget til kontoen derfra.</p>
+    <h2 class="group-title big">Brugere</h2>
+    <div class="list">${users.map((u) => `<div class="row user-row"><span class="grow">
+        <div class="t1">${esc(u.email ?? "(uden e-mail)")}</div>
+        <div class="t3">Oprettet ${esc(shortDate(u.created_at))} · ${u.last_active ? `sidst aktiv ${esc(relative(new Date(u.last_active).getTime() / 1000))}` : "aldrig brugt"}</div>
+        <div class="t3">${u.copies} ${u.copies === 1 ? "plade" : "plader"} · ${u.sections} ${u.sections === 1 ? "sektion" : "sektioner"} · ${u.plays}× spillet</div>
+      </span><span class="devices">${(u.devices ?? []).map((d) => `<span class="badge">${esc(DEVICE_NAMES[d] ?? d)}</span>`).join("")}</span></div>`).join("")}</div>
+    <p class="footnote">Hentet ${esc(new Date(st.at).toLocaleString("da-DK", { dateStyle: "medium", timeStyle: "short" }))}. Kun du kan se denne side.</p>
+  </main>`;
+}
+
 // MARK: Pladen ("Find i reolen")
 
 function recordPage(uid, trackParam) {
@@ -866,9 +978,10 @@ function lastSyncText() {
 
 /** "Indstillinger" øverst under Konto (som i iPhone-appen). */
 function settingsGroup(welcome) {
-  if (welcome || !hasShelves()) return "";
+  if (welcome || (!hasShelves() && !state.isAdmin)) return "";
   return `<div class="group-title">Indstillinger</div>
-    <div class="list"><a class="row" href="#/sortering" data-nav>${icon("checklist")}<span class="grow">Sorteringsliste</span><span class="chev">${icon("chevR")}</span></a></div>
+    <div class="list">${hasShelves() ? `<a class="row" href="#/sortering" data-nav>${icon("checklist")}<span class="grow">Sorteringsliste</span><span class="chev">${icon("chevR")}</span></a>` : ""}
+      ${state.isAdmin && state.session ? `<a class="row" href="#/statistik" data-nav>${icon("chart")}<span class="grow">Statistik over brugerne</span><span class="chev">${icon("chevR")}</span></a>` : ""}</div>
     <p class="footnote">Hele rækkefølgen med flueben, så du kan have telefonen med, når du stiller reolen op. Fluebenene er de samme som på computeren.</p>`;
 }
 
@@ -1018,6 +1131,7 @@ document.addEventListener("click", async (ev) => {
   else if (a === "signin") doSignIn();
   else if (a === "toggle-flow") { state.coverFlow = !state.coverFlow; safeLocal.set("coverFlow", state.coverFlow ? "1" : ""); lastRendered = ""; render(); }
   else if (a === "pick") pickRecord();
+  else if (a === "stats-refresh") loadStats(true);
   else if (a === "sort-check") toggleSortCheck(Number(el.dataset.id));
   else if (a === "sort-next") {
     const next = sortEntries().find((e) => e.number != null && !(state.checked[state.medium] ?? new Set()).has(e.item.id));
@@ -1058,6 +1172,18 @@ document.addEventListener("click", async (ev) => {
     }, 2000);
   }
 });
+
+// Statistikkens søjler: tryk eller hold over en søjle, så står tallet under diagrammet.
+function showBarTip(ev) {
+  const g = ev.target.closest?.("g.bar");
+  if (!g) return;
+  const tip = $(`#tip-${g.dataset.chart}`);
+  if (tip) tip.textContent = g.dataset.tip;
+  g.closest("svg").querySelectorAll("g.bar.on").forEach((x) => x.classList.remove("on"));
+  g.classList.add("on");
+}
+document.addEventListener("pointerover", showBarTip);
+document.addEventListener("pointerdown", showBarTip);
 
 let searchTimer = null;
 document.addEventListener("input", (ev) => {
@@ -1119,6 +1245,7 @@ async function start() {
     state.session = (await db.getMeta("session")) ?? null;
     state.email = (await db.getMeta("email")) ?? "";
     state.lastSync = (await db.getMeta("lastSync")) ?? null;
+    state.isAdmin = (await db.getMeta("isAdmin")) === true;
     login.email = state.email;
   }
   rebuild();

@@ -171,3 +171,10 @@ export async function upsert(docs, s) {
   await send("POST", "rest/v1/sync_records?on_conflict=user_id,kind,key", rows, s.accessToken,
     { Prefer: "resolution=merge-duplicates,return=minimal" });
 }
+
+// MARK: Statistik (kun administratorer, se supabase/admin-stats.sql)
+
+/** Kalder en funktion i databasen. Findes funktionen ikke (SQL'en er ikke kørt), giver det en fejl. */
+export async function rpc(name, s, args = {}) {
+  return send("POST", `rest/v1/rpc/${name}`, args, s.accessToken);
+}
