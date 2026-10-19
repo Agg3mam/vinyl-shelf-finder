@@ -20,9 +20,9 @@ function iosSwitch() {
 
 let last = 0;
 /** "tick": en plade passerer midten · "edge": enden af sektionen · "success": forslaget er fundet. */
-export function haptic(kind = "tick") {
+export function haptic(kind = "tick", paced = false) {
   const now = performance.now();
-  if (kind === "tick" && now - last < 35) return; // ikke en summen, når man bladrer meget hurtigt
+  if (kind === "tick" && !paced && now - last < 35) return; // ikke en summen, når man bladrer meget hurtigt
   last = now;
   try {
     if (navigator.vibrate) navigator.vibrate(kind === "tick" ? 6 : kind === "edge" ? [12, 40, 12] : [10, 50, 20]);

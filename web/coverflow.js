@@ -71,12 +71,15 @@ export function mountCoverFlow(el, opts) {
   }
 
   // Stryg: rækken følger fingeren; passerer den en halv plade, skifter midten.
-  let startX = 0, lastX = 0, dragging = false, moved = false, atEdge = false;
+  let startX = 0, lastX = 0, dragging = false, moved = false, atEdge = false, samples = [], stopped = false;
   const perCover = () => Math.max(24, sideNow() * 0.25);
   el.addEventListener("pointerdown", (e) => {
     if (!items.length) return;
+    // En finger på rækken stopper et glid, der er i gang (og er så ikke et tryk på et cover).
+    stopped = spinTimer !== null;
     stopSpin();
     dragging = true; moved = false; startX = lastX = e.clientX;
+    samples = [{ x: e.clientX, t: e.timeStamp }];
   });
   el.addEventListener("pointermove", (e) => {
     if (!dragging) return;
@@ -84,6 +87,8 @@ export function mountCoverFlow(el, opts) {
     if (!moved) { moved = true; el.setPointerCapture?.(e.pointerId); }
     const d = e.clientX - lastX;
     lastX = e.clientX;
+    samples.push({ x: e.clientX, t: e.timeStamp });
+    while (samples.length > 2 && e.timeStamp - samples[0].t > 100) samples.shift();
     const g = CF.glide(center, shift - d / perCover(), items.length);
     const changed = g.center !== center;
     // Et klik for hver plade, der passerer midten, og et tydeligere ved enden af sektionen.
@@ -98,7 +103,12 @@ export function mountCoverFlow(el, opts) {
   const end = () => {
     if (!dragging) return;
     dragging = false;
-    if (shift !== 0) { shift = 0; layout(true); }
+    if (moved) {
+      // Fingerens fart de sidste 100 ms (plader pr. sekund; mod venstre = næste plade).
+      const a = samples[0], b = samples.at(-1), dt = (b.t - a.t) / 1000;
+      fling(dt > 0 ? -(b.x - a.x) / dt / perCover() : 0);
+    } else if (shift !== 0) { shift = 0; layout(true); }
+    if (stopped) { moved = true; stopped = false; }
     // Et klik lige efter et stryg skal ikke åbne pladen.
     setTimeout(() => { moved = false; }, 0);
   };
@@ -113,40 +123,57 @@ export function mountCoverFlow(el, opts) {
 
   function stopSpin() { if (spinTimer) cancelAnimationFrame(spinTimer); spinTimer = null; }
 
-  /** Snurrer hen til pladen `i`: rækken glider i én bevægelse, starter hurtigt og bremser jævnt op
-   *  (som et lykkehjul), og midtercoveret popper, når den lander. Samme kurve som iPhone-appen. */
+  /** Snurrer hen til pladen `i` (forslaget i "Hør"): glider, bremser jævnt op og popper, når den lander. */
   function spinTo(i, done) {
-    stopSpin();
     if (!items.length) return;
     const target = Math.min(Math.max(i, 0), items.length - 1);
-    const from = center + shift, total = target - from;
-    const land = () => {
-      center = target; shift = 0; layout(false);
-      opts.onCenter?.(center);
+    const total = target - (center + shift);
+    if (reduceMotion() || Math.abs(total) < 0.5) { stopSpin(); finish(target, true, done); return; }
+    // Længere afstande tager lidt længere tid, men aldrig over ca. 2,7 sekunder. Samme kurve som iPhone-appen.
+    glide(target, 1300 + Math.min(1400, Math.abs(total) * 35), true, done);
+  }
+
+  /** Fortsætter et kraftigt stryg med farten og bremser jævnt op (som at scrolle på iPhone). Plader pr. sekund. */
+  function fling(velocity) {
+    const from = center + shift;
+    const target = Math.min(Math.max(Math.round(from + velocity * 0.45), 0), items.length - 1);
+    const total = target - from;
+    if (reduceMotion() || Math.abs(velocity) < 2.5 || Math.abs(total) < 0.5) { shift = 0; layout(true); return; }
+    // Kurven starter med samme fart som fingeren (ease-out i fjerde potens starter med 4 × afstand / tid).
+    glide(target, Math.min(2500, Math.max(350, (4 * Math.abs(total) / Math.abs(velocity)) * 1000)), false);
+  }
+
+  function finish(target, landing, done) {
+    center = target; shift = 0; layout(false);
+    opts.onCenter?.(center);
+    spinTimer = null;
+    if (landing) {
       haptic("success");
       const n = nodes.get(center);
       if (n && !reduceMotion()) { n.classList.remove("cf-pop"); void n.offsetWidth; n.classList.add("cf-pop"); }
-      spinTimer = null;
-      done?.();
-    };
-    if (reduceMotion() || Math.abs(total) < 0.5) { land(); return; }
-    const duration = 1300 + Math.min(1400, Math.abs(total) * 35);
+    }
+    done?.();
+  }
+
+  /** Rækken glider hen til `target`: hurtigt først, bremser jævnt op. Et klik for hver plade, der passerer midten,
+   *  hele vejen (højst ét pr. 35 ms). */
+  function glide(target, duration, landing, done) {
+    stopSpin();
+    const from = center + shift, total = target - from;
     const begin = performance.now();
-    let lastTick = 0;
+    let lastTick = -1e9;
     const frame = (now) => {
       const t = Math.min(1, (now - begin) / duration);
       const pos = from + total * (1 - (1 - t) ** 4); // ease-out (kvart)
       const c = Math.min(Math.max(Math.round(pos), 0), items.length - 1);
       if (c !== center) {
-        // Klik kun, når farten er til at mærke (plader pr. sekund lige nu).
-        const speed = Math.abs(total) * 4 * (1 - t) ** 3 / (duration / 1000);
-        if (speed < 22 && now - lastTick > 40) { haptic("tick"); lastTick = now; }
+        if (now - lastTick >= 35) { haptic("tick", true); lastTick = now; }
         center = c;
         opts.onCenter?.(center);
       }
       shift = pos - c;
       layout(false);
-      if (t >= 1) { land(); return; }
+      if (t >= 1) { finish(target, landing, done); return; }
       spinTimer = requestAnimationFrame(frame);
     };
     spinTimer = requestAnimationFrame(frame);

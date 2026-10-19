@@ -523,6 +523,9 @@ projektet med egen konto (RLS adskiller data), men hver skal have sit eget Disco
   liste/Cover Flow (`@AppStorage("coverFlow")`).
 - **Webapp:** `web/coverflow.js` (CSS 3D, `-webkit-box-reflect`), `web/haptics.js`, fanen "Hør" (`#/hor`) og knap i sektionen.
   Afprøvet i browseren og iPhone-simulatoren med demo-data.
+- **Bevægelse:** ét lag over Cover Flow tager stryg og tryk; et kraftigt stryg fortsætter med farten og bremser
+  op (`fling`, 0,45 s × fart); "Giv mig en plade" glider med ease-out og popper ved landing. Haptik for hver plade
+  hele vejen (højst én pr. 35 ms). I webappen kører haptikken kun, hvor browseren tillader det.
 
 ### Ikke færdigt / næste skridt (spørg brugeren om rækkefølgen)
 

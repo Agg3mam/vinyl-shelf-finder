@@ -17,6 +17,8 @@ struct PhoneCoverFlow: View {
     @State private var atEdge = false
     @State private var edgeTick = 0
     @State private var dragging = false
+    /// Fingeren stoppede et glid: det er ikke et tryk på et cover.
+    @State private var stoppedGlide = false
     /// Et klik i telefonen pr. plade, der passerer midten (kun når det går så langsomt, at man kan mærke det).
     @State private var tick = 0
     @State private var landedTick = 0
@@ -52,6 +54,8 @@ struct PhoneCoverFlow: View {
                     .contentShape(Rectangle())
                     .gesture(DragGesture(minimumDistance: 0)
                         .onChanged { v in
+                            // En finger på rækken stopper et glid, der er i gang (som når man stopper en scroll).
+                            if !dragging, spinTask != nil, spin.wrappedValue == nil { spinTask?.cancel(); spinTask = nil; stoppedGlide = true }
                             guard dragging || abs(v.translation.width) > 6 else { return }
                             if !dragging { spinTask?.cancel(); spinTask = nil; spin.wrappedValue = nil }
                             dragging = true
@@ -60,7 +64,7 @@ struct PhoneCoverFlow: View {
                             pan(-Double(delta) / max(24, side * 0.25))
                         }
                         .onEnded { v in
-                            if !dragging {
+                            if !dragging && !stoppedGlide {
                                 // Et tryk: midtercoveret åbner pladen, et sidecover hentes frem.
                                 let dx = v.location.x - geo.size.width / 2
                                 if abs(dx) <= side / 2 { tapped(c, c) }
@@ -68,9 +72,16 @@ struct PhoneCoverFlow: View {
                                     abs(CoverFlowGeometry.x($0 - c, side: side) - dx) < abs(CoverFlowGeometry.x($1 - c, side: side) - dx)
                                 }) { tapped(i, c) }
                             }
+                            let wasDragging = dragging
+                            stoppedGlide = false
                             dragging = false
                             lastDrag = 0
-                            withAnimation(animation) { shift = 0 }
+                            if wasDragging {
+                                // Fingerens fart, når den slipper (plader pr. sekund; mod venstre = næste plade).
+                                fling(velocity: -Double(v.velocity.width) / max(24, side * 0.25))
+                            } else {
+                                withAnimation(animation) { shift = 0 }
+                            }
                         })
             }
         }
@@ -97,28 +108,44 @@ struct PhoneCoverFlow: View {
     /// Snurrer hen til pladen `target`: rækken glider i én bevægelse, starter hurtigt og bremser jævnt op
     /// (som et lykkehjul), og midtercoveret popper, når den lander.
     private func startSpin(to target: Int) {
-        spinTask?.cancel()
         guard items.indices.contains(target) else { spin.wrappedValue = nil; return }
+        let total = Double(target) - (Double(center) + shift)
+        if reduceMotion || abs(total) < 0.5 { spinTask?.cancel(); center = target; shift = 0; landed(); return }
+        // Længere afstande tager lidt længere tid, men aldrig over ca. 2,7 sekunder.
+        glide(to: target, duration: 1.3 + min(1.4, abs(total) * 0.035), landing: true)
+    }
+
+    /// Fortsætter et kraftigt stryg med farten og bremser jævnt op (som at scrolle på iPhone). `velocity` er i plader pr. sekund.
+    private func fling(velocity: Double) {
+        let from = Double(center) + shift
+        let target = min(max(Int((from + velocity * 0.45).rounded()), 0), items.count - 1)
+        let total = Double(target) - from
+        guard !reduceMotion, abs(velocity) > 2.5, abs(total) >= 0.5 else {
+            withAnimation(animation) { shift = 0 }
+            return
+        }
+        // Kurven starter med samme fart som fingeren (ease-out i fjerde potens starter med 4 × afstand / tid).
+        glide(to: target, duration: min(2.5, max(0.35, 4 * abs(total) / abs(velocity))), landing: false)
+    }
+
+    /// Rækken glider hen til `target`: hurtigt først, bremser jævnt op. Et klik i telefonen for hver plade, der passerer
+    /// midten, hele vejen (højst ét pr. 35 ms, som er det, telefonen kan nå).
+    private func glide(to target: Int, duration: Double, landing: Bool) {
+        spinTask?.cancel()
         let from = Double(center) + shift
         let total = Double(target) - from
-        if reduceMotion || abs(total) < 0.5 { center = target; shift = 0; landed(); return }
-        // Længere afstande tager lidt længere tid, men aldrig over ca. 2,7 sekunder.
-        let duration = 1.3 + min(1.4, abs(total) * 0.035)
         spinTask = Task { @MainActor in
             let clock = ContinuousClock(), begin = clock.now
-            var lastTick = begin
+            var lastTick = begin - .seconds(1)
             while !Task.isCancelled {
                 let t = min(1, (clock.now - begin) / .seconds(duration))
-                let p = 1 - pow(1 - t, 4) // ease-out (kvart): hurtigt først, bremser jævnt op
-                let pos = from + total * p
-                let c = Int(pos.rounded())
+                let pos = from + total * (1 - pow(1 - t, 4)) // ease-out (kvart)
+                let c = min(max(Int(pos.rounded()), 0), items.count - 1)
                 var tr = Transaction(); tr.disablesAnimations = true
                 withTransaction(tr) {
                     if c != center {
-                        // Fart i plader pr. sekund lige nu (afledt af kurven): klik kun, når den er til at mærke.
-                        let speed = abs(total) * 4 * pow(1 - t, 3) / duration
-                        if speed < 22, clock.now - lastTick > .milliseconds(40) { tick += 1; lastTick = clock.now }
-                        center = min(max(c, 0), items.count - 1)
+                        if clock.now - lastTick >= .milliseconds(35) { tick += 1; lastTick = clock.now }
+                        center = c
                     }
                     shift = pos - Double(c)
                 }
@@ -128,7 +155,7 @@ struct PhoneCoverFlow: View {
             guard !Task.isCancelled else { return }
             center = target
             shift = 0
-            landed()
+            if landing { landed() } else { spinTask = nil }
         }
     }
 
