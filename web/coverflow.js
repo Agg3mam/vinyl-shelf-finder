@@ -51,9 +51,11 @@ export function mountCoverFlow(el, opts) {
     for (const [i, n] of nodes) if (i < a - 1 || i > b) { n.remove(); nodes.delete(i); }
     for (let i = a; i < b; i++) {
       const o = i - center - shift;
-      // CSS drejer modsat vej af SwiftUI's rotation3DEffect (som PlaneProjection på Windows).
+      // Med perspektivet på selve coveret drejer CSS samme vej som SwiftUI's rotation3DEffect (yderkanten nærmest).
       const n = nodeFor(i);
-      n.style.transform = `translate(-50%, -50%) translateX(${CF.x(o, side).toFixed(1)}px) rotateY(${(-CF.angle(o)).toFixed(2)}deg) scale(${CF.scale(o).toFixed(3)})`;
+      // Perspektivet ligger på hvert cover (som rotation3DEffect på Mac/iPhone). Ligger det på beholderen, tegner Safari
+      // coverne i ét fælles 3D-rum og stabler dem efter dybde, så sidecoverne skjuler hinanden.
+      n.style.transform = `translate(-50%, -50%) translateX(${CF.x(o, side).toFixed(1)}px) perspective(${(side * 2.4).toFixed(0)}px) rotateY(${CF.angle(o).toFixed(2)}deg) scale(${CF.scale(o).toFixed(3)})`;
       n.style.zIndex = String(1000 - Math.round(Math.abs(o) * 10));
       n.setAttribute("aria-current", i === center ? "true" : "false");
       n.tabIndex = i === center ? 0 : -1;
@@ -71,14 +73,14 @@ export function mountCoverFlow(el, opts) {
   }
 
   // Stryg: rækken følger fingeren; passerer den en halv plade, skifter midten.
-  let startX = 0, lastX = 0, dragging = false, moved = false, atEdge = false, samples = [], stopped = false;
+  let startX = 0, lastX = 0, dragging = false, moved = false, atEdge = false, samples = [], stopped = false, dragStartCenter = 0;
   const perCover = () => Math.max(24, sideNow() * 0.25);
   el.addEventListener("pointerdown", (e) => {
     if (!items.length) return;
     // En finger på rækken stopper et glid, der er i gang (og er så ikke et tryk på et cover).
     stopped = spinTimer !== null;
     stopSpin();
-    dragging = true; moved = false; startX = lastX = e.clientX;
+    dragging = true; moved = false; startX = lastX = e.clientX; dragStartCenter = center;
     samples = [{ x: e.clientX, t: e.timeStamp }];
   });
   el.addEventListener("pointermove", (e) => {
@@ -104,6 +106,8 @@ export function mountCoverFlow(el, opts) {
     if (!dragging) return;
     dragging = false;
     if (moved) {
+      // Safari giver kun haptik under et tryk eller når fingeren slipper (ikke mens den glider), så et klik her.
+      if (center !== dragStartCenter) haptic("tick", true);
       // Fingerens fart de sidste 100 ms (plader pr. sekund; mod venstre = næste plade).
       const a = samples[0], b = samples.at(-1), dt = (b.t - a.t) / 1000;
       fling(dt > 0 ? -(b.x - a.x) / dt / perCover() : 0);

@@ -2,20 +2,19 @@
 // kontakt (<input type="checkbox" switch>, iOS 18+) giver et let "klik", når den skiftes. Virker det
 // ikke på telefonen, sker der bare ingenting.
 
-let label = null;
+// Som biblioteket ios-haptics: en ny kontakt hver gang, klikket via sin label og fjernet igen. Safari giver kun
+// klikket, når det sker under et tryk (ikke mens fingeren glider, og ikke bagefter).
 function iosSwitch() {
-  if (!label) {
-    label = document.createElement("label");
-    label.setAttribute("aria-hidden", "true");
-    label.style.cssText = "position:fixed;left:-100px;top:0;width:1px;height:1px;overflow:hidden;opacity:0;pointer-events:none";
-    const input = document.createElement("input");
-    input.type = "checkbox";
-    input.setAttribute("switch", "");
-    input.tabIndex = -1;
-    label.append(input);
-    document.body.append(label);
-  }
+  const label = document.createElement("label");
+  label.setAttribute("aria-hidden", "true");
+  label.style.display = "none";
+  const input = document.createElement("input");
+  input.type = "checkbox";
+  input.setAttribute("switch", "");
+  label.append(input);
+  document.head.append(label);
   label.click();
+  label.remove();
 }
 
 let last = 0;

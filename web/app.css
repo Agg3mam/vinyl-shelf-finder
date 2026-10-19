@@ -261,10 +261,10 @@ details.tracks[open] summary .chev { transform: rotate(90deg); }
 body:has(.cf-page) { background: #FFFFFF; }
 .cf-page select { color: var(--secondary); }
 .cf-box { position: relative; height: min(32vh, 280px); margin: 4px calc(-1 * var(--gutter)) 0; overflow: hidden; touch-action: pan-y; user-select: none; -webkit-user-select: none; outline: none; }
-.cf-stage { position: absolute; inset: 0; perspective: calc(var(--side, 200px) * 2.6); perspective-origin: 50% 40%; }
+.cf-stage { position: absolute; inset: 0; }
 .cf-cover {
   position: absolute; left: 50%; top: 47%; width: var(--side, 200px); height: var(--side, 200px); padding: 0; border: 0; border-radius: 3px;
-  background: #E5E5EA; color: rgba(60, 60, 67, 0.4); font-size: calc(var(--side, 200px) * 0.3); cursor: pointer; transform-style: preserve-3d;
+  background: #E5E5EA; color: rgba(60, 60, 67, 0.4); font-size: calc(var(--side, 200px) * 0.3); cursor: pointer; transform-style: flat; -webkit-backface-visibility: hidden; backface-visibility: hidden;
   box-shadow: 0 10px 24px rgba(0, 0, 0, 0.18); -webkit-box-reflect: below 2px linear-gradient(transparent 72%, rgba(255, 255, 255, 0.25));
   will-change: transform; -webkit-tap-highlight-color: transparent; touch-action: pan-y; -webkit-user-drag: none;
 }
