@@ -29,6 +29,16 @@ final class PhoneModel {
     var media: [Medium] { Medium.allCases.filter { !(libraries[$0]?.locations.isEmpty ?? true) } }
     var errorMessage: String?
 
+    /// "Hvad skal jeg høre?": filtre og de seneste forslag (som på Mac).
+    var listenFilter = ListenFilter()
+    private(set) var recentPicks: [Int64] = []
+    private(set) var currentPick: Int64?
+    func rememberPick(_ id: Int64) {
+        currentPick = id
+        recentPicks.append(id)
+        if recentPicks.count > 20 { recentPicks.removeFirst() }
+    }
+
     /// Åbnes fra en QR-kode eller et link (vinylshelf://section/…).
     var openedSection: OpenedSection?
     struct OpenedSection: Identifiable, Equatable { let medium: Medium; let locationID: Int64; var id: Int64 { locationID } }

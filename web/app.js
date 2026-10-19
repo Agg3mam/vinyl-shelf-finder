@@ -2,7 +2,10 @@
 // Reol, Scan, Søg og Konto, "Find i reolen" og "Spillet". Data kommer fra kontoen og gemmes i browseren,
 // så appen virker uden net. Webappen ændrer aldrig reolerne; den skriver kun "Spillet".
 
-import { buildLibraries, MEDIA, MEDIUM, STATUS, isOnShelf, locationName, shortName, fullName, detailLine } from "./core/library.js";
+import { buildLibraries, MEDIA, MEDIUM, STATUS, isOnShelf, locationName, shortName, fullName, detailLine, awayMessage,
+  FRESHNESS, genres, decades, candidates, pick, noMatchMessage } from "./core/library.js";
+import { mountCoverFlow } from "./coverflow.js";
+import { haptic } from "./haptics.js";
 import * as cloud from "./core/cloud.js";
 import * as db from "./core/store.js";
 
@@ -25,6 +28,8 @@ const state = {
   loaded: false,
   query: "",
   tab: "reol",
+  coverFlow: false,
+  flowCenter: new Map(), // sektion → pladen i midten af Cover Flow
 };
 
 // MARK: Hjælpere
@@ -51,6 +56,9 @@ const ICONS = {
   frame: '<rect x="3" y="3" width="18" height="18" rx="2"/><path d="m3 17 5-5 4 4 3-3 6 6"/><circle cx="15.5" cy="8.5" r="1.5"/>',
   box: '<path d="M3 7.5 12 3l9 4.5v9L12 21l-9-4.5zM3 7.5 12 12l9-4.5M12 12v9"/>',
   dashed: '<circle cx="12" cy="12" r="9" stroke-dasharray="3 3"/>',
+  dice: '<rect x="3" y="3" width="18" height="18" rx="4"/><circle cx="8" cy="8" r="1.3" fill="currentColor"/><circle cx="16" cy="8" r="1.3" fill="currentColor"/><circle cx="12" cy="12" r="1.3" fill="currentColor"/><circle cx="8" cy="16" r="1.3" fill="currentColor"/><circle cx="16" cy="16" r="1.3" fill="currentColor"/>',
+  flow: '<rect x="8" y="5" width="8" height="12" rx="1"/><path d="M5 6.5 2.5 8v7L5 16.5M19 6.5 21.5 8v7L19 16.5M8 20h8"/>',
+  list: '<path d="M8 6h13M8 12h13M8 18h13M3.5 6h.01M3.5 12h.01M3.5 18h.01"/>',
   toLeft: '<path d="M4 4v16M20 12H8m4-5-5 5 5 5"/>',
   toRight: '<path d="M20 4v16M4 12h12m-4-5 5 5-5 5"/>',
   stack: '<rect x="3" y="8" width="18" height="13" rx="2"/><path d="M6 5h12M8 2h8"/>',
@@ -255,6 +263,7 @@ function parseRoute() {
 
 const TABS = [
   { id: "reol", label: "Reol", icon: "books" },
+  { id: "hor", label: "Hør", icon: "dice" },
   { id: "scan", label: "Scan", icon: "qr" },
   { id: "sog", label: "Søg", icon: "search" },
   { id: "konto", label: "Konto", icon: "person" },
@@ -285,7 +294,9 @@ function render() {
 
   // Søgesiden bygges kun én gang, så feltet beholder fokus, mens man skriver.
   if (r.name === "sog" && lastRendered === key && $("#q")) { renderResults(); renderTabs(welcome); return; }
-  if (unmount && lastRendered !== key) { unmount(); unmount = null; }
+  // Scanneren startes ikke forfra, når siden tegnes om (fx efter en synkronisering).
+  if (r.name === "scan" && lastRendered === key && $("#scan")) { renderTabs(welcome); return; }
+  if (unmount) { unmount(); unmount = null; }
   const scroll = lastRendered === key ? window.scrollY : 0;
   lastRendered = key;
 
@@ -298,6 +309,7 @@ function render() {
     case "plade": html = recordPage(r.arg, r.params.get("sang")); break;
     case "sog": html = searchPage(); break;
     case "scan": html = scanPage(); break;
+    case "hor": html = listenPage(); break;
     case "konto": html = accountPage(welcome); break;
     default: html = shelvesPage();
   }
@@ -307,6 +319,8 @@ function render() {
   if (r.name === "sog") { renderResults(); }
   if (r.name === "plade") drawSpines();
   if (r.name === "scan") unmount = startScanner();
+  if (r.name === "hor") unmount = mountListenFlow();
+  if (r.name === "sektion" && state.coverFlow) unmount = mountSectionFlow(r.arg);
 }
 
 function demoBanner() {
@@ -411,11 +425,115 @@ function sectionPage(uid) {
   if (!hit) return `<main class="page">${topbar({ backTo: "#/reol" })}<div class="empty"><div class="big-icon">${icon("books")}</div><h2>Sektionen findes ikke længere</h2></div></main>`;
   const { medium, loc } = hit, L = lib(medium);
   const numbers = L.shelfNumbers(loc.id);
-  return `<main class="page">${topbar({ backTo: "#/reol", title: `${MEDIUM[medium].shelfWord} ${loc.shelf} · Sektion ${loc.section}` })}
+  const toggle = `<button class="icon-btn" data-action="toggle-flow" aria-pressed="${state.coverFlow}" aria-label="${state.coverFlow ? "Vis som liste" : "Vis som Cover Flow"}">${icon(state.coverFlow ? "list" : "flow")}</button>`;
+  if (state.coverFlow) {
+    return `<main class="page cf-page">${topbar({ backTo: "#/reol", title: `${MEDIUM[medium].shelfWord} ${loc.shelf} · Sektion ${loc.section}`, right: toggle })}
+      <div id="flow" class="cf-box" tabindex="0" aria-label="Cover Flow"></div>
+      <div id="flow-caption" class="cf-caption"></div>
+    </main>`;
+  }
+  return `<main class="page">${topbar({ backTo: "#/reol", title: `${MEDIUM[medium].shelfWord} ${loc.shelf} · Sektion ${loc.section}`, right: toggle })}
     <h1 class="large-title" style="font-size:28px">${esc(MEDIUM[medium].shelfWord)} ${loc.shelf} · Sektion ${esc(loc.section)}</h1>
     <div class="list">${L.items(loc.id).map((item) => recordRow({ medium, item, number: numbers.get(item.id) ?? "" })).join("")}</div>
     <p class="footnote">Nummereret fra venstre. Plader, der er ude af reolen, tælles ikke med.</p>
   </main>`;
+}
+
+// MARK: Cover Flow og "Hvad skal jeg høre?"
+
+/** Titel, kunstner og nummer under midtercoveret (som CoverFlowCaption på Mac). */
+function flowCaption(medium, item, locationID) {
+  const el = $("#flow-caption");
+  if (!el) return;
+  if (!item) { el.innerHTML = `<div class="cf-t2">Sektionen er tom.</div>`; return; }
+  const L = lib(medium);
+  const locID = locationID ?? L.locationOfCopy.get(item.id);
+  const nr = locID != null ? L.shelfNumbers(locID).get(item.id) : null;
+  const loc = L.location(locID);
+  const line = nr ? `Nr. ${nr} af ${L.onShelfCount(locID)}${locationID == null && loc ? ` · ${MEDIUM[medium].shelfWord} ${loc.shelf} · Sektion ${loc.section}` : ""}` : awayMessage(item) ?? "Ude af reolen";
+  el.innerHTML = `<div class="cf-t1">${esc(item.release.title)}</div><div class="cf-t2">${esc(item.release.artist)}</div>
+    <div class="cf-t3">${esc(line)}</div>
+    <a class="cf-find" href="#/plade/${encodeURIComponent(item.copy.uid)}" data-nav>${icon("search")}<span>Find i reolen</span></a>`;
+}
+
+function flowOptions(medium, items, onCenter) {
+  return {
+    items,
+    cover: (it) => it.release.coverURL ?? it.release.thumbURL,
+    label: (it) => fullName(it),
+    away: (it) => !isOnShelf(it),
+    onCenter,
+    onOpen: (i) => go(`#/plade/${encodeURIComponent(items[i].copy.uid)}`),
+  };
+}
+
+function mountSectionFlow(uid) {
+  const hit = findLocation(uid), el = $("#flow");
+  if (!hit || !el) return null;
+  const items = lib(hit.medium).items(hit.loc.id);
+  const start = Math.max(0, items.findIndex((it) => it.copy.uid === state.flowCenter.get(uid)));
+  const show = (i) => { state.flowCenter.set(uid, items[i]?.copy.uid); flowCaption(hit.medium, items[i], hit.loc.id); };
+  const cf = mountCoverFlow(el, { ...flowOptions(hit.medium, items, show), center: start });
+  show(cf.center);
+  return () => cf.destroy();
+}
+
+const listen = { genre: null, decade: null, freshness: "any", recent: [], current: null };
+let listenFlow = null;
+
+/** Hele hylden i reolens rækkefølge (det, Cover Flow snurrer igennem). */
+function shelfItems(m) { return lib(m).globalOrderItems(); }
+
+function listenPage() {
+  if (!hasShelves()) {
+    return `<main class="page">${topbar({})}<h1 class="large-title">Hvad skal jeg høre?</h1><div class="empty"><div class="big-icon">${icon("dice")}</div>
+      <h2>Ingen reoler endnu</h2><p>Reolerne laves i appen på computeren og kommer hertil via din konto.</p></div></main>`;
+  }
+  const m = state.medium, L = lib(m), all = L.allItems;
+  const ms = media();
+  const cands = candidates(all, L, listen, state.lastPlayed);
+  const gs = genres(all), ds = decades(all);
+  const option = (v, label, sel) => `<option value="${esc(v)}" ${sel ? "selected" : ""}>${esc(label)}</option>`;
+  return `<main class="page cf-page">${topbar({})}
+    <h1 class="large-title">Hvad skal jeg høre?</h1>
+    ${ms.length > 1 ? `<div class="segmented" role="group" aria-label="Hylde">${ms.map((x) => `<button data-action="medium" data-medium="${x}" aria-pressed="${x === m}">${MEDIUM[x].title}</button>`).join("")}</div>` : ""}
+    <div id="flow" class="cf-box" tabindex="0" aria-label="Cover Flow"></div>
+    <div id="flow-caption" class="cf-caption"></div>
+    <button class="pick-btn" data-action="pick" ${cands.length ? "" : "disabled"}>${icon("dice")}<span>Giv mig en plade</span></button>
+    <p class="footnote" id="listen-note">${cands.length
+      ? `${cands.length} ${MEDIUM[m].plural} matcher · ${MEDIUM[m].plural} du ikke har hørt længe foreslås oftere`
+      : esc(noMatchMessage(all, L, listen, state.lastPlayed))}</p>
+    <div class="list filters">
+      <label class="row kv"><span>Hvilke</span><select data-filter="freshness">${FRESHNESS.map((f) => option(f.id, f.label, listen.freshness === f.id)).join("")}</select></label>
+      ${gs.length ? `<label class="row kv"><span>Genre</span><select data-filter="genre">${option("", "Alle genrer", !listen.genre)}${gs.map((g) => option(g, g, listen.genre === g)).join("")}</select></label>` : ""}
+      <label class="row kv"><span>Årti</span><select data-filter="decade">${option("", "Alle årtier", listen.decade == null)}${ds.map((d) => option(d, `${d}'erne`, listen.decade === d)).join("")}</select></label>
+    </div>
+  </main>`;
+}
+
+function mountListenFlow() {
+  const el = $("#flow");
+  if (!el) return null;
+  const m = state.medium, items = shelfItems(m);
+  const start = Math.max(0, items.findIndex((it) => it.id === listen.current));
+  const show = (i) => flowCaption(m, items[i], null);
+  listenFlow = mountCoverFlow(el, { ...flowOptions(m, items, show), center: start });
+  show(listenFlow.center);
+  const cf = listenFlow;
+  return () => { cf.destroy(); if (listenFlow === cf) listenFlow = null; };
+}
+
+function pickRecord() {
+  const m = state.medium, L = lib(m);
+  const p = pick(candidates(L.allItems, L, listen, state.lastPlayed), state.lastPlayed, listen.recent);
+  if (!p || !listenFlow) return;
+  listen.current = p.id;
+  listen.recent.push(p.id);
+  if (listen.recent.length > 20) listen.recent.shift();
+  const i = shelfItems(m).findIndex((it) => it.id === p.id);
+  const btn = $("[data-action=pick]");
+  if (btn) btn.disabled = true;
+  listenFlow.spinTo(i, () => { const b = $("[data-action=pick]"); if (b) b.disabled = false; });
 }
 
 // MARK: Pladen ("Find i reolen")
@@ -785,6 +903,8 @@ document.addEventListener("click", async (ev) => {
   else if (a === "logout") logOut();
   else if (a === "clear") { state.query = ""; const q = $("#q"); q.value = ""; q.focus(); el.hidden = true; renderResults(); }
   else if (a === "signin") doSignIn();
+  else if (a === "toggle-flow") { state.coverFlow = !state.coverFlow; safeLocal.set("coverFlow", state.coverFlow ? "1" : ""); lastRendered = ""; render(); }
+  else if (a === "pick") pickRecord();
   else if (a === "send-mail") doSendMail();
   else if (a === "complete") doComplete();
   else if (a === "use-mail") { login.useMail = true; state.phase = "idle"; render(); }
@@ -799,7 +919,7 @@ document.addEventListener("click", async (ev) => {
     el.classList.add("done");
     el.querySelector("svg").outerHTML = icon("check");
     label.textContent = ok ? "Registreret" : "Allerede registreret";
-    navigator.vibrate?.(ok ? 15 : [10, 60, 10]);
+    haptic(ok ? "success" : "edge");
     const plays = $(".plays");
     const count = state.count.get(item.id) ?? 0, last = state.lastPlayed.get(item.id);
     const html = `<div class="plays">${icon("note")}<span>Spillet ${count} ${count === 1 ? "gang" : "gange"}, senest ${esc(relative(last))}</span></div>`;
@@ -822,6 +942,13 @@ document.addEventListener("input", (ev) => {
     if (clear) clear.hidden = !t.value;
     clearTimeout(searchTimer);
     searchTimer = setTimeout(renderResults, 60);
+    return;
+  }
+  if (t.dataset.filter) {
+    const v = t.value;
+    listen[t.dataset.filter] = t.dataset.filter === "decade" ? (v === "" ? null : Number(v)) : (v || (t.dataset.filter === "freshness" ? "any" : null));
+    lastRendered = "";
+    render();
     return;
   }
   const form = t.closest("form[data-form=login]");
@@ -855,6 +982,7 @@ setInterval(() => { if (document.visibilityState === "visible") sync(); }, SYNC_
 
 async function start() {
   state.medium = safeLocal.get("medium") === "cd" ? "cd" : "vinyl";
+  state.coverFlow = safeLocal.get("coverFlow") === "1";
   if (DEMO) {
     try {
       const rows = await (await fetch("demo-records.json")).json();

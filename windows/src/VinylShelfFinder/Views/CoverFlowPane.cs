@@ -16,7 +16,12 @@ namespace VinylShelfFinder.Views;
 public sealed class CoverFlowPane
 {
     private readonly AppModel _model;
-    private readonly Grid _root = new() { Background = new SolidColorBrush(Microsoft.UI.Colors.Transparent), IsTabStop = true };
+    // Altid hvid baggrund (ikke efter coveret), også i mørk tilstand – som på Mac og telefonen.
+    private readonly Grid _root = new() { Background = new SolidColorBrush(Microsoft.UI.Colors.White), RequestedTheme = ElementTheme.Light, IsTabStop = true };
+    // Tekstfarver til den hvide baggrund (som Ink i lys tilstand på Mac).
+    private readonly Brush InkPrimary = new SolidColorBrush(Windows.UI.Color.FromArgb(222, 0, 0, 0));
+    private readonly Brush InkSecondary = new SolidColorBrush(Windows.UI.Color.FromArgb(168, 0, 0, 0));
+    private readonly Brush InkTertiary = new SolidColorBrush(Windows.UI.Color.FromArgb(143, 0, 0, 0));
     private readonly Canvas _strip = new();
     private readonly StackPanel _caption = new() { Spacing = 4, HorizontalAlignment = HorizontalAlignment.Center };
     private readonly ScrollStepper _stepper = new();
@@ -137,16 +142,16 @@ public sealed class CoverFlowPane
         _caption.Children.Clear();
         if (Current is not RecordItem it)
         {
-            _caption.Children.Add(Ui.Text("Sektionen er tom.", color: Ui.Secondary));
+            _caption.Children.Add(Ui.Text("Sektionen er tom.", color: InkSecondary));
             return;
         }
         var numbers = _model.Library.ShelfNumbers(_locationId);
         int onShelf = _model.Library.OnShelfCount(_locationId);
         TextBlock Center(TextBlock t) { t.HorizontalAlignment = HorizontalAlignment.Center; t.TextAlignment = TextAlignment.Center; return t; }
-        _caption.Children.Add(Center(Ui.Text(it.Title, "SubtitleTextBlockStyle", wrap: false)));
-        _caption.Children.Add(Center(Ui.Text(it.Artist, "BodyTextBlockStyle", Ui.Secondary, wrap: false, size: 18)));
+        _caption.Children.Add(Center(Ui.Text(it.Title, "SubtitleTextBlockStyle", InkPrimary, wrap: false)));
+        _caption.Children.Add(Center(Ui.Text(it.Artist, "BodyTextBlockStyle", InkSecondary, wrap: false, size: 18)));
         _caption.Children.Add(Center(Ui.Text(numbers.TryGetValue(it.Id, out var n) ? $"Nr. {n} af {onShelf}" : it.AwayMessage() ?? "Ude af reolen",
-            "BodyTextBlockStyle", Ui.Tertiary, wrap: false)));
+            "BodyTextBlockStyle", InkTertiary, wrap: false)));
         var find = Ui.Btn("Find i reolen", (_, _) => _model.FindModeCopy = it.Id, Ui.Glyph.Pin, accent: true, tooltip: "Find i reolen (Enter)");
         find.HorizontalAlignment = HorizontalAlignment.Center;
         find.Margin = new Thickness(0, 8, 0, 0);

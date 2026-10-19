@@ -9,7 +9,7 @@ Hvad hver app kan. Målet er ✅ i begge kolonner. Opdatér tabellen i samme com
 | Søg, plade-detalje, Find i reolen, Sæt tilbage, Flyt | ✅ | ✅ | |
 | Sektioner, Kontrollér sektion, sektionsgrænser (⇄) | ✅ | ✅ | |
 | Nye / Fjernet fra Discogs / Ude af reolen | ✅ | ✅ | |
-| Cover Flow | ✅ | ✅ | |
+| Cover Flow | ✅ | ✅ | Altid hvid baggrund (ikke tonet efter coveret), også i mørk tilstand. Også på iPhone og i webappen |
 | Historik med Fortryd | ✅ | ✅ | |
 | Hvad skal jeg høre? / Lyttelog | ✅ | ✅ | |
 | Værdi (estimat og markedsdata) | ✅ | ✅ | |
@@ -49,6 +49,8 @@ Data kommer kun fra kontoen i skyen (ingen Discogs-forbindelse på telefonen).
 | Scan QR-koden på et reolskilt | ✅ | I appen (VisionKit) eller med Kamera-appen |
 | "Spillet" | ✅ | Synkroniseres til Mac og Windows |
 | Søg på en sang og se sanglisten | ✅ | Sanglisterne kommer fra computeren via kontoen |
+| Cover Flow i en sektion | ✅ | Knap øverst til højre (liste/Cover Flow). Samme geometri (`CoverFlowGeometry`), hvid baggrund, haptik for hver plade og ved enden |
+| Hvad skal jeg høre? (fanen "Hør") | ✅ | Samme filtre og `ListenPicker` som Mac. Cover Flow snurrer hen til forslaget |
 | Flytte plader, sektioner, Discogs, Værdi, Find nye plader | ❌ | Laves på computeren |
 
 
@@ -67,5 +69,6 @@ reolen" er en JavaScript-port af `Search.swift` og `Library.swift` (`web/core/`)
 | Reoler og sektioner (plader og cd'er), Find i reolen, naboer | ✅ | Samme tekster som Mac (`referenceAdvice`) |
 | Scan QR-koden på et reolskilt | ✅ | I webappen med kameraet (jsQR i `web/vendor`). Kamera-appen åbner `vinylshelf://` i den rigtige app, ikke i webappen |
 | "Spillet" | ✅ | Samme post som iPhone (enhed `web`); gemmes og sendes senere, hvis der ikke er net |
+| Cover Flow i en sektion og "Hør" (Hvad skal jeg høre?) | ✅ | Som iPhone. Port af `CoverFlowGeometry` og `ListenPicker` i `core/library.js`. Haptik: Android vibrerer; iPhone bruger iOS' kontakt-klik (iOS 18+), da Safari ikke har et haptik-API |
 | Log ud | ✅ | Fjerner også reolerne fra telefonen (iPhone-appen beholder dem), da en webside kan deles af flere |
 | Flytte plader, sektioner, Discogs, Værdi, Find nye plader | ❌ | Laves på computeren |

@@ -84,12 +84,51 @@ private struct SectionRow: View {
 struct SectionView: View {
     @Environment(PhoneModel.self) private var model
     let route: SectionRoute
+    /// Liste eller Cover Flow (huskes mellem sektioner, som på Mac).
+    @AppStorage("coverFlow") private var coverFlow = false
+    @State private var center = 0
+    @State private var open: RecordRoute?
 
     var body: some View {
         let lib = model.library(route.medium)
         if let loc = lib.location(route.locationID) {
-            let numbers = lib.shelfNumbers(in: loc.id)
-            List {
+            Group {
+                if coverFlow { flow(lib, loc) } else { list(lib, loc) }
+            }
+            .navigationTitle("\(loc.medium.shelfWord) \(loc.shelf) · Sektion \(loc.section)")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button(coverFlow ? "Vis som liste" : "Vis som Cover Flow", systemImage: coverFlow ? "list.bullet" : "square.stack.3d.forward.dottedline") {
+                        coverFlow.toggle()
+                    }
+                }
+            }
+            .navigationDestination(item: $open) { RecordView(route: $0) }
+        } else {
+            ContentUnavailableView("Sektionen findes ikke længere", systemImage: "books.vertical")
+        }
+    }
+
+    /// Cover Flow med hvid baggrund (som på Mac og Windows).
+    private func flow(_ lib: Library, _ loc: Location) -> some View {
+        let items = lib.items(in: loc.id)
+        return VStack(spacing: 16) {
+            Spacer(minLength: 0)
+            PhoneCoverFlow(items: items, center: $center) { open = RecordRoute(medium: route.medium, copyID: $0.id) }
+                .frame(height: 320)
+            CoverFlowCaption(item: items.indices.contains(center) ? items[center] : nil, library: lib) {
+                open = RecordRoute(medium: route.medium, copyID: $0.id)
+            }
+            Spacer(minLength: 0)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .whiteStage()
+    }
+
+    private func list(_ lib: Library, _ loc: Location) -> some View {
+        let numbers = lib.shelfNumbers(in: loc.id)
+        return List {
                 Section {
                     ForEach(lib.items(in: loc.id)) { item in
                         NavigationLink(value: RecordRoute(medium: route.medium, copyID: item.id)) {
@@ -100,10 +139,5 @@ struct SectionView: View {
                     Text("Nummereret fra venstre. Plader, der er ude af reolen, tælles ikke med.")
                 }
             }
-            .navigationTitle("\(loc.medium.shelfWord) \(loc.shelf) · Sektion \(loc.section)")
-            .navigationBarTitleDisplayMode(.inline)
-        } else {
-            ContentUnavailableView("Sektionen findes ikke længere", systemImage: "books.vertical")
-        }
     }
 }

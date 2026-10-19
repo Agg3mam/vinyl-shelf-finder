@@ -513,6 +513,17 @@ projektet med egen konto (RLS adskiller data), men hver skal have sit eget Disco
   er afprøvet mod en falsk Supabase i browseren (aldrig mod den rigtige konto). Kameraet kan kun afprøves på en rigtig
   telefon over https; QR-afkodningen er afprøvet med et genereret skilt.
 
+### 19. okt (aften): Cover Flow og "Hvad skal jeg høre?" på telefonen, hvid Cover Flow
+
+- **Hvid baggrund i Cover Flow** på Mac (`CoverFlowView`: hvid flade, lys tilstand, `CoverTone.coverFlow` = appens grønne
+  knap i stedet for `recordStage`) og Windows (`CoverFlowPane`: hvid, `ElementTheme.Light`, faste mørke tekstfarver).
+- **iPhone:** `ios/VinylShelfiOS/CoverFlowView.swift` (`PhoneCoverFlow`, samme `CoverFlowGeometry`, haptik med
+  `sensoryFeedback`: `.selection` pr. plade, `.impact` ved enden, `.success` når forslaget lander) og `ListenView.swift`
+  (fanen "Hør": filtre som Mac, "Giv mig en plade" snurrer Cover Flow hen til forslaget). Sektioner har en knap til
+  liste/Cover Flow (`@AppStorage("coverFlow")`).
+- **Webapp:** `web/coverflow.js` (CSS 3D, `-webkit-box-reflect`), `web/haptics.js`, fanen "Hør" (`#/hor`) og knap i sektionen.
+  Afprøvet i browseren og iPhone-simulatoren med demo-data.
+
 ### Ikke færdigt / næste skridt (spørg brugeren om rækkefølgen)
 
 1. **Mobilside på det lokale netværk (opgave 1)**, så QR-koderne virker. Det er det største åbne punkt.

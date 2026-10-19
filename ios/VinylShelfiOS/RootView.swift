@@ -15,7 +15,7 @@ struct RootView: View {
     @State private var query = ""
     @State private var tab = AppTab.shelves
 
-    enum AppTab: Hashable { case shelves, scan, account, search }
+    enum AppTab: Hashable { case shelves, listen, scan, account, search }
 
     var body: some View {
         @Bindable var model = model
@@ -58,6 +58,13 @@ struct RootView: View {
             Tab("Reol", systemImage: "books.vertical", value: AppTab.shelves) {
                 NavigationStack {
                     ShelvesView()
+                        .navigationDestination(for: SectionRoute.self) { SectionView(route: $0) }
+                        .navigationDestination(for: RecordRoute.self) { RecordView(route: $0) }
+                }
+            }
+            Tab("Hør", systemImage: "dice", value: AppTab.listen) {
+                NavigationStack {
+                    ListenView()
                         .navigationDestination(for: SectionRoute.self) { SectionView(route: $0) }
                         .navigationDestination(for: RecordRoute.self) { RecordView(route: $0) }
                 }

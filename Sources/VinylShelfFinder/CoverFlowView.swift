@@ -62,7 +62,11 @@ struct CoverFlowView: View {
                     onPanEnded: { settle() })
             }
         }
-        .recordStage(current?.release)
+        // Altid hvid baggrund (ikke tonet efter coveret), også i mørk tilstand. Samme på Windows og telefonen.
+        .environment(\.colorScheme, .light)
+        .environment(\.coverTone, .coverFlow)
+        .tint(CoverTone.coverFlow.accent)
+        .background(Color.white.ignoresSafeArea())
         // Fokus kun ved klik, så ↑↓ i listen til venstre stadig virker efter skift af sektion.
         .focusable()
         .focused($focused)

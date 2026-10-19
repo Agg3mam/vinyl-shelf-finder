@@ -250,3 +250,39 @@ details.tracks[open] summary .chev { transform: rotate(90deg); }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
 }
+
+/* Cover Flow: altid hvid baggrund (som på Mac og Windows), også i mørk tilstand. */
+.cf-page {
+  --bg: #FFFFFF; --cell: #F2F2F7; --label: #000000; --secondary: rgba(60, 60, 67, 0.66); --tertiary: rgba(60, 60, 67, 0.3);
+  --fill: rgba(120, 120, 128, 0.12); --separator: rgba(60, 60, 67, 0.18); --accent: #1C6E66; --accent-ink: #1C6E66;
+  --material: rgba(242, 242, 247, 0.85); --segment: #FFFFFF; --orange: #C2410C;
+  color: var(--label); color-scheme: light;
+}
+body:has(.cf-page) { background: #FFFFFF; }
+.cf-page select { color: var(--secondary); }
+.cf-box { position: relative; height: min(32vh, 280px); margin: 4px calc(-1 * var(--gutter)) 0; overflow: hidden; touch-action: pan-y; user-select: none; -webkit-user-select: none; outline: none; }
+.cf-stage { position: absolute; inset: 0; perspective: calc(var(--side, 200px) * 2.6); perspective-origin: 50% 40%; }
+.cf-cover {
+  position: absolute; left: 50%; top: 47%; width: var(--side, 200px); height: var(--side, 200px); padding: 0; border: 0; border-radius: 3px;
+  background: #E5E5EA; color: rgba(60, 60, 67, 0.4); font-size: calc(var(--side, 200px) * 0.3); cursor: pointer; transform-style: preserve-3d;
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.18); -webkit-box-reflect: below 2px linear-gradient(transparent 72%, rgba(255, 255, 255, 0.25));
+  will-change: transform; -webkit-tap-highlight-color: transparent;
+}
+.cf-cover img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; border-radius: 3px; pointer-events: none; }
+.cf-cover .cf-ph { display: grid; place-items: center; width: 100%; height: 100%; }
+.cf-cover.away { opacity: 0.45; }
+.cf-anim .cf-cover { transition: transform 0.38s cubic-bezier(0.22, 0.8, 0.3, 1); }
+.cf-caption { text-align: center; min-height: 118px; margin-top: 2px; padding: 0 8px; }
+.cf-t1 { font-size: 20px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cf-t2 { font-size: 17px; color: var(--secondary); margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cf-t3 { font-size: 14px; color: var(--secondary); margin-top: 4px; font-variant-numeric: tabular-nums; }
+.cf-find { display: inline-flex; align-items: center; gap: 6px; margin-top: 10px; padding: 9px 16px; border-radius: 999px; background: var(--accent); color: #fff; font-size: 15px; font-weight: 600; text-decoration: none; }
+.pick-btn {
+  display: flex; width: 100%; align-items: center; justify-content: center; gap: 10px; height: 52px; margin-top: 14px; border: 0; border-radius: 26px;
+  background: var(--accent); color: #fff; font-size: 17px; font-weight: 600; cursor: pointer; box-shadow: 0 6px 18px rgba(28, 110, 102, 0.3);
+}
+.pick-btn svg { font-size: 22px; }
+.pick-btn:disabled { opacity: 0.45; cursor: default; }
+.pick-btn:active:not(:disabled) { transform: scale(0.98); }
+.filters { margin-top: 18px; }
+.filters select { appearance: none; -webkit-appearance: none; border: 0; background: none; font-size: 17px; text-align: right; text-align-last: right; color: var(--secondary); max-width: 60%; cursor: pointer; }

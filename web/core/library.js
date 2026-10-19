@@ -43,6 +43,18 @@ export const STATUS = {
 export const statusOf = (s) => (Object.hasOwn(STATUS, s) ? s : "home");
 export const isOnShelf = (item) => item.copy.status === "home";
 
+/** Én sætning, når pladen ikke står i reolen (som awayMessage på Mac). null, når den står på plads. */
+export function awayMessage(item) {
+  const note = (item.copy.statusNote ?? "").trim();
+  switch (item.copy.status) {
+    case "wall": return "Hænger på væggen – står ikke i reolen";
+    case "lent": return note ? `Udlånt til ${note} – står ikke i reolen` : "Udlånt – står ikke i reolen";
+    case "stored": return note ? `Opbevaret andet sted (${note}) – står ikke i reolen` : "Opbevaret andet sted – står ikke i reolen";
+    case "missing": return "Mangler – står ikke i reolen";
+    default: return null;
+  }
+}
+
 export const locationName = (l) => `${MEDIUM[l.medium].shelfWord} ${l.shelf} · Sektion ${l.section}`;
 export const shortName = (l) => `${l.shelf}${l.section}`;
 export const fullName = (it) => `${it.release.artist} – ${it.release.title}`;
@@ -107,6 +119,9 @@ export class Library {
   }
 
   get allItems() { return [...this.copies.keys()].map((id) => this.item(id)).filter(Boolean); }
+
+  /** Alle placerede plader i reolens rækkefølge (sektion for sektion). */
+  globalOrderItems() { return this.locations.flatMap((l) => this.items(l.id)); }
 
   get index() {
     if (!this._index) this._index = new SearchIndex(this.allItems, this.globalIndex);
@@ -314,7 +329,7 @@ export function buildLibraries(records) {
       releases.set(id, {
         id, artist: d.artist ?? "", title: d.title ?? "", year: Number.isFinite(d.year) ? d.year : null,
         label: d.label ?? null, catalogNumber: d.catalog ?? null, format: d.format ?? null,
-        coverURL: d.cover ?? null, thumbURL: d.thumb ?? null,
+        coverURL: d.cover ?? null, thumbURL: d.thumb ?? null, genres: d.genres ?? null,
         tracks: Array.isArray(d.tracks) ? d.tracks.filter((t) => typeof t?.t === "string").map((t) => ({ position: t.p ?? "", title: t.t, duration: t.d ?? null })) : [],
       });
     } else if (r.kind === "copy") {
@@ -372,3 +387,92 @@ export function buildLibraries(records) {
     .sort((a, b) => b.at - a.at);
   return { libraries, plays: playList, copyByID: new Map([...copies.values()].map((c) => [c.id, c])) };
 }
+
+// MARK: "Hvad skal jeg høre?" (port af ListenPicker i Listening.swift)
+
+export const FRESHNESS = [
+  { id: "any", label: "Alle plader" },
+  { id: "neverPlayed", label: "Aldrig spillet" },
+  { id: "notIn3Months", label: "Ikke hørt i 3 måneder" },
+  { id: "notInYear", label: "Ikke hørt i et år" },
+];
+
+const genreList = (r) => (r.genres ?? "").split(",").map((g) => g.trim()).filter(Boolean);
+
+export function genres(items) { return [...new Set(items.flatMap((it) => genreList(it.release)))].sort(); }
+
+export function decades(items) {
+  return [...new Set(items.filter((it) => Number.isFinite(it.release.year)).map((it) => Math.floor(it.release.year / 10) * 10))].sort((a, b) => a - b);
+}
+
+/** Plader, der opfylder filteret og står i reolen. `lastPlayed`: copyID → sekunder. */
+export function candidates(items, library, filter, lastPlayed, now = Date.now() / 1000) {
+  return items.filter((it) => {
+    if (!isOnShelf(it) || !library.locationOfCopy.has(it.id)) return false;
+    if (filter.genre && !genreList(it.release).includes(filter.genre)) return false;
+    if (filter.decade != null && (Number.isFinite(it.release.year) ? Math.floor(it.release.year / 10) * 10 : null) !== filter.decade) return false;
+    const last = lastPlayed.get(it.id);
+    switch (filter.freshness) {
+      case "neverPlayed": return last === undefined;
+      case "notIn3Months": return last === undefined || now - last > 90 * 86400;
+      case "notInYear": return last === undefined || now - last > 365 * 86400;
+      default: return true;
+    }
+  });
+}
+
+/** Tilfældig plade, vægtet mod plader, der ikke er hørt længe. Undgår de seneste forslag. */
+export function pick(cands, lastPlayed, recent, now = Date.now() / 1000, random = Math.random) {
+  let pool = cands.filter((it) => !recent.includes(it.id));
+  if (!pool.length) pool = cands;
+  if (!pool.length) return null;
+  // Vægt: aldrig spillet = 4, ellers 1 + år siden sidst (højst 4).
+  const weights = pool.map((it) => {
+    const last = lastPlayed.get(it.id);
+    return last === undefined ? 4 : Math.min(4, 1 + Math.max(0, now - last) / (365 * 86400));
+  });
+  let r = random() * weights.reduce((a, b) => a + b, 0);
+  for (let i = 0; i < pool.length; i++) { if (r < weights[i]) return pool[i]; r -= weights[i]; }
+  return pool.at(-1);
+}
+
+/** Ingen plader matcher: sig venligt, hvilket filter man kan løsne (som NoMatchNote på Mac). */
+export function noMatchMessage(items, library, filter, lastPlayed) {
+  const matches = (g) => candidates(items, library, g, lastPlayed).length > 0;
+  const tips = [];
+  if (filter.genre && matches({ ...filter, genre: null })) tips.push("“Alle genrer”");
+  if (filter.decade != null && matches({ ...filter, decade: null })) tips.push("“Alle årtier”");
+  if (filter.freshness !== "any" && matches({ ...filter, freshness: "any" })) tips.push("“Alle plader”");
+  if (!tips.length) {
+    return matches({ genre: null, decade: null, freshness: "any" })
+      ? "Ingen plader passer til den kombination. Nulstil et par af filtrene, så kommer der forslag igen."
+      : "Der står ingen plader i reolen endnu, som kan foreslås.";
+  }
+  const list = tips.length === 1 ? tips[0] : tips.slice(0, -1).join(", ") + " eller " + tips.at(-1);
+  return `Ingen plader passer til filtrene lige nu. Prøv ${list} – så er der plader at vælge imellem.`;
+}
+
+// MARK: Cover Flow (port af CoverFlowGeometry i CoverFlow.swift)
+
+export const CF = {
+  visible: 6, tilt: 65, sideScale: 0.9, reflectionHeight: 0.28, reflectionOpacity: 0.25, firstGap: 0.62, stackGap: 0.25,
+  side(width, height) { return Math.max(80, Math.min(height * 0.62, width * 0.36, 360)); },
+  clamped(o) { return Math.min(Math.max(o, -1), 1); },
+  x(o, side) { const c = CF.clamped(o); return side * (CF.firstGap * c + CF.stackGap * (o - c)); },
+  angle(o) { return -CF.tilt * CF.clamped(o); },
+  scale(o) { return 1 - (1 - CF.sideScale) * Math.abs(CF.clamped(o)); },
+  visibleRange(center, count) {
+    if (count <= 0) return [0, 0];
+    const c = Math.min(Math.max(center, 0), count - 1);
+    return [Math.max(0, c - CF.visible), Math.min(count, c + CF.visible + 1)];
+  },
+  glide(center, shift, count) {
+    if (count <= 0) return { center: 0, shift: 0 };
+    let c = Math.min(Math.max(center, 0), count - 1), s = shift;
+    while (s > 0.5 && c < count - 1) { s -= 1; c += 1; }
+    while (s < -0.5 && c > 0) { s += 1; c -= 1; }
+    if (c === 0) s = Math.max(s, -0.3);
+    if (c === count - 1) s = Math.min(s, 0.3);
+    return { center: c, shift: s };
+  },
+};

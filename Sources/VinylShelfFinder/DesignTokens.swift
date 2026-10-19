@@ -279,6 +279,11 @@ struct GlassPanel: ViewModifier {
 
 // MARK: - Pladeskærme (mørk scene med cover)
 
+extension CoverTone {
+    /// Cover Flow har hvid baggrund; knappen får appens grønne accent (#1C6E66).
+    static let coverFlow = CoverTone(hue: 0.485, saturation: 0.75)
+}
+
 private struct CoverToneKey: EnvironmentKey {
     static let defaultValue = CoverTone(hue: 0.6, saturation: 0.1)
 }

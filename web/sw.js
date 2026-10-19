@@ -2,10 +2,10 @@
 // slår igennem med det samme), ellers fra lageret. Covers gemmes, når de først er vist.
 // Kald til kontoen (Supabase) går aldrig gennem lageret.
 
-const SHELL = "vinylshelf-app-v1";
+const SHELL = "vinylshelf-app-v2";
 const COVERS = "vinylshelf-covers-v1";
 const FILES = [
-  "./", "index.html", "app.css", "app.js", "manifest.webmanifest",
+  "./", "index.html", "app.css", "app.js", "coverflow.js", "haptics.js", "manifest.webmanifest",
   "core/search.js", "core/library.js", "core/cloud.js", "core/store.js",
   "vendor/jsQR.js", "icons/icon-180.png", "icons/icon-192.png", "icons/icon-512.png",
 ];
