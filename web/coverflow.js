@@ -111,35 +111,45 @@ export function mountCoverFlow(el, opts) {
   const onResize = () => layout(false);
   window.addEventListener("resize", onResize);
 
-  function stopSpin() { clearTimeout(spinTimer); spinTimer = null; }
+  function stopSpin() { if (spinTimer) cancelAnimationFrame(spinTimer); spinTimer = null; }
 
-  /** Snurrer hen til pladen `i`: hurtigt først, langsommere til sidst (som et lykkehjul). */
+  /** Snurrer hen til pladen `i`: rækken glider i én bevægelse, starter hurtigt og bremser jævnt op
+   *  (som et lykkehjul), og midtercoveret popper, når den lander. Samme kurve som iPhone-appen. */
   function spinTo(i, done) {
     stopSpin();
     if (!items.length) return;
     const target = Math.min(Math.max(i, 0), items.length - 1);
-    if (reduceMotion()) { go(target, false); done?.(); return; }
-    const dir = target >= center ? 1 : -1;
-    let steps = Math.abs(target - center);
-    // Lange afstande: spring tæt på, og snur de sidste plader (mindst en lille runde, også ved samme plade).
-    const run = Math.min(Math.max(steps, 8), 16);
-    if (steps !== run) {
-      const startAt = Math.min(Math.max(target - dir * run, 0), items.length - 1);
-      center = startAt; shift = 0; layout(false);
-      steps = Math.abs(target - center);
-    }
-    let k = 0;
-    const tick = () => {
-      if (center === target) { haptic("success"); opts.onCenter?.(center); done?.(); spinTimer = null; return; }
-      k += 1;
-      center += target > center ? 1 : -1;
-      haptic("tick");
-      layout(true);
+    const from = center + shift, total = target - from;
+    const land = () => {
+      center = target; shift = 0; layout(false);
       opts.onCenter?.(center);
-      const left = Math.abs(target - center);
-      spinTimer = setTimeout(tick, 45 + (steps - left) ** 1.6 * 4 + (left < 3 ? 90 : 0));
+      haptic("success");
+      const n = nodes.get(center);
+      if (n && !reduceMotion()) { n.classList.remove("cf-pop"); void n.offsetWidth; n.classList.add("cf-pop"); }
+      spinTimer = null;
+      done?.();
     };
-    tick();
+    if (reduceMotion() || Math.abs(total) < 0.5) { land(); return; }
+    const duration = 1300 + Math.min(1400, Math.abs(total) * 35);
+    const begin = performance.now();
+    let lastTick = 0;
+    const frame = (now) => {
+      const t = Math.min(1, (now - begin) / duration);
+      const pos = from + total * (1 - (1 - t) ** 4); // ease-out (kvart)
+      const c = Math.min(Math.max(Math.round(pos), 0), items.length - 1);
+      if (c !== center) {
+        // Klik kun, når farten er til at mærke (plader pr. sekund lige nu).
+        const speed = Math.abs(total) * 4 * (1 - t) ** 3 / (duration / 1000);
+        if (speed < 22 && now - lastTick > 40) { haptic("tick"); lastTick = now; }
+        center = c;
+        opts.onCenter?.(center);
+      }
+      shift = pos - c;
+      layout(false);
+      if (t >= 1) { land(); return; }
+      spinTimer = requestAnimationFrame(frame);
+    };
+    spinTimer = requestAnimationFrame(frame);
   }
 
   layout(false);

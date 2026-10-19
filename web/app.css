@@ -266,7 +266,7 @@ body:has(.cf-page) { background: #FFFFFF; }
   position: absolute; left: 50%; top: 47%; width: var(--side, 200px); height: var(--side, 200px); padding: 0; border: 0; border-radius: 3px;
   background: #E5E5EA; color: rgba(60, 60, 67, 0.4); font-size: calc(var(--side, 200px) * 0.3); cursor: pointer; transform-style: preserve-3d;
   box-shadow: 0 10px 24px rgba(0, 0, 0, 0.18); -webkit-box-reflect: below 2px linear-gradient(transparent 72%, rgba(255, 255, 255, 0.25));
-  will-change: transform; -webkit-tap-highlight-color: transparent;
+  will-change: transform; -webkit-tap-highlight-color: transparent; touch-action: pan-y; -webkit-user-drag: none;
 }
 .cf-cover img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; border-radius: 3px; pointer-events: none; }
 .cf-cover .cf-ph { display: grid; place-items: center; width: 100%; height: 100%; }
@@ -286,3 +286,5 @@ body:has(.cf-page) { background: #FFFFFF; }
 .pick-btn:active:not(:disabled) { transform: scale(0.98); }
 .filters { margin-top: 18px; }
 .filters select { appearance: none; -webkit-appearance: none; border: 0; background: none; font-size: 17px; text-align: right; text-align-last: right; color: var(--secondary); max-width: 60%; cursor: pointer; }
+.cf-cover.cf-pop img, .cf-cover.cf-pop .cf-ph { animation: cf-pop 0.45s cubic-bezier(0.3, 1.6, 0.5, 1); }
+@keyframes cf-pop { 40% { transform: scale(1.07); } 100% { transform: scale(1); } }

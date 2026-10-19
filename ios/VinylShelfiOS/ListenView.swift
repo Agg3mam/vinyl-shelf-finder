@@ -7,8 +7,8 @@ struct ListenView: View {
     @Environment(PhoneModel.self) private var model
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var center = 0
-    @State private var spinning = false
-    @State private var landed = 0
+    /// Pladen, Cover Flow snurrer hen til (nil, når den er landet).
+    @State private var spinTarget: Int?
     @State private var open: RecordRoute?
 
     var body: some View {
@@ -28,7 +28,7 @@ struct ListenView: View {
                     .pickerStyle(.segmented)
                     .padding(.horizontal)
                 }
-                PhoneCoverFlow(items: shelf, center: $center) { open = RecordRoute(medium: model.medium, copyID: $0.id) }
+                PhoneCoverFlow(items: shelf, center: $center, spin: $spinTarget) { open = RecordRoute(medium: model.medium, copyID: $0.id) }
                     .frame(height: 260)
                 CoverFlowCaption(item: shelf.indices.contains(center) ? shelf[center] : nil, library: lib, showsSection: true) {
                     open = RecordRoute(medium: model.medium, copyID: $0.id)
@@ -39,7 +39,7 @@ struct ListenView: View {
                 }
                 .buttonStyle(.glassProminent)
                 .controlSize(.large)
-                .disabled(cands.isEmpty || spinning)
+                .disabled(cands.isEmpty || spinTarget != nil)
                 .padding(.horizontal)
                 Text(cands.isEmpty ? noMatch(all, lib)
                      : "\(cands.count) \(model.medium.plural) matcher · \(model.medium.plural) du ikke har hørt længe foreslås oftere")
@@ -78,7 +78,6 @@ struct ListenView: View {
         .whiteStage()
         .navigationTitle("Hvad skal jeg høre?")
         .navigationDestination(item: $open) { RecordView(route: $0) }
-        .sensoryFeedback(.success, trigger: landed)
         .onAppear {
             if let p = model.currentPick, let i = shelf.firstIndex(where: { $0.id == p }) { center = i }
         }
@@ -95,31 +94,13 @@ struct ListenView: View {
         .padding(.vertical, 6)
     }
 
-    /// Tilfældig plade (vægtet som på Mac), og Cover Flow snurrer derhen: hurtigt først, langsommere til sidst.
+    /// Tilfældig plade (vægtet som på Mac); Cover Flow snurrer derhen (se `PhoneCoverFlow.spin`).
     private func spin(_ cands: [RecordItem], _ shelf: [RecordItem]) {
         var rng = SystemRandomNumberGenerator()
         guard let pick = ListenPicker.pick(from: cands, stats: model.stats, avoiding: model.recentPicks, using: &rng),
               let target = shelf.firstIndex(where: { $0.id == pick.id }) else { return }
         model.rememberPick(pick.id)
-        if reduceMotion { center = target; landed += 1; return }
-        spinning = true
-        Task {
-            let dir = target >= center ? 1 : -1
-            let run = min(max(abs(target - center), 8), 16)
-            if abs(target - center) != run {
-                var t = Transaction(); t.disablesAnimations = true
-                withTransaction(t) { center = min(max(target - dir * run, 0), shelf.count - 1) }
-            }
-            let steps = abs(target - center)
-            while center != target {
-                withAnimation(.spring(response: 0.3, dampingFraction: 0.9)) { center += target > center ? 1 : -1 }
-                let left = abs(target - center)
-                let ms = 45 + pow(Double(steps - left), 1.6) * 4 + (left < 3 ? 90 : 0)
-                try? await Task.sleep(for: .milliseconds(Int(ms)))
-            }
-            landed += 1
-            spinning = false
-        }
+        spinTarget = target
     }
 
     /// Ingen plader matcher: sig venligt, hvilket filter man kan løsne (samme tekster som Mac).

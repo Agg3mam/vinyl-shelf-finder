@@ -7,6 +7,8 @@ import VinylCore
 struct PhoneCoverFlow: View {
     let items: [RecordItem]
     @Binding var center: Int
+    /// Sæt til en plade (indeks), så snurrer Cover Flow derhen i én blød bevægelse; sættes til nil, når den er landet.
+    var spin: Binding<Int?> = .constant(nil)
     let onOpen: (RecordItem) -> Void
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     /// Hvor langt rækken er skubbet under fingeren (i plader).
@@ -14,6 +16,13 @@ struct PhoneCoverFlow: View {
     @State private var lastDrag: CGFloat = 0
     @State private var atEdge = false
     @State private var edgeTick = 0
+    @State private var dragging = false
+    /// Et klik i telefonen pr. plade, der passerer midten (kun når det går så langsomt, at man kan mærke det).
+    @State private var tick = 0
+    @State private var landedTick = 0
+    /// Midtercoveret "popper" kort, når forslaget er fundet.
+    @State private var pop = false
+    @State private var spinTask: Task<Void, Never>?
 
     var body: some View {
         GeometryReader { geo in
@@ -23,34 +32,55 @@ struct PhoneCoverFlow: View {
             ZStack {
                 ForEach(Array(zip(range, items[range])), id: \.1.id) { i, item in
                     let o = Double(i - c) - shift
-                    Button {
-                        if i == c { onOpen(item) } else { withAnimation(animation) { center = i } }
-                    } label: {
-                        CoverFlowCover(item: item, o: o, side: side)
-                    }
-                    .buttonStyle(.plain)
-                    .zIndex(CoverFlowGeometry.zIndex(o))
-                    .accessibilityLabel(item.fullName)
-                    .accessibilityHint(i == c ? "Find i reolen" : "Vis pladen i midten")
+                    CoverFlowCover(item: item, o: o, side: side)
+                        .scaleEffect(pop && i == c ? 1.07 : 1)
+                        .zIndex(CoverFlowGeometry.zIndex(o))
+                        .accessibilityElement()
+                        .accessibilityAddTraits(.isButton)
+                        .accessibilityLabel(item.fullName)
+                        .accessibilityHint(i == c ? "Find i reolen" : "Vis pladen i midten")
+                        .accessibilityAction { tapped(i, c) }
                 }
             }
             .offset(y: -side * CoverFlowGeometry.reflectionHeight / 2)
             .frame(width: geo.size.width, height: geo.size.height)
-            .contentShape(Rectangle())
-            .gesture(DragGesture(minimumDistance: 6)
-                .onChanged { v in
-                    let delta = v.translation.width - lastDrag
-                    lastDrag = v.translation.width
-                    pan(-Double(delta) / max(24, side * 0.25))
-                }
-                .onEnded { _ in
-                    lastDrag = 0
-                    withAnimation(animation) { shift = 0 }
-                })
+            .allowsHitTesting(false)
+            // Ét lag over hele Cover Flow tager både stryg og tryk. (Lader man coverne selv fange fingeren,
+            // kan man kun bladre ved at stryge på den tomme flade under dem.)
+            .overlay {
+                Color.clear
+                    .contentShape(Rectangle())
+                    .gesture(DragGesture(minimumDistance: 0)
+                        .onChanged { v in
+                            guard dragging || abs(v.translation.width) > 6 else { return }
+                            if !dragging { spinTask?.cancel(); spinTask = nil; spin.wrappedValue = nil }
+                            dragging = true
+                            let delta = v.translation.width - lastDrag
+                            lastDrag = v.translation.width
+                            pan(-Double(delta) / max(24, side * 0.25))
+                        }
+                        .onEnded { v in
+                            if !dragging {
+                                // Et tryk: midtercoveret åbner pladen, et sidecover hentes frem.
+                                let dx = v.location.x - geo.size.width / 2
+                                if abs(dx) <= side / 2 { tapped(c, c) }
+                                else if let i = range.filter({ $0 != c }).min(by: {
+                                    abs(CoverFlowGeometry.x($0 - c, side: side) - dx) < abs(CoverFlowGeometry.x($1 - c, side: side) - dx)
+                                }) { tapped(i, c) }
+                            }
+                            dragging = false
+                            lastDrag = 0
+                            withAnimation(animation) { shift = 0 }
+                        })
+            }
         }
         .clipped()
-        .sensoryFeedback(.selection, trigger: center)
+        .sensoryFeedback(.selection, trigger: tick)
         .sensoryFeedback(.impact(weight: .medium), trigger: edgeTick)
+        .sensoryFeedback(.success, trigger: landedTick)
+        .onChange(of: spin.wrappedValue) { _, target in if let target { startSpin(to: target) } }
+        .onChange(of: center) { old, new in if !spinning, old != new { tick += 1 } }
+        .onDisappear { spinTask?.cancel() }
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Cover Flow")
         .accessibilityAdjustableAction { dir in
@@ -60,6 +90,62 @@ struct PhoneCoverFlow: View {
             default: break
             }
         }
+    }
+
+    private var spinning: Bool { spinTask != nil }
+
+    /// Snurrer hen til pladen `target`: rækken glider i én bevægelse, starter hurtigt og bremser jævnt op
+    /// (som et lykkehjul), og midtercoveret popper, når den lander.
+    private func startSpin(to target: Int) {
+        spinTask?.cancel()
+        guard items.indices.contains(target) else { spin.wrappedValue = nil; return }
+        let from = Double(center) + shift
+        let total = Double(target) - from
+        if reduceMotion || abs(total) < 0.5 { center = target; shift = 0; landed(); return }
+        // Længere afstande tager lidt længere tid, men aldrig over ca. 2,7 sekunder.
+        let duration = 1.3 + min(1.4, abs(total) * 0.035)
+        spinTask = Task { @MainActor in
+            let clock = ContinuousClock(), begin = clock.now
+            var lastTick = begin
+            while !Task.isCancelled {
+                let t = min(1, (clock.now - begin) / .seconds(duration))
+                let p = 1 - pow(1 - t, 4) // ease-out (kvart): hurtigt først, bremser jævnt op
+                let pos = from + total * p
+                let c = Int(pos.rounded())
+                var tr = Transaction(); tr.disablesAnimations = true
+                withTransaction(tr) {
+                    if c != center {
+                        // Fart i plader pr. sekund lige nu (afledt af kurven): klik kun, når den er til at mærke.
+                        let speed = abs(total) * 4 * pow(1 - t, 3) / duration
+                        if speed < 22, clock.now - lastTick > .milliseconds(40) { tick += 1; lastTick = clock.now }
+                        center = min(max(c, 0), items.count - 1)
+                    }
+                    shift = pos - Double(c)
+                }
+                if t >= 1 { break }
+                try? await Task.sleep(for: .milliseconds(8))
+            }
+            guard !Task.isCancelled else { return }
+            center = target
+            shift = 0
+            landed()
+        }
+    }
+
+    private func landed() {
+        spinTask = nil
+        spin.wrappedValue = nil
+        landedTick += 1
+        withAnimation(.spring(response: 0.22, dampingFraction: 0.5)) { pop = true }
+        Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(220))
+            withAnimation(.spring(response: 0.35, dampingFraction: 0.7)) { pop = false }
+        }
+    }
+
+    private func tapped(_ i: Int, _ c: Int) {
+        guard items.indices.contains(i) else { return }
+        if i == c { onOpen(items[i]) } else { withAnimation(animation) { center = i } }
     }
 
     private var animation: Animation? { reduceMotion ? nil : .spring(response: 0.38, dampingFraction: 0.86) }
