@@ -27,7 +27,8 @@ public sealed class ListenPane : IPane
 
     public void OnModelChanged(string? property)
     {
-        if (property is nameof(AppModel.Library) or nameof(AppModel.Stats) or nameof(AppModel.CurrentPick) or nameof(AppModel.ListenFilter))
+        if (property is nameof(AppModel.Library) or nameof(AppModel.Stats) or nameof(AppModel.CurrentPick) or nameof(AppModel.ListenFilter)
+            or nameof(AppModel.WheelSpinning))
             Rebuild();
     }
 
@@ -84,8 +85,11 @@ public sealed class ListenPane : IPane
             p.Children.Add(Ui.Text($"{_model.Medium.Count(candidates.Count)} matcher · {_model.Medium.Plural()} du ikke har hørt længe foreslås oftere · mellemrum = nyt forslag",
                 "CaptionTextBlockStyle", Ui.Secondary));
 
+        // Forslaget afsløres først, når lykkehjulet er landet.
         if (candidates.Count > 0 && _model.CurrentPick is long pid && _model.Library.Item(pid) is RecordItem it)
-            p.Children.Add(PickLine(it));
+        {
+            if (!_model.WheelSpinning) p.Children.Add(PickLine(it));
+        }
         else if (candidates.Count > 0)
             p.Children.Add(Ui.Label(Ui.Glyph.Shuffle, "Tryk “Giv mig en plade” (eller mellemrum), så foreslår appen en plade.", color: Ui.Secondary));
         _scroll.Content = p;

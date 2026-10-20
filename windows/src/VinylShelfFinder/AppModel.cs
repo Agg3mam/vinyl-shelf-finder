@@ -618,6 +618,10 @@ public sealed partial class AppModel : INotifyPropertyChanged
     public long? CurrentPick { get => _currentPick; private set => Set(ref _currentPick, value); }
     private readonly List<long> _recentPicks = new();
 
+    private bool _wheelSpinning;
+    /// <summary>Lykkehjulet i "Hvad skal jeg høre?" snurrer stadig (forslaget vises først, når det er landet).</summary>
+    public bool WheelSpinning { get => _wheelSpinning; set => Set(ref _wheelSpinning, value); }
+
     public List<RecordItem> ListenCandidates => ListenPicker.Candidates(Library.AllItems, Library, ListenFilter, Stats);
 
     /// <summary>"Giv mig en plade": vægtet mod plader, der ikke er hørt længe, og undgår de seneste forslag.</summary>

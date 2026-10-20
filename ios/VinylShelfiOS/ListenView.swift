@@ -2,7 +2,7 @@ import SwiftUI
 import VinylCore
 
 /// "Hvad skal jeg høre?" som på Mac (samme filtre og `ListenPicker`: plader, du ikke har hørt længe, foreslås oftere).
-/// "Giv mig en plade" får Cover Flow til at snurre hen til forslaget. Hvid baggrund som Cover Flow på Mac.
+/// "Giv mig en plade" får Cover Flow til at snurre hen til forslaget. Hvid baggrund (sort i mørk tilstand) som Cover Flow på Mac.
 struct ListenView: View {
     @Environment(PhoneModel.self) private var model
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -69,13 +69,13 @@ struct ListenView: View {
                         }
                     }
                 }
-                .background(Color(white: 0.95), in: .rect(cornerRadius: 14))
+                .background(Color(.secondarySystemBackground), in: .rect(cornerRadius: 14))
                 .padding(.horizontal)
             }
             .padding(.vertical)
             .padding(.bottom, 40)
         }
-        .whiteStage()
+        .coverFlowStage()
         .navigationTitle("Hvad skal jeg høre?")
         .navigationDestination(item: $open) { RecordView(route: $0) }
         .onAppear {

@@ -548,6 +548,19 @@ projektet med egen konto (RLS adskiller data), men hver skal have sit eget Disco
   klik-handleren i `web/app.js`), også et tryk på det midterste cover i Cover Flow. Klikket sker med det samme, fordi
   Safari kun giver haptik under selve trykket (fx ikke når "Spillet" er sendt). `sw.js`-cachen er `v4`.
 
+### 20. okt: fart efter stryg og lykkehjul på Mac og Windows, mørk Cover Flow
+
+- **Fælles matematik:** `CoverFlowGeometry.fling` (fart ved slip → landingsplade og varighed, højst 60 plader/s),
+  `spinDuration` og `easeOut` i `VinylCore` (Swift og C#) med fælles checks ("fart: …", "lykkehjul: …").
+- **Mac:** `CoverFlowStage` i `CoverFlowView.swift` bruges af sektionen (`CoverFlowView`) og "Hvad skal jeg høre?"
+  (`ListenCoverFlow`, højre kolonne). Trackpad-farten måles de sidste 100 ms før fingrene løftes (macOS' egen fart bruges
+  ikke). `AppModel.wheelSpinning` skjuler forslaget i midterkolonnen, til hjulet er landet. Snapshots `8c-lykkehjul`
+  og `13c-coverflow-moerk`.
+- **Windows:** `CoverFlowPane` genbruger coverne (ét `Button` pr. plade), glider med `CompositionTarget.Rendering`, træk
+  med mus/finger og fart. `ShowListen()` i "Hvad skal jeg høre?", `AppModel.WheelSpinning`. Kun tjekket af CI.
+- **Mørk tilstand:** Cover Flow er hvid i lys tilstand og sort i mørk på alle fire (webappen: `--cf-*` i `app.css`,
+  iPhone: `coverFlowStage()`). `sw.js`-cachen er `v5`.
+
 ### Ikke færdigt / næste skridt (spørg brugeren om rækkefølgen)
 
 1. **Mobilside på det lokale netværk (opgave 1)**, så QR-koderne virker. Det er det største åbne punkt.

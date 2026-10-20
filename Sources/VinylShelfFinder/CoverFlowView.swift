@@ -5,21 +5,13 @@ import VinylCore
 /// Cover Flow som på en iPod classic: sektionens plader i reolens rækkefølge.
 /// Vises i detaljekolonnen, når Cover Flow er slået til i en sektion. Midterpladen er
 /// altid den valgte plade, så listen til venstre og Cover Flow følger hinanden.
-/// Styres med ← →, trackpad (coverne følger fingrene), musehjul, træk med musen, klik på et
-/// sidecover og ↩ eller klik på midten (Find i reolen).
+/// Styres med ← →, trackpad (coverne følger fingrene, et kraftigt stryg fortsætter), musehjul,
+/// træk med musen, klik på et sidecover og ↩ eller klik på midten (Find i reolen).
 struct CoverFlowView: View {
     @Environment(AppModel.self) private var model
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let locationID: Int64
     /// false i snapshots: ImageRenderer kan ikke tegne AppKit-views og viser et advarselsskilt i stedet.
     var catchesScroll = true
-    @FocusState private var focused: Bool
-    /// Hvor langt rækken er skubbet under en trackpad- eller musebevægelse (i plader).
-    @ViewState private var shift = 0.0
-    @ViewState private var lastDrag: CGFloat = 0
-    @ViewState private var stripWidth: CGFloat = 0
-    /// Står rækken mod enden af sektionen (så enden kun mærkes én gang pr. skub).
-    @ViewState private var atEdge = false
 
     var body: some View {
         let items = model.library.items(in: locationID)
@@ -29,27 +21,110 @@ struct CoverFlowView: View {
         let current = items.indices.contains(center) ? items[center] : nil
         let numbers = model.library.shelfNumbers(in: locationID)
         let onShelf = model.library.onShelfCount(in: locationID)
+        CoverFlowStage(items: items, center: center, catchesScroll: catchesScroll,
+                       isAway: { model.isAway($0) },
+                       setCenter: { model.selection = items[$0].id },
+                       onOpen: { model.findModeCopy = items[$0].id }) {
+            CoverFlowCaption(item: current, line: current.map { numbers[$0.id].map { "Nr. \($0) af \(onShelf)" } ?? $0.awayMessage ?? "Ude af reolen" })
+        }
+        .onAppear {
+            // Står den valgte plade ikke i sektionen, vælges den første (som i listen).
+            if current == nil || model.selection != current?.id { model.selection = items.first?.id }
+        }
+    }
+}
+
+/// "Hvad skal jeg høre?": hele reolen som Cover Flow. "Giv mig en plade" (eller mellemrum) får rækken til at snurre
+/// hen til forslaget som et lykkehjul – hurtigt først, så bremser den op, og coveret popper, når det lander.
+struct ListenCoverFlow: View {
+    @Environment(AppModel.self) private var model
+    /// false i snapshots (se `CoverFlowView.catchesScroll`).
+    var catchesScroll = true
+    @ViewState private var center = 0
+    @ViewState private var spin: Int?
+
+    var body: some View {
+        let lib = model.library
+        let items = lib.locations.flatMap { lib.items(in: $0.id) }
+        let c = items.isEmpty ? 0 : min(max(center, 0), items.count - 1)
+        let current = items.indices.contains(c) ? items[c] : nil
+        CoverFlowStage(items: items, center: c, catchesScroll: catchesScroll, isAway: { model.isAway($0) },
+                       setCenter: { center = $0 },
+                       onOpen: { model.findModeCopy = items[$0].id },
+                       spin: $spin) {
+            CoverFlowCaption(item: current, line: current.map { line($0, lib) })
+        }
+        .onAppear {
+            if let p = model.currentPick ?? model.selection, let i = items.firstIndex(where: { $0.id == p }) { center = i }
+        }
+        .onChange(of: model.currentPick) { _, pick in
+            guard let pick, let i = items.firstIndex(where: { $0.id == pick }) else { return }
+            spin = i
+        }
+        .onChange(of: spin == nil) { _, landed in model.wheelSpinning = !landed }
+    }
+
+    private func line(_ item: RecordItem, _ lib: Library) -> String {
+        guard let loc = lib.location(of: item.id), let nr = lib.shelfNumbers(in: loc.id)[item.id] else {
+            return item.awayMessage ?? "Ude af reolen"
+        }
+        return "\(loc.medium.shelfWord) \(loc.shelf) · Sektion \(loc.section) · Nr. \(nr) af \(lib.onShelfCount(in: loc.id))"
+    }
+}
+
+/// Rækken af covers med al bevægelsen: træk med musen, trackpad, musehjul, piletaster, fart efter et kraftigt
+/// stryg og (med `spin`) lykkehjulet. Hvid baggrund, sort i mørk tilstand. Samme bevægelse som telefonen.
+struct CoverFlowStage<Caption: View>: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.colorScheme) private var colorScheme
+    let items: [RecordItem]
+    let center: Int
+    var catchesScroll = true
+    let isAway: (Int64) -> Bool
+    /// Midten skifter (under et glid uden animation).
+    let setCenter: (Int) -> Void
+    /// Klik eller ↩ på midtercoveret.
+    let onOpen: (Int) -> Void
+    /// Sæt til en plade (indeks), så snurrer rækken derhen; sættes til nil, når den er landet.
+    var spin: Binding<Int?> = .constant(nil)
+    @ViewBuilder let caption: () -> Caption
+
+    @FocusState private var focused: Bool
+    /// Hvor langt rækken er skubbet under en trackpad- eller musebevægelse (i plader).
+    @ViewState private var shift = 0.0
+    @ViewState private var lastDrag: CGFloat = 0
+    @ViewState private var stripWidth: CGFloat = 0
+    /// Står rækken mod enden af sektionen (så enden kun mærkes én gang pr. skub).
+    @ViewState private var atEdge = false
+    /// Et glid efter et kraftigt stryg eller lykkehjulet.
+    @ViewState private var glideTask: Task<Void, Never>?
+    /// Midtercoveret "popper" kort, når forslaget er fundet.
+    @ViewState private var pop = false
+
+    var body: some View {
         VStack(spacing: Spacing.l) {
             Spacer(minLength: 0)
-            CoverFlowStrip(items: items, center: center, shift: shift, isAway: { model.isAway($0) }) { i in
-                if i == center { model.findModeCopy = items[i].id } else { select(i, in: items) }
+            CoverFlowStrip(items: items, center: center, shift: shift, pop: pop, isAway: isAway) { i in
+                stopGlide()
+                if i == center { onOpen(i) } else { setCenter(i) }
             }
             .frame(maxHeight: 460)
-            .animation(Motion.coverFlow(reduceMotion), value: center)
+            .animation(glideTask == nil ? Motion.coverFlow(reduceMotion) : nil, value: center)
             .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { stripWidth = $0 }
             .simultaneousGesture(DragGesture(minimumDistance: 6)
                 .onChanged { v in
+                    if lastDrag == 0 { stopGlide() }
                     let delta = v.translation.width - lastDrag
                     lastDrag = v.translation.width
                     // Rækken følger musen: ét cover pr. stak-afstand.
-                    pan(-Double(delta) / dragPointsPerCover, center: center, items: items)
+                    pan(-Double(delta) / dragPointsPerCover)
                 }
-                .onEnded { _ in
+                .onEnded { v in
                     lastDrag = 0
-                    settle()
+                    fling(-Double(v.velocity.width) / dragPointsPerCover)
                 })
-            CoverFlowCaption(item: current, number: current.flatMap { numbers[$0.id] }, onShelf: onShelf)
-                .animation(Motion.fade(reduceMotion), value: current?.id)
+            caption()
+                .animation(Motion.fade(reduceMotion), value: items.indices.contains(center) ? items[center].id : nil)
             Spacer(minLength: 0)
         }
         .padding(Spacing.l)
@@ -57,38 +132,33 @@ struct CoverFlowView: View {
         .background {
             if catchesScroll {
                 ScrollWheelCatcher(
-                    onSteps: { step($0, from: center, in: items) },
-                    onPan: { pan($0 / Self.trackpadPointsPerCover, center: center, items: items) },
-                    onPanEnded: { settle() })
+                    onSteps: { step($0) },
+                    onPanBegan: { stopGlide() },
+                    onPan: { pan($0 / CoverFlowView.trackpadPointsPerCover) },
+                    onPanEnded: { fling($0 / CoverFlowView.trackpadPointsPerCover) })
             }
         }
-        // Altid hvid baggrund (ikke tonet efter coveret), også i mørk tilstand. Samme på Windows og telefonen.
-        .environment(\.colorScheme, .light)
+        // Hvid baggrund i lys tilstand og sort i mørk (ikke tonet efter coveret). Samme på Windows og telefonen.
         .environment(\.coverTone, .coverFlow)
         .tint(CoverTone.coverFlow.accent)
-        .background(Color.white.ignoresSafeArea())
+        .background((colorScheme == .dark ? Color.black : Color.white).ignoresSafeArea())
         // Fokus kun ved klik, så ↑↓ i listen til venstre stadig virker efter skift af sektion.
         .focusable()
         .focused($focused)
         .focusEffectDisabled()
-        .onKeyPress(.leftArrow) { step(-1, from: center, in: items); return .handled }
-        .onKeyPress(.rightArrow) { step(1, from: center, in: items); return .handled }
-        .onKeyPress(.upArrow) { step(-1, from: center, in: items); return .handled }
-        .onKeyPress(.downArrow) { step(1, from: center, in: items); return .handled }
+        .onKeyPress(.leftArrow) { step(-1); return .handled }
+        .onKeyPress(.rightArrow) { step(1); return .handled }
+        .onKeyPress(.upArrow) { step(-1); return .handled }
+        .onKeyPress(.downArrow) { step(1); return .handled }
         .onKeyPress(.return) {
-            if let current { model.findModeCopy = current.id }
+            if items.indices.contains(center) { onOpen(center) }
             return .handled
         }
-        .onAppear {
-            // Står den valgte plade ikke i sektionen, vælges den første (som i listen).
-            if current == nil || model.selection != current?.id { model.selection = items.first?.id }
-        }
+        .onChange(of: spin.wrappedValue) { _, target in if let target { startSpin(to: target) } }
+        .onDisappear { glideTask?.cancel(); glideTask = nil; if spin.wrappedValue != nil { spin.wrappedValue = nil } }
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Cover Flow")
     }
-
-    /// Trackpad: så mange punkters fingerbevægelse flytter én plade.
-    static let trackpadPointsPerCover = 36.0
 
     /// Træk med musen: ét cover pr. afstand mellem de stablede sidecovers.
     private var dragPointsPerCover: Double {
@@ -96,22 +166,18 @@ struct CoverFlowView: View {
         return max(24, side * 0.25)
     }
 
-    private func select(_ i: Int, in items: [RecordItem]) {
-        guard items.indices.contains(i) else { return }
-        model.selection = items[i].id
-    }
-
-    private func step(_ delta: Int, from center: Int, in items: [RecordItem]) {
+    private func step(_ delta: Int) {
         guard !items.isEmpty else { return }
+        stopGlide()
         let target = min(max(center + delta, 0), items.count - 1)
         // Musehjul: mærkes kun med en Magic Mouse/trackpad under fingeren; ellers sker der intet.
         if target != center { Haptics.tick() }
-        select(target, in: items)
+        setCenter(target)
     }
 
     /// Skubber rækken under fingrene/musen. Passerer den en halv plade, skifter midten, uden
     /// animation, så coverne bliver, hvor de er (rækken flytter sig kun med bevægelsen).
-    private func pan(_ plates: Double, center: Int, items: [RecordItem]) {
+    private func pan(_ plates: Double) {
         guard !items.isEmpty else { return }
         let g = CoverFlowGeometry.glide(center: center, shift: shift + plates, count: items.count)
         // Et let "klik" i trackpad'en for hver plade, der passerer midten (som hjulet på iPod'en),
@@ -127,15 +193,98 @@ struct CoverFlowView: View {
         t.disablesAnimations = true
         withTransaction(t) {
             shift = g.shift
-            if g.center != center { model.selection = items[g.center].id }
+            if g.center != center { setCenter(g.center) }
         }
     }
 
-    /// Fingrene er løftet: coverne falder på plads med en fjeder.
-    private func settle() {
-        guard shift != 0 else { return }
-        withAnimation(Motion.coverFlow(reduceMotion)) { shift = 0 }
+    /// Fingrene er løftet: et kraftigt stryg fortsætter med farten og bremser op; ellers falder coverne på plads.
+    /// `velocity` er i plader pr. sekund.
+    private func fling(_ velocity: Double) {
+        if !reduceMotion, let f = CoverFlowGeometry.fling(from: Double(center) + shift, velocity: velocity, count: items.count) {
+            glide(to: f.target, duration: f.duration, landing: false)
+        } else if shift != 0 {
+            withAnimation(Motion.coverFlow(reduceMotion)) { shift = 0 }
+        }
     }
+
+    /// Lykkehjulet: snurrer hen til pladen `target` i én blød bevægelse.
+    private func startSpin(to target: Int) {
+        guard items.indices.contains(target) else { spin.wrappedValue = nil; return }
+        let total = Double(target) - (Double(center) + shift)
+        if reduceMotion || abs(total) < 0.5 {
+            stopGlide()
+            setCenter(target)
+            shift = 0
+            landed()
+            return
+        }
+        glide(to: target, duration: CoverFlowGeometry.spinDuration(distance: total), landing: true)
+    }
+
+    /// Rækken glider hen til `target`: hurtigt først, bremser jævnt op. Et klik i trackpad'en for hver plade, der
+    /// passerer midten (højst ét pr. 35 ms; det mærkes kun, mens en finger hviler på trackpad'en).
+    private func glide(to target: Int, duration: Double, landing: Bool) {
+        glideTask?.cancel()
+        let from = Double(center) + shift
+        let total = Double(target) - from
+        let count = items.count
+        glideTask = Task { @MainActor in
+            let clock = ContinuousClock(), begin = clock.now
+            var lastTick = begin - .seconds(1)
+            var c = center
+            while !Task.isCancelled {
+                let t = min(1, (clock.now - begin) / .seconds(duration))
+                let pos = from + total * CoverFlowGeometry.easeOut(t)
+                let next = min(max(Int(pos.rounded()), 0), count - 1)
+                var tr = Transaction()
+                tr.disablesAnimations = true
+                withTransaction(tr) {
+                    if next != c {
+                        if clock.now - lastTick >= .milliseconds(35) { Haptics.tick(); lastTick = clock.now }
+                        c = next
+                        setCenter(next)
+                    }
+                    shift = pos - Double(next)
+                }
+                if t >= 1 { break }
+                try? await Task.sleep(for: .milliseconds(8))
+            }
+            guard !Task.isCancelled else { return }
+            shift = 0
+            glideTask = nil
+            if landing { landed() }
+        }
+    }
+
+    /// En finger, et klik eller en tast stopper et glid, der er i gang (lykkehjulet lander straks).
+    private func stopGlide() {
+        guard let task = glideTask else { return }
+        task.cancel()
+        glideTask = nil
+        if let target = spin.wrappedValue {
+            setCenter(target)
+            withAnimation(Motion.coverFlow(reduceMotion)) { shift = 0 }
+            spin.wrappedValue = nil
+        } else if shift != 0 {
+            withAnimation(Motion.coverFlow(reduceMotion)) { shift = 0 }
+        }
+    }
+
+    private func landed() {
+        spin.wrappedValue = nil
+        Haptics.edge()
+        guard !reduceMotion else { return }
+        withAnimation(.spring(response: 0.22, dampingFraction: 0.5)) { pop = true }
+        Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(220))
+            withAnimation(.spring(response: 0.35, dampingFraction: 0.7)) { pop = false }
+        }
+    }
+}
+
+extension CoverFlowView {
+    /// Trackpad: så mange punkters fingerbevægelse flytter én plade.
+    static let trackpadPointsPerCover = 36.0
 }
 
 /// Selve rækken af covers.
@@ -143,6 +292,7 @@ private struct CoverFlowStrip: View {
     let items: [RecordItem]
     let center: Int
     let shift: Double
+    var pop = false
     let isAway: (Int64) -> Bool
     let onSelect: (Int) -> Void
 
@@ -156,6 +306,7 @@ private struct CoverFlowStrip: View {
                     let o = Double(i - center) - shift
                     Button { onSelect(i) } label: {
                         CoverFlowCover(item: item, o: o, side: side, away: isAway(item.id))
+                            .scaleEffect(pop && i == center ? 1.07 : 1)
                     }
                     .buttonStyle(.plain)
                     .zIndex(CoverFlowGeometry.zIndex(o))
@@ -205,12 +356,11 @@ private struct CoverFlowCover: View {
     }
 }
 
-/// Titel, kunstner og nummer under midtercoveret.
+/// Titel, kunstner og en linje (nummer i sektionen, eller hvor pladen står) under midtercoveret.
 private struct CoverFlowCaption: View {
     @Environment(AppModel.self) private var model
     let item: RecordItem?
-    let number: Int?
-    let onShelf: Int
+    let line: String?
 
     var body: some View {
         VStack(spacing: Spacing.xxs) {
@@ -221,7 +371,7 @@ private struct CoverFlowCaption: View {
                 Text(item.artist)
                     .font(.title3)
                     .foregroundStyle(Ink.secondary)
-                Text(number.map { "Nr. \($0) af \(onShelf)" } ?? item.awayMessage ?? "Ude af reolen")
+                Text(line ?? "")
                     .font(.callout)
                     .foregroundStyle(Ink.tertiary)
                     .monospacedDigit()
@@ -250,10 +400,12 @@ private struct CoverFlowCaption: View {
 private struct ScrollWheelCatcher: NSViewRepresentable {
     /// Musehjul: hele trin.
     let onSteps: (Int) -> Void
+    /// Trackpad: fingrene rører trackpad'en (stopper et glid).
+    let onPanBegan: () -> Void
     /// Trackpad: glidende bevægelse i punkter (positiv = mod næste plade).
     let onPan: (Double) -> Void
-    /// Trackpad: fingrene er løftet.
-    let onPanEnded: () -> Void
+    /// Trackpad: fingrene er løftet, med farten lige før (punkter pr. sekund).
+    let onPanEnded: (Double) -> Void
 
     func makeNSView(context: Context) -> CatcherView {
         let view = CatcherView()
@@ -267,6 +419,7 @@ private struct ScrollWheelCatcher: NSViewRepresentable {
 
     private func update(_ view: CatcherView) {
         view.onSteps = onSteps
+        view.onPanBegan = onPanBegan
         view.onPan = onPan
         view.onPanEnded = onPanEnded
     }
@@ -277,10 +430,13 @@ private struct ScrollWheelCatcher: NSViewRepresentable {
 
     final class CatcherView: NSView {
         var onSteps: ((Int) -> Void)?
+        var onPanBegan: (() -> Void)?
         var onPan: ((Double) -> Void)?
-        var onPanEnded: (() -> Void)?
+        var onPanEnded: ((Double) -> Void)?
         private var monitor: Any?
         private var stepper = ScrollStepper()
+        /// Fingrenes bevægelse de sidste 100 ms (tid, punkter), til farten når de løftes.
+        private var samples: [(t: TimeInterval, d: Double)] = []
 
         override func hitTest(_ point: NSPoint) -> NSView? { nil }
 
@@ -303,7 +459,8 @@ private struct ScrollWheelCatcher: NSViewRepresentable {
         private func handle(_ event: NSEvent) -> Bool {
             guard event.window === window, !isHiddenOrHasHiddenAncestor,
                   bounds.contains(convert(event.locationInWindow, from: nil)) else { return false }
-            // Efter at fingrene er løftet: ingen glid (ellers suser et hurtigt svirp gennem hele sektionen).
+            // Efter at fingrene er løftet, sender macOS sin egen fart; den bruges ikke, for Cover Flow glider selv
+            // videre med samme kurve som telefonen (ellers suser et hurtigt svirp gennem hele sektionen).
             if event.momentumPhase != [] { return true }
             let dx = Double(event.scrollingDeltaX), dy = Double(event.scrollingDeltaY)
             // Fingrene mod venstre (eller hjulet ned) → næste plade til højre.
@@ -313,8 +470,20 @@ private struct ScrollWheelCatcher: NSViewRepresentable {
                 if steps != 0 { onSteps?(steps) }
                 return true
             }
-            if delta != 0 { onPan?(delta) }
-            if event.phase == .ended || event.phase == .cancelled { onPanEnded?() }
+            if event.phase == .began || event.phase == .mayBegin { samples = []; onPanBegan?() }
+            if delta != 0 {
+                samples.append((event.timestamp, delta))
+                samples.removeAll { event.timestamp - $0.t > 0.1 }
+                onPan?(delta)
+            }
+            if event.phase == .ended || event.phase == .cancelled {
+                // Farten de sidste 100 ms. Har fingrene stået stille et øjeblik før de løftes, er der ingen fart.
+                let recent = samples.filter { event.timestamp - $0.t <= 0.1 }
+                let span = (recent.last?.t ?? 0) - (recent.first?.t ?? 0)
+                let velocity = recent.count >= 2 && span > 0.01 ? recent.dropFirst().reduce(0) { $0 + $1.d } / span : 0
+                samples = []
+                onPanEnded?(event.phase == .cancelled ? 0 : velocity)
+            }
             return true
         }
     }

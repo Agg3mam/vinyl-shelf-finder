@@ -9,7 +9,8 @@ Hvad hver app kan. Målet er ✅ i begge kolonner. Opdatér tabellen i samme com
 | Søg, plade-detalje, Find i reolen, Sæt tilbage, Flyt | ✅ | ✅ | |
 | Sektioner, Kontrollér sektion, sektionsgrænser (⇄) | ✅ | ✅ | |
 | Nye / Fjernet fra Discogs / Ude af reolen | ✅ | ✅ | |
-| Cover Flow | ✅ | ✅ | Altid hvid baggrund (ikke tonet efter coveret), også i mørk tilstand. Også på iPhone og i webappen |
+| Cover Flow | ✅ | ✅ | Hvid baggrund i lys tilstand og sort i mørk (ikke tonet efter coveret). Træk med musen eller fingeren; et kraftigt stryg fortsætter med farten og bremser op (`CoverFlowGeometry.fling`, fælles checks). Mac: også trackpad. Windows: touchpad flytter én plade ad gangen (Windows giver ingen besked, når fingrene løftes). Også på iPhone og i webappen |
+| Lykkehjul i "Hvad skal jeg høre?" | ✅ | ✅ | Højre kolonne er hele reolen som Cover Flow, der snurrer hen til forslaget og popper (`spinDuration`, `easeOut`). Forslaget i midterkolonnen vises først, når hjulet er landet |
 | Historik med Fortryd | ✅ | ✅ | |
 | Hvad skal jeg høre? / Lyttelog | ✅ | ✅ | |
 | Værdi (estimat og markedsdata) | ✅ | ✅ | |
@@ -49,7 +50,7 @@ Data kommer kun fra kontoen i skyen (ingen Discogs-forbindelse på telefonen).
 | Scan QR-koden på et reolskilt | ✅ | I appen (VisionKit) eller med Kamera-appen |
 | "Spillet" | ✅ | Synkroniseres til Mac og Windows |
 | Søg på en sang og se sanglisten | ✅ | Sanglisterne kommer fra computeren via kontoen |
-| Cover Flow i en sektion | ✅ | Knap øverst til højre (liste/Cover Flow). Samme geometri (`CoverFlowGeometry`), hvid baggrund, haptik for hver plade og ved enden |
+| Cover Flow i en sektion | ✅ | Knap øverst til højre (liste/Cover Flow). Samme geometri (`CoverFlowGeometry`), hvid baggrund (sort i mørk tilstand), haptik for hver plade og ved enden |
 | Sorteringsliste med flueben (Konto › Indstillinger) | ✅ | Samme liste (`SortList.build`) og flueben som Mac/Windows; følger med via kontoen (`sort_checked_…`) |
 | Hvad skal jeg høre? (fanen "Hør") | ✅ | Samme filtre og `ListenPicker` som Mac. Cover Flow snurrer hen til forslaget |
 | Flytte plader, sektioner, Discogs, Værdi, Find nye plader | ❌ | Laves på computeren |

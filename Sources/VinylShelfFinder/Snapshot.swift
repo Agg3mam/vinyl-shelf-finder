@@ -94,6 +94,8 @@ enum Snapshotter {
             // Cover Flow alene med ImageRenderer: cacheDisplay tegner ikke 3D-drejningerne.
             renderSwiftUI(CoverFlowView(locationID: loc.id, catchesScroll: false).appRoot().environment(model), size: CGSize(width: 900, height: 620),
                           to: dir.appendingPathComponent("13b-coverflow-alene.png"))
+            renderSwiftUI(CoverFlowView(locationID: loc.id, catchesScroll: false).appRoot().environment(\.colorScheme, .dark).environment(model),
+                          size: CGSize(width: 900, height: 620), to: dir.appendingPathComponent("13c-coverflow-moerk.png"))
             model.showCoverFlow = savedCoverFlow
         }
         model.sidebar = .value
@@ -105,6 +107,9 @@ enum Snapshotter {
         let listenID = find("Led Zeppelin IV") ?? model.library.globalOrder.first
         model.selection = listenID
         render(MainView().appRoot().environment(model), size: CGSize(width: 1280, height: 900), to: dir.appendingPathComponent("8-listen.png"))
+        // Lykkehjulet alene (med ImageRenderer, så 3D-drejningerne kommer med).
+        renderSwiftUI(ListenCoverFlow(catchesScroll: false).appRoot().environment(model), size: CGSize(width: 900, height: 620),
+                      to: dir.appendingPathComponent("8c-lykkehjul.png"))
         if let listenID {
             render(ListenView(previewPick: listenID).environment(model), size: CGSize(width: 720, height: 1000),
                    to: dir.appendingPathComponent("8b-listen-pick.png"))

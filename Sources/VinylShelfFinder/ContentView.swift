@@ -202,6 +202,9 @@ struct DetailColumn: View {
             // Cover Flow: sektionen i reolens rækkefølge. Valget følger listen til venstre.
             CoverFlowView(locationID: id)
                 .id(id)
+        } else if case .listen = model.sidebar ?? .search, !model.library.locations.isEmpty {
+            // Lykkehjulet: hele reolen som Cover Flow, der snurrer hen til forslaget.
+            ListenCoverFlow()
         } else if let sel = model.selection, model.library.item(sel) != nil {
             // Ingen `.id(sel)`: detaljen beholder sin identitet ved skift af plade, så
             // SwiftUI kun opdaterer forskellen (hurtigere ↑↓, og farvetonen kan tone over).

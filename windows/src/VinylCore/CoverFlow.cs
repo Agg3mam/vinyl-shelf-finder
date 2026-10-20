@@ -67,6 +67,37 @@ public static class CoverFlowGeometry
         if (c == count - 1) s = Math.Min(s, 0.3);
         return (c, s);
     }
+
+    /// <summary>
+    /// Et kraftigt stryg fortsætter med farten og bremser jævnt op (som at scrolle på iPhone). <paramref name="position"/> er
+    /// midten plus skub, <paramref name="velocity"/> er fingerens fart, når den slipper (plader pr. sekund, positiv = mod næste
+    /// plade). Giver pladen, rækken lander på, og hvor længe glidet varer – eller null, når stryget var for langsomt.
+    /// </summary>
+    public static (int Target, double Duration)? Fling(double position, double velocity, int count)
+    {
+        if (count <= 0 || Math.Abs(velocity) <= FlingMinVelocity) return null;
+        double v = Math.Clamp(velocity, -FlingMaxVelocity, FlingMaxVelocity);
+        int target = Math.Clamp((int)Math.Round(position + v * 0.45, MidpointRounding.AwayFromZero), 0, count - 1);
+        double total = target - position;
+        if (Math.Abs(total) < 0.5) return null;
+        // Kurven starter med samme fart som fingeren (ease-out i fjerde potens starter med 4 × afstand / tid).
+        return (target, Math.Min(2.5, Math.Max(0.35, 4 * Math.Abs(total) / Math.Abs(v))));
+    }
+
+    /// <summary>Langsommere stryg end dette (plader pr. sekund) falder bare på plads.</summary>
+    public const double FlingMinVelocity = 2.5;
+    /// <summary>Højeste fart, et stryg kan give.</summary>
+    public const double FlingMaxVelocity = 60.0;
+
+    /// <summary>Lykkehjulet i "Hvad skal jeg høre?": længere afstande tager lidt længere tid, men aldrig over 2,7 sekunder.</summary>
+    public static double SpinDuration(double distance) => 1.3 + Math.Min(1.4, Math.Abs(distance) * 0.035);
+
+    /// <summary>Glidets kurve fra 0 til 1: hurtigt først, bremser jævnt op (ease-out i fjerde potens).</summary>
+    public static double EaseOut(double t)
+    {
+        double u = Math.Clamp(t, 0, 1);
+        return 1 - Math.Pow(1 - u, 4);
+    }
 }
 
 /// Lægger rullebevægelser sammen til hele trin (én plade pr. trin).

@@ -123,7 +123,7 @@ struct SectionView: View {
             Spacer(minLength: 0)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .whiteStage()
+        .coverFlowStage()
     }
 
     private func list(_ lib: Library, _ loc: Location) -> some View {

@@ -1644,6 +1644,17 @@ do {
     check(g5.center == 9 && abs(g5.shift - 0.3) < 0.0001, "glid: i slutningen kan man kun skubbe lidt")
     let g6 = G.glide(center: 3, shift: 1, count: 0)
     check(g6.center == 0 && g6.shift == 0, "glid: tom sektion")
+    check(G.fling(from: 5, velocity: 2, count: 50) == nil, "fart: et langsomt stryg falder bare på plads")
+    let f1 = G.fling(from: 5, velocity: 20, count: 50)
+    check(f1?.target == 14 && abs((f1?.duration ?? 0) - 1.8) < 0.0001, "fart: et kraftigt stryg fortsætter 9 plader og bremser op på 1,8 s")
+    check(G.fling(from: 5, velocity: -20, count: 50)?.target == 0, "fart: baglæns stopper ved den første plade")
+    check(G.fling(from: 40, velocity: 1000, count: 50)?.target == 49, "fart: stopper ved den sidste plade")
+    check(G.fling(from: 0, velocity: 1000, count: 100)?.target == 27, "fart: meget hurtige stryg begrænses (højst 60 plader/s)")
+    check(G.fling(from: 49, velocity: 20, count: 50) == nil, "fart: allerede ved enden – intet glid")
+    check(abs(G.spinDuration(distance: 0) - 1.3) < 0.0001 && abs(G.spinDuration(distance: 1000) - 2.7) < 0.0001,
+          "lykkehjul: mindst 1,3 s og højst 2,7 s")
+    check(G.easeOut(0) == 0 && G.easeOut(1) == 1 && abs(G.easeOut(0.5) - 0.9375) < 0.0001 && G.easeOut(2) == 1,
+          "lykkehjul: kurven starter hurtigt og bremser op")
 }
 
 // MARK: iMusic (Daisycon-feed, separat cache)

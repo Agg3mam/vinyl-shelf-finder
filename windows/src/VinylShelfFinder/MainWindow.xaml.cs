@@ -387,7 +387,7 @@ public sealed partial class MainWindow : Window
         DetailHost.Visibility = Visibility.Collapsed;
     }
 
-    /// <summary>Højre kolonne: Cover Flow i en sektion (når det er slået til), ellers plade-detaljen.</summary>
+    /// <summary>Højre kolonne: Cover Flow i en sektion (når det er slået til) og i "Hvad skal jeg høre?", ellers plade-detaljen.</summary>
     private void UpdateDetail()
     {
         if (Model.Sidebar.Kind == SidebarKind.FindNew)
@@ -401,6 +401,13 @@ public sealed partial class MainWindow : Window
             _coverFlow ??= new CoverFlowPane(Model);
             DetailHost.Child = _coverFlow.View;
             _coverFlow.Show(Model.Sidebar.SectionId);
+        }
+        else if (Model.Sidebar.Kind == SidebarKind.Listen && Model.Library.Locations.Count > 0)
+        {
+            // Lykkehjulet: hele reolen som Cover Flow, der snurrer hen til forslaget.
+            _coverFlow ??= new CoverFlowPane(Model);
+            DetailHost.Child = _coverFlow.View;
+            _coverFlow.ShowListen();
         }
         else DetailHost.Child = Detail.View;
     }

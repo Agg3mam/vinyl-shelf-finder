@@ -5,11 +5,12 @@ import VinylCore
 // MARK: - Hvad skal jeg høre?
 //
 // Midterkolonnen er betjeningen: filtre, "Giv mig en plade" og én kompakt linje med det
-// aktuelle forslag. Selve pladen vises kun ét sted – som plade-detalje (pladeskærm) i
-// højre kolonne, fordi `pickRecord()` også vælger pladen.
+// aktuelle forslag. Højre kolonne er lykkehjulet (`ListenCoverFlow`): hele reolen som Cover Flow,
+// der snurrer hen til forslaget, når `pickRecord()` har valgt det.
 
 struct ListenView: View {
     @Environment(AppModel.self) private var model
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     /// Kun til snapshot: vis denne plade i stedet for et tilfældigt valg (deterministisk).
     var previewPick: Int64? = nil
 
@@ -36,6 +37,9 @@ struct ListenView: View {
                 if let pickID {
                     CurrentPickLine(pickID: pickID)
                         .padding(.top, Spacing.xs)
+                        // Forslaget afsløres først, når lykkehjulet er landet.
+                        .opacity(model.wheelSpinning ? 0 : 1)
+                        .animation(Motion.fade(reduceMotion), value: model.wheelSpinning)
                 } else if !candidates.isEmpty {
                     Label("Tryk “Giv mig en plade” (eller mellemrum), så foreslår appen en plade.", systemImage: "dice")
                         .font(.callout)

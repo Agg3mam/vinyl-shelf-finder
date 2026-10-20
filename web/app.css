@@ -251,20 +251,20 @@ details.tracks[open] summary .chev { transform: rotate(90deg); }
   *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
 }
 
-/* Cover Flow: altid hvid baggrund (som på Mac og Windows), også i mørk tilstand. */
-.cf-page {
-  --bg: #FFFFFF; --cell: #F2F2F7; --label: #000000; --secondary: rgba(60, 60, 67, 0.66); --tertiary: rgba(60, 60, 67, 0.3);
-  --fill: rgba(120, 120, 128, 0.12); --separator: rgba(60, 60, 67, 0.18); --accent: #1C6E66; --accent-ink: #1C6E66;
-  --material: rgba(242, 242, 247, 0.85); --segment: #FFFFFF; --orange: #C2410C;
-  color: var(--label); color-scheme: light;
+/* Cover Flow: hvid baggrund i lys tilstand og sort i mørk (som på Mac og Windows). */
+:root { --cf-bg: #FFFFFF; --cf-cell: #F2F2F7; --cf-segment: #FFFFFF; --cf-material: rgba(242, 242, 247, 0.85); --cf-ph: #E5E5EA; }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) { --cf-bg: #000000; --cf-cell: #1C1C1E; --cf-segment: #636366; --cf-material: rgba(44, 44, 46, 0.72); --cf-ph: #2C2C2E; }
 }
-body:has(.cf-page) { background: #FFFFFF; }
+:root[data-theme="dark"] { --cf-bg: #000000; --cf-cell: #1C1C1E; --cf-segment: #636366; --cf-material: rgba(44, 44, 46, 0.72); --cf-ph: #2C2C2E; }
+.cf-page { --bg: var(--cf-bg); --cell: var(--cf-cell); --segment: var(--cf-segment); --material: var(--cf-material); color: var(--label); }
+body:has(.cf-page) { background: var(--cf-bg); }
 .cf-page select { color: var(--secondary); }
 .cf-box { position: relative; height: min(32vh, 280px); margin: 4px calc(-1 * var(--gutter)) 0; overflow: hidden; touch-action: pan-y; user-select: none; -webkit-user-select: none; outline: none; }
 .cf-stage { position: absolute; inset: 0; }
 .cf-cover {
   position: absolute; left: 50%; top: 47%; width: var(--side, 200px); height: var(--side, 200px); padding: 0; border: 0; border-radius: 3px;
-  background: #E5E5EA; color: rgba(60, 60, 67, 0.4); font-size: calc(var(--side, 200px) * 0.3); cursor: pointer; transform-style: flat; -webkit-backface-visibility: hidden; backface-visibility: hidden;
+  background: var(--cf-ph); color: var(--tertiary); font-size: calc(var(--side, 200px) * 0.3); cursor: pointer; transform-style: flat; -webkit-backface-visibility: hidden; backface-visibility: hidden;
   box-shadow: 0 10px 24px rgba(0, 0, 0, 0.18); -webkit-box-reflect: below 2px linear-gradient(transparent 72%, rgba(255, 255, 255, 0.25));
   will-change: transform; -webkit-tap-highlight-color: transparent; touch-action: pan-y; -webkit-user-drag: none;
 }

@@ -68,6 +68,33 @@ public enum CoverFlowGeometry {
         if c == count - 1 { s = min(s, 0.3) }
         return (c, s)
     }
+
+    /// Et kraftigt stryg fortsætter med farten og bremser jævnt op (som at scrolle på iPhone). `position` er midten plus
+    /// skub, `velocity` er fingerens fart, når den slipper (plader pr. sekund, positiv = mod næste plade). Giver pladen,
+    /// rækken lander på, og hvor længe glidet varer – eller nil, når stryget var for langsomt til at fortsætte.
+    public static func fling(from position: Double, velocity: Double, count: Int) -> (target: Int, duration: Double)? {
+        guard count > 0, abs(velocity) > flingMinVelocity else { return nil }
+        let v = min(max(velocity, -flingMaxVelocity), flingMaxVelocity)
+        let target = min(max(Int((position + v * 0.45).rounded()), 0), count - 1)
+        let total = Double(target) - position
+        guard abs(total) >= 0.5 else { return nil }
+        // Kurven starter med samme fart som fingeren (ease-out i fjerde potens starter med 4 × afstand / tid).
+        return (target, min(2.5, max(0.35, 4 * abs(total) / abs(v))))
+    }
+
+    /// Langsommere stryg end dette (plader pr. sekund) falder bare på plads.
+    public static let flingMinVelocity = 2.5
+    /// Højeste fart, et stryg kan give (en trackpad kan måle meget høje farter).
+    public static let flingMaxVelocity = 60.0
+
+    /// Lykkehjulet i "Hvad skal jeg høre?": længere afstande tager lidt længere tid, men aldrig over 2,7 sekunder.
+    public static func spinDuration(distance: Double) -> Double { 1.3 + min(1.4, abs(distance) * 0.035) }
+
+    /// Glidets kurve fra 0 til 1: hurtigt først, bremser jævnt op (ease-out i fjerde potens).
+    public static func easeOut(_ t: Double) -> Double {
+        let u = min(max(t, 0), 1)
+        return 1 - pow(1 - u, 4)
+    }
 }
 
 /// Lægger rullebevægelser sammen til hele trin (én plade pr. trin).

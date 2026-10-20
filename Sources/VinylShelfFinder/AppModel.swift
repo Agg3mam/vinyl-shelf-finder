@@ -81,6 +81,8 @@ final class AppModel {
         didSet { if listenFilter != oldValue { clearPick() } }
     }
     private(set) var currentPick: Int64?
+    /// Lykkehjulet i "Hvad skal jeg høre?" snurrer stadig (forslaget vises først, når det er landet).
+    var wheelSpinning = false
     private var recentPicks: [Int64] = []
 
     // Værdi

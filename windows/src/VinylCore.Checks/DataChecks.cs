@@ -1545,6 +1545,17 @@ static class DataChecks
         Check.That(g4.Center == 0 && Math.Abs(g4.Shift + 0.3) < 0.0001, "glid: i starten kan man kun skubbe lidt (gummibånd)");
         var g5 = CoverFlowGeometry.Glide(9, 5, 10);
         Check.That(g5.Center == 9 && Math.Abs(g5.Shift - 0.3) < 0.0001, "glid: i slutningen kan man kun skubbe lidt");
+        Check.That(CoverFlowGeometry.Fling(5, 2, 50) is null, "fart: et langsomt stryg falder bare på plads");
+        var f1 = CoverFlowGeometry.Fling(5, 20, 50);
+        Check.That(f1?.Target == 14 && Math.Abs((f1?.Duration ?? 0) - 1.8) < 0.0001, "fart: et kraftigt stryg fortsætter 9 plader og bremser op på 1,8 s");
+        Check.That(CoverFlowGeometry.Fling(5, -20, 50)?.Target == 0, "fart: baglæns stopper ved den første plade");
+        Check.That(CoverFlowGeometry.Fling(40, 1000, 50)?.Target == 49, "fart: stopper ved den sidste plade");
+        Check.That(CoverFlowGeometry.Fling(0, 1000, 100)?.Target == 27, "fart: meget hurtige stryg begrænses (højst 60 plader/s)");
+        Check.That(CoverFlowGeometry.Fling(49, 20, 50) is null, "fart: allerede ved enden – intet glid");
+        Check.That(Math.Abs(CoverFlowGeometry.SpinDuration(0) - 1.3) < 0.0001 && Math.Abs(CoverFlowGeometry.SpinDuration(1000) - 2.7) < 0.0001,
+                   "lykkehjul: mindst 1,3 s og højst 2,7 s");
+        Check.That(CoverFlowGeometry.EaseOut(0) == 0 && CoverFlowGeometry.EaseOut(1) == 1 && Math.Abs(CoverFlowGeometry.EaseOut(0.5) - 0.9375) < 0.0001 && CoverFlowGeometry.EaseOut(2) == 1,
+                   "lykkehjul: kurven starter hurtigt og bremser op");
         var g6 = CoverFlowGeometry.Glide(3, 1, 0);
         Check.That(g6.Center == 0 && g6.Shift == 0, "glid: tom sektion");
     });

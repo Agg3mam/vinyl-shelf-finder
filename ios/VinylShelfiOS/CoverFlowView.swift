@@ -1,7 +1,7 @@
 import SwiftUI
 import VinylCore
 
-/// Cover Flow som på Mac (CoverFlowView.swift) med samme geometri (`CoverFlowGeometry`): altid hvid baggrund,
+/// Cover Flow som på Mac (CoverFlowView.swift) med samme geometri (`CoverFlowGeometry`): hvid baggrund (sort i mørk tilstand),
 /// covers drejet i 3D med spejling. Stryg med fingeren, tryk på et sidecover for at hente det frem, og på midten
 /// for at åbne pladen. Et let klik i telefonen for hver plade, der passerer midten, og et tydeligere ved enden.
 struct PhoneCoverFlow: View {
@@ -273,11 +273,15 @@ extension RecordItem {
     }
 }
 
-/// Cover Flow har altid hvid baggrund, også i mørk tilstand.
+/// Cover Flow har hvid baggrund i lys tilstand og sort i mørk (som Mac og Windows).
 extension View {
-    func whiteStage() -> some View {
-        environment(\.colorScheme, .light)
-            .background(Color.white.ignoresSafeArea())
-            .toolbarColorScheme(.light, for: .navigationBar)
+    func coverFlowStage() -> some View { modifier(CoverFlowBackground()) }
+}
+
+private struct CoverFlowBackground: ViewModifier {
+    @Environment(\.colorScheme) private var colorScheme
+
+    func body(content: Content) -> some View {
+        content.background((colorScheme == .dark ? Color.black : Color.white).ignoresSafeArea())
     }
 }
