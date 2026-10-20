@@ -22,20 +22,20 @@ struct RootView: View {
         Group {
             if !model.cloudLoggedIn && !model.hasShelves {
                 // Første gang: data kommer fra kontoen, så log ind først.
-                NavigationStack { AccountView(welcome: true) }
+                NavigationStack { AccountView(welcome: true).lookScreen() }
             } else {
                 tabs
             }
         }
         .sheet(item: $model.openedSection) { s in
             NavigationStack {
-                SectionView(route: SectionRoute(medium: s.medium, locationID: s.locationID))
+                SectionView(route: SectionRoute(medium: s.medium, locationID: s.locationID)).lookScreen()
                     .toolbar {
                         ToolbarItem(placement: .topBarTrailing) {
                             Button("Luk", systemImage: "xmark") { model.openedSection = nil }
                         }
                     }
-                    .navigationDestination(for: RecordRoute.self) { RecordView(route: $0) }
+                    .navigationDestination(for: RecordRoute.self) { RecordView(route: $0).lookScreen() }
             }
         }
         .alert("Hvilke reoler skal bruges?", isPresented: Binding(get: { model.cloudChoice != nil }, set: { if !$0 { model.cloudChoice = nil } }),
@@ -57,29 +57,29 @@ struct RootView: View {
         TabView(selection: $tab) {
             Tab("Reol", systemImage: "books.vertical", value: AppTab.shelves) {
                 NavigationStack {
-                    ShelvesView()
-                        .navigationDestination(for: SectionRoute.self) { SectionView(route: $0) }
-                        .navigationDestination(for: RecordRoute.self) { RecordView(route: $0) }
+                    ShelvesView().lookScreen()
+                        .navigationDestination(for: SectionRoute.self) { SectionView(route: $0).lookScreen() }
+                        .navigationDestination(for: RecordRoute.self) { RecordView(route: $0).lookScreen() }
                 }
             }
             Tab("Hør", systemImage: "dice", value: AppTab.listen) {
                 NavigationStack {
                     ListenView()
-                        .navigationDestination(for: SectionRoute.self) { SectionView(route: $0) }
-                        .navigationDestination(for: RecordRoute.self) { RecordView(route: $0) }
+                        .navigationDestination(for: SectionRoute.self) { SectionView(route: $0).lookScreen() }
+                        .navigationDestination(for: RecordRoute.self) { RecordView(route: $0).lookScreen() }
                 }
             }
             Tab("Scan", systemImage: "qrcode.viewfinder", value: AppTab.scan) {
                 NavigationStack { ScanView() }
             }
             Tab("Konto", systemImage: "person.crop.circle", value: AppTab.account) {
-                NavigationStack { AccountView(welcome: false) }
+                NavigationStack { AccountView(welcome: false).lookScreen() }
             }
             Tab(value: AppTab.search, role: .search) {
                 NavigationStack {
-                    SearchView(query: query)
-                        .navigationDestination(for: RecordRoute.self) { RecordView(route: $0) }
-                        .navigationDestination(for: SectionRoute.self) { SectionView(route: $0) }
+                    SearchView(query: query).lookScreen()
+                        .navigationDestination(for: RecordRoute.self) { RecordView(route: $0).lookScreen() }
+                        .navigationDestination(for: SectionRoute.self) { SectionView(route: $0).lookScreen() }
                 }
                 .searchable(text: $query, placement: .navigationBarDrawer(displayMode: .always), prompt: "Kunstner, titel, sang …")
             }

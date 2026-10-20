@@ -196,6 +196,19 @@ public partial class App : Application
                     m.FindModeCopy = null;
                 }
                 _window.ResizeForSmoke(1280, 820);
+                // Udseende: stilene i lys og mørk tilstand (sættes tilbage bagefter).
+                if (m.Library.Locations.FirstOrDefault() is Location first)
+                {
+                    m.Sidebar = SidebarItem.ForSection(first.Id);
+                    foreach (var (style, theme) in new[] { (LookStyle.Kasse, LookTheme.Light), (LookStyle.Kasse, LookTheme.Dark), (LookStyle.Fokus, LookTheme.Light), (LookStyle.Cover, LookTheme.Dark) })
+                    {
+                        m.LookStyle = style;
+                        m.LookTheme = theme;
+                        await Shot($"14-stil-{style.Id()}-{theme.Id()}.png");
+                    }
+                    m.LookStyle = LookStyle.Standard;
+                    m.LookTheme = LookTheme.Auto;
+                }
                 _window.OpenSettings();
                 await Shot("11-indstillinger.png");
             }

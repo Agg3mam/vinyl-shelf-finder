@@ -190,7 +190,7 @@ struct RecordRow: View {
             if numberColumn || number != nil {
                 numberLabel
             }
-            CoverView(release: item.release, size: 38)
+            CoverView(release: item.release, size: model.lookStyle.bigCovers ? 52 : 38)
                 .opacity(dimmed ? 0.45 : 1)
                 .alignmentGuide(.listRowSeparatorLeading) { $0[.leading] }
             VStack(alignment: .leading, spacing: 2) {

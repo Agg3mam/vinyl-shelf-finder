@@ -49,6 +49,7 @@ struct RecordRow: View {
     let location: Location?
     /// Pladens nummer i sektionen (set fra venstre), når listen er en sektion.
     var number: Int? = nil
+    @AppStorage("look_style") private var lookStyle = LookStyle.standard
 
     var body: some View {
         HStack(spacing: 12) {
@@ -57,7 +58,7 @@ struct RecordRow: View {
                     .font(.callout.monospacedDigit()).foregroundStyle(.secondary)
                     .frame(minWidth: 28, alignment: .trailing)
             }
-            CoverImage(url: item.release.thumbURL ?? item.release.coverURL, size: 48)
+            CoverImage(url: item.release.thumbURL ?? item.release.coverURL, size: lookStyle.bigCovers ? 60 : 48)
             VStack(alignment: .leading, spacing: 2) {
                 Text(item.artist).font(.headline).lineLimit(1)
                 Text(item.title).font(.subheadline).foregroundStyle(.secondary).lineLimit(1)

@@ -33,7 +33,7 @@ public static class RecordRow
             Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(n, number is int k ? $"Nummer {k} i reolen" : "Står ikke i reolen");
         }
 
-        var cover = Ui.Cover(item.Release, 38);
+        var cover = Ui.Cover(item.Release, Ui.Style.BigCovers() ? 52 : 38);
         cover.Opacity = dimmed ? 0.45 : 1;
         Add(cover, GridLength.Auto);
 

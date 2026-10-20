@@ -7,6 +7,7 @@ struct RecordView: View {
     @Environment(PhoneModel.self) private var model
     let route: RecordRoute
     @State private var playedTick = 0
+    @AppStorage("look_style") private var lookStyle = LookStyle.standard
     @State private var skippedTick = 0
     @State private var showTracks = false
     /// Kort bekræftelse på knappen efter "Spillet".
@@ -80,13 +81,24 @@ struct RecordView: View {
         }
     }
 
+    @ViewBuilder
     private func header(_ item: RecordItem) -> some View {
-        HStack(alignment: .bottom, spacing: 16) {
-            CoverImage(url: item.release.coverURL ?? item.release.thumbURL, size: 130, corner: 10)
-                .shadow(radius: 12, y: 6)
+        let url = item.release.coverURL ?? item.release.thumbURL
+        // "Covers i fokus" (Konto › Indstillinger › Udseende): coveret fylder hele bredden.
+        let layout = lookStyle.bigCovers ? AnyLayout(VStackLayout(alignment: .leading, spacing: 14)) : AnyLayout(HStackLayout(alignment: .bottom, spacing: 16))
+        layout {
+            if lookStyle.bigCovers {
+                Color.clear.aspectRatio(1, contentMode: .fit)
+                    .overlay { CoverImage(url: url, corner: 14) }
+                    .clipShape(.rect(cornerRadius: 14))
+                    .shadow(radius: 12, y: 6)
+            } else {
+                CoverImage(url: url, size: 130, corner: 10)
+                    .shadow(radius: 12, y: 6)
+            }
             VStack(alignment: .leading, spacing: 4) {
                 Text(item.artist).font(.title3.weight(.semibold))
-                Text(item.title).font(.title2.weight(.bold))
+                Text(item.title).font(.title2.weight(.bold)).fontDesign(lookStyle.serifTitles ? .serif : nil)
                 Text(item.detailLine).font(.footnote).foregroundStyle(.secondary).lineLimit(2)
             }
         }
@@ -187,16 +199,24 @@ private struct ReferenceCard: View {
 /// Coveret sløret bag pladeskærmen (som "scenen" på Mac).
 struct CoverBackdrop: View {
     let url: String?
+    @AppStorage("look_style") private var lookStyle = LookStyle.standard
 
     var body: some View {
+        // Stilen bestemmer baggrunden under det slørede cover; "Farve fra coveret" farver hele skærmen kraftigere.
+        let base = lookStyle.palette != nil ? AppAccent.background : Color(uiColor: .systemBackground)
+        let strong = lookStyle.strongCoverTint
         ZStack {
-            Rectangle().fill(.background)
+            Rectangle().fill(base)
             AsyncImage(url: url.flatMap(URL.init(string:))) { phase in
                 if let image = phase.image {
-                    image.resizable().scaledToFill().blur(radius: 50).opacity(0.55)
+                    image.resizable().scaledToFill().blur(radius: strong ? 60 : 50).saturation(strong ? 1.5 : 1).opacity(strong ? 1 : 0.55)
                 }
             }
-            LinearGradient(colors: [.clear, Color(uiColor: .systemBackground).opacity(0.85)], startPoint: .top, endPoint: .bottom)
+            if strong {
+                Rectangle().fill(base.opacity(0.5))
+            } else {
+                LinearGradient(colors: [.clear, base.opacity(0.85)], startPoint: .top, endPoint: .bottom)
+            }
         }
         .ignoresSafeArea()
         .accessibilityHidden(true)

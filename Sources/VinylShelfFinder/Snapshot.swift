@@ -116,6 +116,23 @@ enum Snapshotter {
         }
         model.sidebar = .plays
         render(MainView().appRoot().environment(model), size: CGSize(width: 1280, height: 820), to: dir.appendingPathComponent("9-plays.png"))
+        // Udseende: stilene i lys og mørk tilstand (Indstillinger › Udseende). Sættes tilbage bagefter.
+        let (savedTheme, savedStyle) = (model.lookTheme, model.lookStyle)
+        if let loc = model.library.locations.first, let first = model.library.sections[loc.id]?.first {
+            model.sidebar = .section(loc.id)
+            model.selection = first
+            for style in [LookStyle.kasse, .cover, .fokus] {
+                model.lookStyle = style
+                for theme in [LookTheme.light, .dark] {
+                    model.lookTheme = theme
+                    render(MainView().appRoot().environment(model), size: CGSize(width: 1280, height: 820),
+                           to: dir.appendingPathComponent("20-stil-\(style.rawValue)-\(theme.rawValue).png"), dark: theme == .dark)
+                }
+            }
+        }
+        model.lookTheme = savedTheme
+        model.lookStyle = savedStyle
+        render(LookSettings().appRoot().environment(model), size: CGSize(width: 640, height: 560), to: dir.appendingPathComponent("20b-indstillinger-udseende.png"))
         // Sorteringslisten med to flueben. Fluebenene fjernes igen bagefter.
         let order = SortList.build(model.library, rules: model.rules).filter { $0.number != nil }
         for e in order.prefix(2) { model.setSortChecked(e.id, true) }
@@ -191,14 +208,16 @@ enum Snapshotter {
         try? NSBitmapImageRep(cgImage: cg).representation(using: .png, properties: [:])?.write(to: url)
     }
 
-    static func render<V: View>(_ view: V, size: CGSize, to url: URL) {
+    /// Tegner i lys tilstand, medmindre `dark` (fx stilene i Indstillinger › Udseende).
+    static func render<V: View>(_ view: V, size: CGSize, to url: URL, dark: Bool = false) {
+        let appearance = NSAppearance(named: dark ? .darkAqua : .aqua)
         let host = NSHostingView(rootView: view
             .frame(width: size.width, height: size.height)
             .background(Color(nsColor: .windowBackgroundColor)))
-        host.appearance = NSAppearance(named: .aqua)
+        host.appearance = appearance
         host.frame = CGRect(origin: .zero, size: size)
         let window = NSWindow(contentRect: host.frame, styleMask: [.borderless], backing: .buffered, defer: false)
-        window.appearance = NSAppearance(named: .aqua)
+        window.appearance = appearance
         window.contentView = host
         host.layoutSubtreeIfNeeded()
         // Lad SwiftUI og AppKit nå at lægge lister mv. ud.

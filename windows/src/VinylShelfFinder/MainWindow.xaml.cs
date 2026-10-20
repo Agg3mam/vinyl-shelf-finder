@@ -1,3 +1,4 @@
+using Microsoft.UI.Xaml.Media;
 using System.ComponentModel;
 using System.Runtime.InteropServices.WindowsRuntime;
 using Microsoft.UI.Xaml;
@@ -92,9 +93,44 @@ public sealed partial class MainWindow : Window
 
         _updater.Changed += ShowUpdateState;
         Model.PropertyChanged += OnModelChanged;
+        Root.ActualThemeChanged += (_, _) => UpdateLookBackground();
+        ApplyLook();
         AddShortcuts();
         BuildSidebar();
         ShowContent();
+    }
+
+    // MARK: Udseende
+
+    private static readonly string[] AccentKeys =
+        { "SystemAccentColor", "SystemAccentColorDark1", "SystemAccentColorDark2", "SystemAccentColorDark3", "SystemAccentColorLight1", "SystemAccentColorLight2", "SystemAccentColorLight3" };
+
+    private static Windows.UI.Color Rgb(uint v) => Windows.UI.Color.FromArgb(255, (byte)(v >> 16), (byte)(v >> 8), (byte)v);
+
+    /// <summary>Tema og stil fra Indstillinger › Udseende: accentfarve, baggrund og lys/mørk.</summary>
+    private void ApplyLook()
+    {
+        Ui.Style = Model.LookStyle;
+        var res = Application.Current.Resources;
+        if (Model.LookStyle.Palette() is { } p)
+        {
+            // Lys tilstand bruger de mørke trin af accenten, mørk tilstand de lyse (sådan læser WinUI dem).
+            var colors = new[] { p.Light.Accent, p.Light.Accent, p.Light.AccentInk, p.Light.AccentInk, p.Dark.Accent, p.Dark.Accent, p.Dark.AccentInk };
+            for (int i = 0; i < AccentKeys.Length; i++) res[AccentKeys[i]] = Rgb(colors[i]);
+        }
+        else foreach (var k in AccentKeys) res.Remove(k);
+        var theme = Model.LookTheme switch { LookTheme.Light => ElementTheme.Light, LookTheme.Dark => ElementTheme.Dark, _ => ElementTheme.Default };
+        // Accentfarverne læses igen, når temaet skifter: skift kort til det modsatte og tilbage.
+        Root.RequestedTheme = Root.ActualTheme == ElementTheme.Dark ? ElementTheme.Light : ElementTheme.Dark;
+        Root.RequestedTheme = theme;
+        UpdateLookBackground();
+    }
+
+    /// <summary>Stilens baggrund bag listen og detaljen (Standard bruger Windows' egen).</summary>
+    private void UpdateLookBackground()
+    {
+        bool dark = Root.ActualTheme == ElementTheme.Dark;
+        Body.Background = Model.LookStyle.Palette() is { } p ? new SolidColorBrush(Rgb(dark ? p.Dark.Background : p.Light.Background)) : null;
     }
 
     // MARK: Modellen
@@ -124,6 +160,13 @@ public sealed partial class MainWindow : Window
                 break;
             case nameof(AppModel.SyncState):
                 UpdateToolbar();
+                break;
+            case nameof(AppModel.LookTheme):
+            case nameof(AppModel.LookStyle):
+                ApplyLook();
+                // Skærmene bygges forfra med stilens overskrifter og covers.
+                ShowContent();
+                Detail.OnModelChanged(nameof(AppModel.Selection));
                 break;
             case nameof(AppModel.CloudChoice):
                 if (Model.CloudChoice is NeedsChoiceException choice) _ = AskCloudChoiceAsync(choice);

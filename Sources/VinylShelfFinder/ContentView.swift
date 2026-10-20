@@ -14,6 +14,7 @@ struct ContentView: View {
             }
         }
         .onOpenURL { model.open($0) }
+        .onAppear { model.applyLookTheme() }
         .modifier(UpdatePrompt())
         .task {
             if model.needsRankSync { await model.sync(showReport: false) }
@@ -50,21 +51,29 @@ struct ContentView: View {
 
 /// Appens accentfarve på systemskærmene: en rolig blågrøn i stedet for systemblå.
 /// Pladeskærmene (mørke, med cover) sætter selv deres egen tone indeni.
+/// Stilen følger valget i Indstillinger › Udseende (`LookStyle`): farverne nedenfor slår stilen op, når de tegnes.
 enum AppAccent {
     /// Til knapper, kontakter, ikoner og links. Lys: 6:1 mod hvid. Mørk: 5:1 mod
     /// vinduets baggrund og 3,3:1 for hvid tekst på knapper (som systemblå).
-    static let color = Color(nsColor: dynamic(light: 0x1C6E66, dark: 0x2E9D8F))
+    static let color = Color(nsColor: dynamic(light: 0x1C6E66, dark: 0x2E9D8F) { $0.accent })
     /// Til tekst på en svag accentflade (fx placeringsmærket "2A"). Lysere i mørk tilstand.
-    static let ink = Color(nsColor: dynamic(light: 0x1C6E66, dark: 0x5EC4B6))
+    static let ink = Color(nsColor: dynamic(light: 0x1C6E66, dark: 0x5EC4B6) { $0.accentInk })
 
-    private static func dynamic(light: UInt32, dark: UInt32) -> NSColor {
+    /// Den valgte stil (sættes af `AppModel.lookStyle`). Læses, når farverne tegnes.
+    nonisolated(unsafe) static var style = LookStyle(rawValue: UserDefaults.standard.string(forKey: "look_style") ?? "") ?? .standard
+
+    /// Stilens baggrund under lister og tomme skærme (kun med en anden stil end Standard).
+    static let background = Color(nsColor: dynamic(light: 0xFFFFFF, dark: 0x1E1E1E) { $0.background })
+
+    private static func dynamic(light: UInt32, dark: UInt32, _ pick: @escaping @Sendable (LookColors) -> UInt32) -> NSColor {
         NSColor(name: nil) { appearance in
             let isDark = appearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
+            if let p = style.palette { return rgb(pick(isDark ? p.dark : p.light)) }
             return rgb(isDark ? dark : light)
         }
     }
 
-    private static func rgb(_ hex: UInt32) -> NSColor {
+    static func rgb(_ hex: UInt32) -> NSColor {
         NSColor(srgbRed: CGFloat((hex >> 16) & 0xFF) / 255,
                 green: CGFloat((hex >> 8) & 0xFF) / 255,
                 blue: CGFloat(hex & 0xFF) / 255, alpha: 1)
@@ -81,6 +90,21 @@ extension View {
     }
 }
 
+/// Stilens baggrund under lister og tomme skærme (Indstillinger › Udseende). Standard bruger systemets egne.
+struct LookBackground: ViewModifier {
+    @Environment(AppModel.self) private var model
+
+    func body(content: Content) -> some View {
+        if model.lookStyle.palette != nil {
+            content
+                .scrollContentBackground(.hidden)
+                .background(AppAccent.background.ignoresSafeArea())
+        } else {
+            content
+        }
+    }
+}
+
 struct MainView: View {
     @Environment(AppModel.self) private var model
 
@@ -90,9 +114,14 @@ struct MainView: View {
                 .navigationSplitViewColumnWidth(min: 190, ideal: 220)
         } content: {
             ContentColumn()
+                .modifier(LookBackground())
+                // En ny stil tegner farverne forfra.
+                .id(model.lookStyle)
                 .navigationSplitViewColumnWidth(min: 300, ideal: 360)
         } detail: {
             DetailColumn()
+                .modifier(LookBackground())
+                .id(model.lookStyle)
         }
         .toolbar {
             if model.showsMediumPicker {

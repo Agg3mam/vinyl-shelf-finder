@@ -127,7 +127,8 @@ public sealed class DetailPane
         var grid = new Grid { ColumnSpacing = _narrow ? 14 : 20 };
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        var cover = Ui.Cover(it.Release, _narrow ? 88 : 132);
+        // "Covers i fokus" (Indstillinger › Udseende): et større cover.
+        var cover = Ui.Cover(it.Release, _narrow ? 88 : Ui.Style.BigCovers() ? 220 : 132);
         cover.VerticalAlignment = VerticalAlignment.Top;
         grid.Children.Add(cover);
         var text = new StackPanel { Spacing = 2 };

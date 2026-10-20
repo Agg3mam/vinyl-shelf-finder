@@ -5,6 +5,7 @@ struct SettingsView: View {
     var body: some View {
         TabView {
             CloudSettings().tabItem { Label("Konto", systemImage: "icloud") }
+            LookSettings().tabItem { Label("Udseende", systemImage: "paintpalette") }
             AccountSettings().tabItem { Label("Discogs", systemImage: "person.crop.circle") }
             SortSettings().tabItem { Label("Sortering", systemImage: "textformat.abc") }
             ShelfSettings().tabItem { Label("Reol", systemImage: "books.vertical") }
@@ -184,6 +185,60 @@ struct SortSettings: View {
 
     static func list(_ s: String) -> [String] {
         s.split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
+    }
+}
+
+/// Udseende: tema og stil, som i webappen og på telefonen. Gælder kun på denne Mac.
+struct LookSettings: View {
+    @Environment(AppModel.self) private var model
+
+    var body: some View {
+        @Bindable var model = model
+        Form {
+            Section("Tema") {
+                Picker("Tema", selection: $model.lookTheme) {
+                    ForEach(LookTheme.allCases) { Text($0.name).tag($0) }
+                }
+                .pickerStyle(.segmented)
+                .labelsHidden()
+            }
+            Section {
+                Picker("Stil", selection: $model.lookStyle) {
+                    ForEach(LookStyle.allCases) { style in
+                        HStack(spacing: Spacing.s) {
+                            LookSwatch(colors: style.swatch)
+                            VStack(alignment: .leading, spacing: 1) {
+                                Text(style.name)
+                                Text(style.note).font(.caption).foregroundStyle(.secondary)
+                            }
+                        }
+                        .padding(.vertical, 2)
+                        .tag(style)
+                    }
+                }
+                .pickerStyle(.radioGroup)
+                .labelsHidden()
+            } header: {
+                Text("Stil")
+            } footer: {
+                Text("Hver stil har en lys og en mørk udgave. Valget gælder kun på denne Mac.")
+            }
+        }
+        .formStyle(.grouped)
+    }
+}
+
+/// Lille farveprøve af en stil (baggrund, mørk baggrund, accent).
+private struct LookSwatch: View {
+    let colors: [UInt32]
+
+    var body: some View {
+        HStack(spacing: 0) {
+            ForEach(colors.indices, id: \.self) { Color(nsColor: AppAccent.rgb(colors[$0])) }
+        }
+        .frame(width: 30, height: 30)
+        .clipShape(.rect(cornerRadius: 7))
+        .overlay(RoundedRectangle(cornerRadius: 7).strokeBorder(.separator, lineWidth: 0.5))
     }
 }
 

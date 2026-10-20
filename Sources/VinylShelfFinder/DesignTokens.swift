@@ -31,7 +31,8 @@ enum Radius {
 enum Typo {
     static let eyebrow = Font.caption.weight(.bold)
     static let eyebrowTracking: CGFloat = 2
-    static let display = Font.system(size: 34, weight: .heavy)
+    /// Pladens titel. Med fødder i de varme stile (Indstillinger › Udseende).
+    static var display: Font { .system(size: 34, weight: .heavy, design: AppAccent.style.serifTitles ? .serif : .default) }
     static let location = Font.system(size: 30, weight: .bold)
     /// Placeringslinjen i en smal kolonne (plade-detaljen).
     static let locationCompact = Font.title.weight(.bold)

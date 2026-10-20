@@ -31,7 +31,7 @@ public sealed class SettingsPane : IPane
         _updater = updater;
         _root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         _root.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
-        foreach (var (tag, text) in new[] { ("cloud", "Konto"), ("discogs", "Discogs"), ("sort", "Sortering"), ("shelf", "Reol"), ("imusic", "iMusic"), ("backup", "Sikkerhedskopi og data"), ("update", "Opdatering") })
+        foreach (var (tag, text) in new[] { ("cloud", "Konto"), ("look", "Udseende"), ("discogs", "Discogs"), ("sort", "Sortering"), ("shelf", "Reol"), ("imusic", "iMusic"), ("backup", "Sikkerhedskopi og data"), ("update", "Opdatering") })
             _tabs.Items.Add(new SelectorBarItem { Text = text, Tag = tag });
         _tabs.SelectedItem = _tabs.Items[0];
         _tabs.SelectionChanged += (_, _) => { if (_tabs.SelectedItem?.Tag is string t) { _tab = t; Rebuild(); } };
@@ -81,6 +81,7 @@ public sealed class SettingsPane : IPane
         switch (_tab)
         {
             case "cloud": Cloud(p); break;
+            case "look": LookTab(p); break;
             case "discogs": Account(p); break;
             case "sort": Sort(p); break;
             case "shelf": Shelf(p); break;
@@ -93,6 +94,43 @@ public sealed class SettingsPane : IPane
         }
         _scroll.Content = p;
         _building = false;
+    }
+
+    /// <summary>Udseende: tema og stil, som på Mac, telefonen og i webappen. Gælder kun på denne computer.</summary>
+    private void LookTab(StackPanel p)
+    {
+        var themes = new RadioButtons { Header = "Tema", MaxColumns = 3 };
+        foreach (var t in Enum.GetValues<LookTheme>()) themes.Items.Add(t.Name());
+        themes.SelectedIndex = (int)_model.LookTheme;
+        themes.SelectionChanged += (_, _) => { if (!_building && themes.SelectedIndex >= 0) _model.LookTheme = (LookTheme)themes.SelectedIndex; };
+        var styles = new RadioButtons { Header = "Stil" };
+        foreach (var st in Enum.GetValues<LookStyle>()) styles.Items.Add(StyleItem(st));
+        styles.SelectedIndex = (int)_model.LookStyle;
+        styles.SelectionChanged += (_, _) => { if (!_building && styles.SelectedIndex >= 0) _model.LookStyle = (LookStyle)styles.SelectedIndex; };
+        p.Children.Add(Group(themes, styles,
+            Ui.Text("Hver stil har en lys og en mørk udgave. Valget gælder kun på denne computer.", "CaptionTextBlockStyle", Ui.Secondary)));
+    }
+
+    /// <summary>En stil med en lille farveprøve (baggrund, mørk baggrund, accent), navn og forklaring.</summary>
+    private static FrameworkElement StyleItem(LookStyle s)
+    {
+        var swatch = new Grid { Width = 30, Height = 30, CornerRadius = new CornerRadius(7), BorderBrush = Ui.CardStroke, BorderThickness = new Thickness(1) };
+        var colors = s.Swatch();
+        for (int i = 0; i < colors.Length; i++)
+        {
+            swatch.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            var c = colors[i];
+            var cell = new Border { Background = new SolidColorBrush(Windows.UI.Color.FromArgb(255, (byte)(c >> 16), (byte)(c >> 8), (byte)c)) };
+            Grid.SetColumn(cell, i);
+            swatch.Children.Add(cell);
+        }
+        var text = new StackPanel { Spacing = 1 };
+        text.Children.Add(Ui.Text(s.Name(), wrap: false));
+        text.Children.Add(Ui.Text(s.Note(), "CaptionTextBlockStyle", Ui.Secondary));
+        var row = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 10, Margin = new Thickness(0, 2, 0, 2) };
+        row.Children.Add(swatch);
+        row.Children.Add(text);
+        return row;
     }
 
     private static Border Group(params UIElement[] children) => Ui.Card(Ui.VStack(12, children), 16);

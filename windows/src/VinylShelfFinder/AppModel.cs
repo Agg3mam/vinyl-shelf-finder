@@ -55,6 +55,8 @@ public sealed partial class AppModel : INotifyPropertyChanged
         _medium = MediumExtensions.FromRaw(Store.Setting("medium")) ?? Medium.Vinyl;
         _currency = Store.Setting("market_currency") ?? "DKK";
         _showCoverFlow = Store.Setting("cover_flow") == "1";
+        _lookTheme = Look.ThemeFrom(Store.Setting("look_theme"));
+        _lookStyle = Look.StyleFrom(Store.Setting("look_style"));
         try { _market = Store.LoadMarket(); } catch { }
         _collectionValue = Store.LoadCollectionValue();
         _hasToken = !demo && SafeExists(_token);
@@ -372,6 +374,24 @@ public sealed partial class AppModel : INotifyPropertyChanged
     }
 
     // MARK: Reol
+
+    // MARK: Udseende (kun på denne computer, som i webappen)
+
+    private LookTheme _lookTheme;
+    /// <summary>Lys, mørk eller som Windows.</summary>
+    public LookTheme LookTheme
+    {
+        get => _lookTheme;
+        set { if (Set(ref _lookTheme, value)) Store.SetSetting("look_theme", value.Id()); }
+    }
+
+    private LookStyle _lookStyle;
+    /// <summary>Stilen: farver, overskrifter og coverstørrelse (Look.cs).</summary>
+    public LookStyle LookStyle
+    {
+        get => _lookStyle;
+        set { if (Set(ref _lookStyle, value)) Store.SetSetting("look_style", value.Id()); }
+    }
 
     private bool _showCoverFlow;
     /// <summary>Cover Flow i stedet for plade-detaljen, når en sektion er valgt.</summary>

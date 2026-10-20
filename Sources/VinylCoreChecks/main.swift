@@ -1655,6 +1655,20 @@ do {
           "lykkehjul: mindst 1,3 s og højst 2,7 s")
     check(G.easeOut(0) == 0 && G.easeOut(1) == 1 && abs(G.easeOut(0.5) - 0.9375) < 0.0001 && G.easeOut(2) == 1,
           "lykkehjul: kurven starter hurtigt og bremser op")
+    // Udseende: samme stile og farver som webappen (web/app.css).
+    check(LookStyle.allCases.map(\.rawValue) == ["", "kasse", "cover", "fokus"] && LookTheme.allCases.map(\.rawValue) == ["", "light", "dark"],
+          "udseende: samme stile og temaer som webappen")
+    check(LookStyle.standard.palette == nil && !LookStyle.standard.serifTitles && LookStyle.fokus.bigCovers && !LookStyle.cover.bigCovers,
+          "udseende: Standard bruger systemets farver; kun Covers i fokus har store covers")
+    if let css = try? String(contentsOfFile: "web/app.css", encoding: .utf8) {
+        for style in LookStyle.allCases {
+            guard let p = style.palette else { continue }
+            let colors = [p.light, p.dark].flatMap { [$0.background, $0.cell, $0.label, $0.accent, $0.accentInk] }
+            let missing = colors.map { String(format: "#%06X", $0) }.filter { !css.contains($0) }
+            check(css.contains("data-style=\"\(style.rawValue)\"") && missing.isEmpty,
+                  "udseende: \(style.name) har samme farver som webappen \(missing.isEmpty ? "" : "(mangler \(missing.joined(separator: ", ")))")")
+        }
+    }
 }
 
 // MARK: iMusic (Daisycon-feed, separat cache)

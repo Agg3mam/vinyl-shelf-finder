@@ -89,7 +89,8 @@ struct RecordDetailView: View {
 
     private func header(_ it: RecordItem) -> some View {
         HStack(alignment: .top, spacing: Spacing.m + Spacing.xxs) {
-            CoverView(release: it.release, size: 132)
+            // "Covers i fokus" (Indstillinger › Udseende): et større cover.
+            CoverView(release: it.release, size: model.lookStyle.bigCovers ? 220 : 132)
                 .modifier(CoverShadow())
             VStack(alignment: .leading, spacing: Spacing.xxs) {
                 Text(it.artist).font(.title2).foregroundStyle(Ink.secondary)

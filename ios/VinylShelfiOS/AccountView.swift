@@ -13,16 +13,24 @@ struct AccountView: View {
     @State private var password = ""
     /// Uden adgangskode: log ind med et link på mail.
     @State private var useMail = false
+    @AppStorage("look_style") private var lookStyle = LookStyle.standard
 
     var body: some View {
         Form {
-            if model.hasShelves && !welcome {
+            if !welcome {
                 Section {
-                    NavigationLink { SortListView() } label: { Label("Sorteringsliste", systemImage: "checklist") }
+                    NavigationLink { LookView().lookScreen() } label: {
+                        LabeledContent { Text(lookStyle.name) } label: { Label("Udseende", systemImage: "paintpalette") }
+                    }
+                    if model.hasShelves {
+                        NavigationLink { SortListView().lookScreen() } label: { Label("Sorteringsliste", systemImage: "checklist") }
+                    }
                 } header: {
                     Text("Indstillinger")
                 } footer: {
-                    Text("Hele rækkefølgen med flueben, så du kan have telefonen med, når du stiller reolen op. Fluebenene er de samme som på computeren.")
+                    if model.hasShelves {
+                        Text("Sorteringslisten er hele rækkefølgen med flueben, så du kan have telefonen med, når du stiller reolen op. Fluebenene er de samme som på computeren.")
+                    }
                 }
             }
             if model.cloudLoggedIn { loggedIn } else { login }
@@ -146,5 +154,50 @@ struct AccountView: View {
             if await model.completeCloudInput(email: email, text: code) { code = "" }
             busy = false
         }
+    }
+}
+
+/// Udseende: tema og stil, som i webappen og på Mac. Gælder kun på telefonen.
+struct LookView: View {
+    @AppStorage("look_theme") private var lookTheme = LookTheme.auto
+    @AppStorage("look_style") private var lookStyle = LookStyle.standard
+
+    var body: some View {
+        Form {
+            Section("Tema") {
+                Picker("Tema", selection: $lookTheme) {
+                    ForEach(LookTheme.allCases) { Text($0.name).tag($0) }
+                }
+                .pickerStyle(.segmented)
+                .listRowBackground(Color.clear)
+                .listRowInsets(EdgeInsets())
+            }
+            Section {
+                ForEach(LookStyle.allCases) { style in
+                    Button { lookStyle = style } label: {
+                        HStack(spacing: 12) {
+                            HStack(spacing: 0) {
+                                ForEach(style.swatch.indices, id: \.self) { Color(uiColor: AppAccent.rgb(style.swatch[$0])) }
+                            }
+                            .frame(width: 34, height: 34)
+                            .clipShape(.rect(cornerRadius: 9))
+                            .overlay(RoundedRectangle(cornerRadius: 9).strokeBorder(.separator, lineWidth: 0.5))
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(style.name).foregroundStyle(.primary)
+                                Text(style.note).font(.footnote).foregroundStyle(.secondary)
+                            }
+                            Spacer()
+                            if style == lookStyle { Image(systemName: "checkmark").foregroundStyle(.tint) }
+                        }
+                    }
+                    .sensoryFeedback(.selection, trigger: lookStyle)
+                }
+            } header: {
+                Text("Stil")
+            } footer: {
+                Text("Hver stil har en lys og en mørk udgave. Valget gælder kun på denne telefon.")
+            }
+        }
+        .navigationTitle("Udseende")
     }
 }

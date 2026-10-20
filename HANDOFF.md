@@ -568,7 +568,12 @@ projektet med egen konto (RLS adskiller data), men hver skal have sit eget Disco
   en mørk udgave (sidst i `app.css`). `appearance.js` sætter valget, før siden tegnes. Gemmes i `localStorage`
   (`theme`, `style`), kun på enheden. `sw.js`-cachen er `v6`.
 - Inspiration: Crateful (pladekasse), Apple Music iOS 26.4 (farve fra coveret), Albums-appen (covers i fokus).
-- **Mangler:** det samme i Mac, Windows og iPhone, når brugeren har prøvet stilene og valgt (spørg).
+- **Mac, Windows og iPhone (20. okt, senere):** samme indstilling. Fælles `LookStyle`/`LookTheme` i `VinylCore` (`Look.swift`,
+  `Look.cs`); Swift-checken sammenligner farverne med `web/app.css`. Mac: `AppAccent.style` (læses af de dynamiske farver),
+  `LookBackground`, `AppModel.lookTheme/lookStyle` (UserDefaults `look_theme`/`look_style`), fanen Udseende, snapshots
+  `20-stil-*`. iPhone: `@AppStorage`, `AppAccent.apply` (navigationslinjens skrift), `lookScreen()`, `LookView`.
+  Windows: `MainWindow.ApplyLook` (accent i `Application.Resources`, `RequestedTheme`), `Ui.Style`, fanen Udseende,
+  CI-billeder `14-stil-*`. Windows er kun tjekket af CI.
 - Windows: Cover Flow-rækken klippes nu ved kanten (sidecoverne lå hen over listen i "Hvad skal jeg høre?").
 
 ### Ikke færdigt / næste skridt (spørg brugeren om rækkefølgen)

@@ -130,6 +130,23 @@ final class AppModel {
     var statusNoteRequest: StatusNoteRequest?
 
     /// Cover Flow i sektionerne (i stedet for plade-detaljen). Huskes mellem gange.
+    /// Indstillinger › Udseende: tema og stil (kun på denne Mac, som i webappen).
+    var lookTheme = LookTheme(rawValue: UserDefaults.standard.string(forKey: "look_theme") ?? "") ?? .auto {
+        didSet { UserDefaults.standard.set(lookTheme.rawValue, forKey: "look_theme"); applyLookTheme() }
+    }
+    var lookStyle = AppAccent.style {
+        didSet { UserDefaults.standard.set(lookStyle.rawValue, forKey: "look_style"); AppAccent.style = lookStyle }
+    }
+
+    /// Lys, mørk eller som systemet.
+    func applyLookTheme() {
+        NSApp?.appearance = switch lookTheme {
+        case .auto: nil
+        case .light: NSAppearance(named: .aqua)
+        case .dark: NSAppearance(named: .darkAqua)
+        }
+    }
+
     var showCoverFlow = UserDefaults.standard.bool(forKey: "cover_flow") {
         didSet { UserDefaults.standard.set(showCoverFlow, forKey: "cover_flow") }
     }

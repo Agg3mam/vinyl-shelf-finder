@@ -1556,6 +1556,12 @@ static class DataChecks
                    "lykkehjul: mindst 1,3 s og højst 2,7 s");
         Check.That(CoverFlowGeometry.EaseOut(0) == 0 && CoverFlowGeometry.EaseOut(1) == 1 && Math.Abs(CoverFlowGeometry.EaseOut(0.5) - 0.9375) < 0.0001 && CoverFlowGeometry.EaseOut(2) == 1,
                    "lykkehjul: kurven starter hurtigt og bremser op");
+        // Udseende: samme stile og farver som Mac og webappen (Look.swift, web/app.css).
+        Check.That(string.Join(",", Enum.GetValues<LookStyle>().Select(x => x.Id())) == ",kasse,cover,fokus" && Look.StyleFrom("fokus") == LookStyle.Fokus
+                   && Look.StyleFrom("ukendt") == LookStyle.Standard && Look.ThemeFrom("dark") == LookTheme.Dark && Look.ThemeFrom(null) == LookTheme.Auto,
+                   "udseende: samme stile og temaer som webappen");
+        Check.That(LookStyle.Standard.Palette() is null && LookStyle.Kasse.Palette()?.Light.Background == 0xEAE2D3 && LookStyle.Fokus.Palette()?.Dark.Accent == 0x2E9D8F
+                   && LookStyle.Fokus.BigCovers() && !LookStyle.Cover.BigCovers(), "udseende: farverne er de samme som på Mac");
         var g6 = CoverFlowGeometry.Glide(3, 1, 0);
         Check.That(g6.Center == 0 && g6.Shift == 0, "glid: tom sektion");
     });
