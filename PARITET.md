@@ -70,7 +70,7 @@ reolen" er en JavaScript-port af `Search.swift` og `Library.swift` (`web/core/`)
 | Reoler og sektioner (plader og cd'er), Find i reolen, naboer | ✅ | Samme tekster som Mac (`referenceAdvice`) |
 | Scan QR-koden på et reolskilt | ✅ | I webappen med kameraet (jsQR i `web/vendor`). Kamera-appen åbner `vinylshelf://` i den rigtige app, ikke i webappen |
 | "Spillet" | ✅ | Samme post som iPhone (enhed `web`); gemmes og sendes senere, hvis der ikke er net |
-| Cover Flow i en sektion og "Hør" (Hvad skal jeg høre?) | ✅ | Som iPhone. Port af `CoverFlowGeometry` og `ListenPicker` i `core/library.js`. Haptik: Android vibrerer; iPhone bruger iOS' kontakt-klik (iOS 18+), da Safari ikke har et haptik-API |
+| Cover Flow i en sektion og "Hør" (Hvad skal jeg høre?) | ✅ | Som iPhone. Port af `CoverFlowGeometry` og `ListenPicker` i `core/library.js`. Haptik: Android vibrerer; iPhone bruger iOS' kontakt-klik (iOS 18+), da Safari ikke har et haptik-API. Webappen giver også et let klik ved hvert tryk på en knap, fane eller plade |
 | Sorteringsliste med flueben (Konto › Indstillinger) | ✅ | Samme opdeling og flueben som Mac (posten `sort_checked_…`). Plader uden plads sorteres med en forenklet udgave af reglerne (Discogs' rækkefølge, ellers kunstner/titel) |
 | Log ud | ✅ | Fjerner også reolerne fra telefonen (iPhone-appen beholder dem), da en webside kan deles af flere |
 | Flytte plader, sektioner, Discogs, Værdi, Find nye plader | ❌ | Laves på computeren |

@@ -35,7 +35,7 @@ export function mountCoverFlow(el, opts) {
     if (opts.away?.(it)) n.classList.add("away");
     n.addEventListener("click", (e) => {
       if (moved) { e.preventDefault(); return; }
-      if (i === center) opts.onOpen?.(i);
+      if (i === center) { haptic("tick", true); opts.onOpen?.(i); }
       else go(i, true);
     });
     stage.append(n);

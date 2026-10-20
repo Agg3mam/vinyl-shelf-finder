@@ -542,6 +542,12 @@ projektet med egen konto (RLS adskiller data), men hver skal have sit eget Disco
   definer, kun for administratorer). Står brugeren i `admin_users`, viser Konto "Statistik over brugerne" (`#/statistik`).
   Afprøvet mod en falsk Supabase i browseren.
 
+### 20. okt: haptik ved alle tryk i webappen
+
+- Hvert tryk på en knap (`data-action`), fane eller plade-link giver et let klik (`haptic("tick", true)` øverst i
+  klik-handleren i `web/app.js`), også et tryk på det midterste cover i Cover Flow. Klikket sker med det samme, fordi
+  Safari kun giver haptik under selve trykket (fx ikke når "Spillet" er sendt). `sw.js`-cachen er `v4`.
+
 ### Ikke færdigt / næste skridt (spørg brugeren om rækkefølgen)
 
 1. **Mobilside på det lokale netværk (opgave 1)**, så QR-koderne virker. Det er det største åbne punkt.

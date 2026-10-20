@@ -1110,6 +1110,7 @@ document.addEventListener("click", async (ev) => {
   const nav = ev.target.closest("a[data-nav], .tabbar a");
   if (nav && !ev.defaultPrevented && ev.button === 0 && !ev.metaKey && !ev.ctrlKey) {
     ev.preventDefault();
+    haptic("tick", true);
     const href = nav.getAttribute("href");
     if (nav.closest(".tabbar")) {
       // En fane åbner sin forside; trykkes på den aktive fane, rulles til toppen.
@@ -1122,6 +1123,9 @@ document.addEventListener("click", async (ev) => {
   const el = ev.target.closest("[data-action]");
   if (!el || el.disabled) return;
   const a = el.dataset.action;
+  // Et let klik ved hvert tryk på en knap. Det skal ske med det samme: iPhone giver kun haptik under selve trykket
+  // (ikke efter en ventetid, fx når "Spillet" er sendt). Fluebenet i sorteringslisten klikker selv.
+  if (a !== "sort-check") haptic("tick", true);
   if (a === "back") back(el.dataset.fallback);
   else if (a === "medium") { state.medium = el.dataset.medium; safeLocal.set("medium", state.medium); render(); }
   else if (a === "sync") sync(true);
