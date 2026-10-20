@@ -361,6 +361,18 @@ static class SyncChecks
         Check.That(viaPassword.AccessToken == "adgang" && viaPassword.Email == "test@example.com", "login med e-mail og adgangskode");
         Check.That(Err(() => cloud.SignInAsync("test@example.com", "forkert-kode")) == CloudClient.WrongPassword, "forkert adgangskode giver en dansk besked");
 
+        // Totrinslogin (TOTP): svarene læses, og fejlene er på dansk (hele forløbet testes mod en falsk Supabase i Swift-checkene).
+        var factors = CloudClient.FactorsFrom(Encoding.UTF8.GetBytes("{\"factors\":[{\"id\":\"f1\",\"factor_type\":\"totp\",\"status\":\"verified\"},{\"id\":\"p1\",\"factor_type\":\"phone\",\"status\":\"verified\"}]}"));
+        Check.That(factors.Count == 1 && factors[0] == new CloudFactor("f1", true), "totrinslogin: kun kode-apps tæller");
+        var enrol = CloudClient.EnrollmentFrom(Encoding.UTF8.GetBytes("{\"id\":\"f2\",\"totp\":{\"secret\":\"JBSWY3DPEHPK3PXP\",\"uri\":\"otpauth://totp/x\"}}"));
+        Check.That(enrol?.FactorId == "f2" && enrol.GroupedSecret == "JBSW Y3DP EHPK 3PXP", "totrinslogin: koden til kode-appen i grupper");
+        Check.That(CloudClient.ErrorFrom(403, Encoding.UTF8.GetBytes("{\"code\":\"42501\"}")).NeedsSecondFactor
+                   && CloudClient.ErrorFrom(422, Encoding.UTF8.GetBytes("{\"error_code\":\"mfa_verification_failed\"}")).Message == CloudClient.WrongSecondFactorCode,
+                   "totrinslogin: en afvist post betyder, at koden mangler; en forkert kode siger det på dansk");
+        static string Jwt(string json) => "x." + Convert.ToBase64String(Encoding.UTF8.GetBytes(json)).TrimEnd('=').Replace('+', '-').Replace('/', '_') + ".y";
+        Check.That(CloudClient.Assurance(session with { AccessToken = Jwt("{\"sub\":\"u\",\"aal\":\"aal2\"}") }) == "aal2" && CloudClient.Assurance(session) == "aal1",
+                   "totrinslogin: et login med koden er aal2");
+
         bool needsLogin = false;
         try { cloud.FetchAsync(null, session with { AccessToken = "forkert" }).GetAwaiter().GetResult(); }
         catch (CloudException e) { needsLogin = e.NeedsLogin; }

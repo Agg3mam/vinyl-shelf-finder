@@ -56,6 +56,7 @@ struct AccountView: View {
         } footer: {
             Text("Reoler, placeringer og lyttelog er de samme som på din computer (Mac eller Windows). Appen synkroniserer selv, når den åbnes, kort efter \"Spillet\" og hvert 5. minut.")
         }
+        SecondFactorSection()
         Section {
             Button("Synkronisér nu", systemImage: "arrow.triangle.2.circlepath") { Task { await model.syncCloud(userInitiated: true) } }
                 .disabled(model.cloudPhase == .syncing)

@@ -382,7 +382,7 @@ public sealed partial class AppModel : INotifyPropertyChanged
     public LookTheme LookTheme
     {
         get => _lookTheme;
-        set { if (Set(ref _lookTheme, value)) Store.SetSetting("look_theme", value.Id()); }
+        set { if (Set(ref _lookTheme, value)) { Store.SetSetting("look_theme", value.Id()); if (!IsDemo) LookFile.Write(value, _lookStyle); } }
     }
 
     private LookStyle _lookStyle;
@@ -390,7 +390,19 @@ public sealed partial class AppModel : INotifyPropertyChanged
     public LookStyle LookStyle
     {
         get => _lookStyle;
-        set { if (Set(ref _lookStyle, value)) Store.SetSetting("look_style", value.Id()); }
+        set { if (Set(ref _lookStyle, value)) { Store.SetSetting("look_style", value.Id()); if (!IsDemo) LookFile.Write(_lookTheme, value); } }
+    }
+
+    /// <summary>Tema og knapfarve skifter først ved næste start (Windows): skal appen genstartes for at vise valget?</summary>
+    public bool LookNeedsRestart =>
+        LookTheme != App.StartedWith.Theme || (LookStyle.Palette()?.Light.Accent ?? 0) != (App.StartedWith.Style.Palette()?.Light.Accent ?? 0);
+
+    /// <summary>Genstarter appen (Indstillinger › Udseende › Genstart nu).</summary>
+    public void Restart()
+    {
+        try { System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(Environment.ProcessPath!, IsDemo ? "--demo" : "--restart") { UseShellExecute = false }); }
+        catch (Exception ex) { ErrorMessage = "Appen kunne ikke åbne igen. " + Describe(ex); return; }
+        Microsoft.UI.Xaml.Application.Current.Exit();
     }
 
     private bool _showCoverFlow;

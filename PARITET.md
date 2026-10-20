@@ -35,6 +35,7 @@ Hvad hver app kan. Målet er ✅ i begge kolonner. Opdatér tabellen i samme com
 | Søg på en sang (sanglister fra Discogs, hentes i baggrunden) | ✅ | ✅ | Skema v7 (`release_tracks`). Sangen vises under resultatet og fremhæves i "Sange" på pladen. Status og "Hent sanglister" under Indstillinger › Discogs. Følger med via kontoen (feltet `tracks`) |
 | QR-koden på et trykt skilt følger sektionen til andre enheder | ✅ | ✅ | Feltet `code` i sektionens post (`locations.scan_code`). Begge gemmer koden, når skiltene laves (Windows fra 19. okt; allerede trykte skilte virker, når skiltene er åbnet én gang efter opdateringen) |
 | Udseende: tema (automatisk/lys/mørk) og stil (Standard, Pladekasse, Farve fra coveret, Covers i fokus) | ✅ | ✅ | Indstillinger › Udseende. Fælles navne og farver i `Look.swift` / `Look.cs` (check mod `web/app.css`). Kun på enheden. Mac: `NSApp.appearance`, accent og baggrund under listerne, titler med fødder, større covers. Windows: `RequestedTheme`, accentfarven i ressourcerne, Georgia i titler. "Farve fra coveret": Mac'ens pladeskærm er allerede farvet af coveret |
+| Totrinslogin (kode fra en kode-app, TOTP), guide én gang efter login | ✅ | ✅ | Indstillinger › Konto. `CloudClient` (`enrollSecondFactor`, `verifySecondFactor`, `pendingSecondFactor`) i Swift og C#. Kræves af Supabase, når `supabase/mfa.sql` er kørt. Windows: guiden er en dialog |
 | Mobilside på lokalnettet | ❌ | ❌ | Halvt lavet (kun ruter), ingen server endnu |
 
 ## iPhone-appen (`ios/`)
@@ -53,6 +54,7 @@ Data kommer kun fra kontoen i skyen (ingen Discogs-forbindelse på telefonen).
 | Søg på en sang og se sanglisten | ✅ | Sanglisterne kommer fra computeren via kontoen |
 | Cover Flow i en sektion | ✅ | Knap øverst til højre (liste/Cover Flow). Samme geometri (`CoverFlowGeometry`), hvid baggrund (sort i mørk tilstand), haptik for hver plade og ved enden |
 | Sorteringsliste med flueben (Konto › Indstillinger) | ✅ | Samme liste (`SortList.build`) og flueben som Mac/Windows; følger med via kontoen (`sort_checked_…`) |
+| Totrinslogin (Konto) og guide én gang efter login | ✅ | `SecondFactorView.swift`; "Åbn i kode-appen" åbner otpauth://-adressen i Adgangskoder |
 | Udseende: tema og stil (Konto › Indstillinger › Udseende) | ✅ | `LookView`, `@AppStorage("look_style")`, `lookScreen()` (baggrund), titler med fødder i navigationslinjen, stort cover i "Covers i fokus" og kraftigere farve fra coveret i "Farve fra coveret" |
 | Hvad skal jeg høre? (fanen "Hør") | ✅ | Samme filtre og `ListenPicker` som Mac. Cover Flow snurrer hen til forslaget |
 | Flytte plader, sektioner, Discogs, Værdi, Find nye plader | ❌ | Laves på computeren |
@@ -75,6 +77,7 @@ reolen" er en JavaScript-port af `Search.swift` og `Library.swift` (`web/core/`)
 | "Spillet" | ✅ | Samme post som iPhone (enhed `web`); gemmes og sendes senere, hvis der ikke er net |
 | Cover Flow i en sektion og "Hør" (Hvad skal jeg høre?) | ✅ | Som iPhone. Port af `CoverFlowGeometry` og `ListenPicker` i `core/library.js`. Haptik: Android vibrerer; iPhone bruger iOS' kontakt-klik (iOS 18+), da Safari ikke har et haptik-API. Webappen giver også et let klik ved hvert tryk på en knap, fane eller plade |
 | Sorteringsliste med flueben (Konto › Indstillinger) | ✅ | Samme opdeling og flueben som Mac (posten `sort_checked_…`). Plader uden plads sorteres med en forenklet udgave af reglerne (Discogs' rækkefølge, ellers kunstner/titel) |
+| Totrinslogin (Konto, `#/totrin`) og guide én gang efter login | ✅ | `core/cloud.js` (samme kald som Swift), afprøvet mod en falsk Supabase i browseren |
 | Udseende: tema og stil | ✅ | Konto › Indstillinger › Udseende. Gemmes kun på enheden (`appearance.js`). Samme stile som Mac, Windows og iPhone (`Look.swift`) |
 | Log ud | ✅ | Fjerner også reolerne fra telefonen (iPhone-appen beholder dem), da en webside kan deles af flere |
 | Flytte plader, sektioner, Discogs, Værdi, Find nye plader | ❌ | Laves på computeren |

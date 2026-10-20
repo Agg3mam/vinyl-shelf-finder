@@ -61,6 +61,7 @@ const ICONS = {
   box: '<path d="M3 7.5 12 3l9 4.5v9L12 21l-9-4.5zM3 7.5 12 12l9-4.5M12 12v9"/>',
   dashed: '<circle cx="12" cy="12" r="9" stroke-dasharray="3 3"/>',
   chart: '<path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/>',
+  shield: '<path d="M12 3 4 6v6c0 4.5 3.4 8.3 8 9 4.6-.7 8-4.5 8-9V6z"/><path d="m8.5 12 2.5 2.5 4.5-5"/>',
   palette: '<path d="M12 3a9 9 0 0 0 0 18c1.1 0 1.6-.8 1.6-1.6 0-1-.8-1.4-.8-2.3 0-.9.7-1.6 1.6-1.6H16a5 5 0 0 0 5-5C21 6.6 17 3 12 3z"/><circle cx="7.5" cy="11" r="1.2" fill="currentColor"/><circle cx="10.5" cy="7" r="1.2" fill="currentColor"/><circle cx="15.5" cy="7.5" r="1.2" fill="currentColor"/>',
   checklist: '<path d="M10 6h11M10 12h11M10 18h11"/><path d="m3 6 1.5 1.5L7 5M3 12l1.5 1.5L7 11"/><circle cx="5" cy="18" r="1.6"/>',
   circle: '<circle cx="12" cy="12" r="9"/>',
@@ -175,6 +176,141 @@ async function loggedIn(s) {
   await sync(true);
 }
 
+// MARK: Totrinslogin (som SecondFactorViews.swift på Mac og telefonen)
+
+/** needs: kode-appen, koden mangler fra (null = ingen kode mangler). on: slået til (null = ukendt). */
+const mfa = { needs: null, on: null, step: 0, enrollment: null, code: "", error: null, busy: false, copied: false };
+
+/** Én gang efter login: et venligt tilbud om totrinslogin, hvis det ikke allerede er slået til. */
+async function offerSecondFactorOnce(s) {
+  if (safeLocal.get("mfa_offer_shown") === "1") return;
+  let list;
+  try { list = await cloud.factors(s); } catch { return; }
+  safeLocal.set("mfa_offer_shown", "1");
+  mfa.on = list.some((f) => f.verified);
+  if (!mfa.on) { Object.assign(mfa, { step: 0, enrollment: null, code: "", error: null }); go("#/totrin"); }
+}
+
+async function refreshSecondFactor() {
+  if (DEMO || !state.session) return;
+  try { mfa.on = (await cloud.factors(await validSession())).some((f) => f.verified); } catch { return; }
+  if (parseRoute().name === "konto") { lastRendered = ""; render(); }
+}
+
+/** Koden, når kontoen kræver den (fra Konto). */
+async function submitNeededCode() {
+  if (!mfa.needs || mfa.busy) return;
+  mfa.busy = true; mfa.error = null; render();
+  try {
+    const s2 = await cloud.verifySecondFactor(mfa.needs.id, mfa.code, await validSession());
+    await saveSession(s2);
+    Object.assign(mfa, { needs: null, on: true, code: "" });
+    state.phase = "idle";
+    mfa.busy = false;
+    await sync(true);
+  } catch (e) {
+    mfa.error = e.message;
+  }
+  mfa.busy = false;
+  lastRendered = ""; render();
+}
+
+async function mfaStart() {
+  Object.assign(mfa, { step: 1, error: null, enrollment: null, copied: false });
+  render();
+  if (DEMO) {
+    mfa.enrollment = { factorID: "demo", secret: "JBSWY3DPEHPK3PXP", uri: "otpauth://totp/Vinyl%20Shelf:demo?secret=JBSWY3DPEHPK3PXP&issuer=Vinyl%20Shelf", qr: null };
+  } else {
+    try { mfa.enrollment = await cloud.enrollSecondFactor(await validSession()); } catch (e) { mfa.error = e.message; }
+  }
+  lastRendered = ""; render();
+}
+
+async function mfaConfirm() {
+  if (!mfa.enrollment || mfa.busy || mfa.code.replace(/\D/g, "").length !== 6) return;
+  mfa.busy = true; mfa.error = null; render();
+  try {
+    if (!DEMO) await saveSession(await cloud.verifySecondFactor(mfa.enrollment.factorID, mfa.code, await validSession()));
+    Object.assign(mfa, { on: true, step: 3, code: "" });
+    haptic("success");
+  } catch (e) {
+    mfa.error = e.message;
+  }
+  mfa.busy = false;
+  lastRendered = ""; render();
+}
+
+async function mfaDisable() {
+  if (!confirm("Slå totrinslogin fra? Så er en adgangskode eller et mail-link igen nok til at logge ind på kontoen.")) return;
+  try {
+    const s = await validSession();
+    for (const f of await cloud.factors(s)) await cloud.removeSecondFactor(f.id, s);
+    mfa.on = false;
+  } catch (e) {
+    toast(e.message);
+  }
+  lastRendered = ""; render();
+}
+
+function mfaSection() {
+  if (DEMO) return "";
+  const needs = mfa.needs ? `<div class="group-title">Skriv koden</div>
+    <div class="list"><label class="field code-field"><span class="sr">Kode fra kode-appen</span><input data-mfa="code" inputmode="numeric" autocomplete="one-time-code" placeholder="123 456" value="${esc(mfa.code)}"></label>
+      ${mfa.error ? `<div class="message">${icon("warn")}<span>${esc(mfa.error)}</span></div>` : ""}
+      <button class="row btn-row" data-action="mfa-submit" ${mfa.busy || mfa.code.replace(/\D/g, "").length !== 6 ? "disabled" : ""}>${icon("shield")}<span>Fortsæt</span></button></div>
+    <p class="footnote">Din konto har totrinslogin. Åbn kode-appen (fx Adgangskoder › Koder), og skriv de 6 tal ud for Vinyl Shelf.</p>` : "";
+  const state_ = mfa.on === true ? "Til" : mfa.on === false ? "Fra" : "…";
+  const action = mfa.on === true
+    ? `<button class="row btn-row danger" data-action="mfa-off" ${mfa.needs ? "disabled" : ""}>${icon("shield")}<span>Slå totrinslogin fra</span></button>`
+    : mfa.on === false ? `<a class="row btn-row" href="#/totrin" data-nav>${icon("shield")}<span>Slå totrinslogin til</span></a>` : "";
+  return `${needs}<div class="group-title">Totrinslogin</div>
+    <div class="list"><div class="row kv"><span>Totrinslogin</span><span class="v">${state_}</span></div>${action}</div>
+    <p class="footnote">Med totrinslogin skal du også skrive en kode fra telefonen, når du logger ind på en ny enhed.</p>`;
+}
+
+/** Guiden: tre trin som på Mac og telefonen. */
+function mfaPage() {
+  const steps = ["Find en kode-app på telefonen", "Tilføj Vinyl Shelf i appen", "Skriv de 6 tal, appen viser"];
+  const dots = `<div class="mfa-dots" aria-label="Trin ${Math.min(mfa.step, 2) + 1} af 3">${[0, 1, 2].map((i) => `<span class="${i === Math.min(mfa.step, 2) ? "on" : ""}"></span>`).join("")}</div>`;
+  const err = mfa.error ? `<div class="list" style="margin-top:14px"><div class="message">${icon("warn")}<span>${esc(mfa.error)}</span></div></div>` : "";
+  let body;
+  if (mfa.step === 0) {
+    body = `<div class="welcome"><div class="big-icon">${icon("shield")}</div><h2>Slå totrinslogin til</h2>
+        <p>Så kan ingen komme ind på din konto med kun din adgangskode eller din mail. Det tager et par minutter.</p></div>
+      <div class="group-title">Sådan gør du</div>
+      <div class="list steps">${steps.map((t, i) => `<div class="row"><span class="n">${i + 1}</span><span class="grow">${t}</span></div>`).join("")}</div>
+      <p class="footnote">På iPhone kan du bruge appen Adgangskoder, som allerede er der. På Android kan du hente Google Authenticator gratis.</p>
+      <div class="list" style="margin-top:22px"><button class="row btn-row" data-action="mfa-start"><span class="grow">Kom i gang</span>${icon("chevR")}</button></div>`;
+  } else if (mfa.step === 1) {
+    const e = mfa.enrollment;
+    body = `<h1 class="large-title" style="font-size:28px">Tilføj Vinyl Shelf</h1>
+      ${e ? `<div class="group-title">På denne telefon</div>
+        <div class="list"><a class="row btn-row" href="${esc(e.uri)}">${icon("key")}<span>Åbn i kode-appen</span></a></div>
+        <p class="footnote">Åbner Adgangskoder (eller din kode-app), som tilføjer koden.</p>
+        ${e.qr ? `<div class="group-title">Fra en anden telefon</div><div class="list"><div class="qr"><img src="${esc(e.qr)}" alt="QR-kode til kode-appen"></div></div>
+        <p class="footnote">Scan koden med kameraet, og vælg at tilføje den i kode-appen.</p>` : ""}
+        <div class="group-title">Kan du ikke scanne?</div>
+        <div class="list"><div class="row kv"><span class="secret">${esc(cloud.groupedSecret(e.secret))}</span><button class="link-btn" data-action="mfa-copy">${mfa.copied ? "Kopieret" : "Kopiér"}</button></div></div>
+        <div class="list" style="margin-top:22px"><button class="row btn-row" data-action="mfa-next"><span class="grow">Næste</span>${icon("chevR")}</button></div>`
+      : `<div class="empty"><span class="spinner"></span></div>`}`;
+  } else if (mfa.step === 2) {
+    body = `<h1 class="large-title" style="font-size:28px">Skriv koden</h1>
+      <p class="footnote" style="margin:0 4px">Skriv de 6 tal, som kode-appen viser ud for Vinyl Shelf. Tallene skifter hvert 30. sekund.</p>
+      <div class="list code-field" style="margin-top:14px"><label class="field"><span class="sr">Kode</span><input data-mfa="code" inputmode="numeric" autocomplete="one-time-code" placeholder="123 456" value="${esc(mfa.code)}"></label></div>
+      <div class="list" style="margin-top:22px"><button class="row btn-row" data-action="mfa-confirm" ${mfa.busy || mfa.code.replace(/\D/g, "").length !== 6 ? "disabled" : ""}><span class="grow">Slå totrinslogin til</span>${mfa.busy ? '<span class="spinner"></span>' : ""}</button></div>`;
+  } else {
+    body = `<div class="welcome"><div class="big-icon">${icon("check")}</div><h2>Totrinslogin er slået til</h2>
+        <p>Næste gang du logger ind på en ny enhed, skal du også skrive en kode fra kode-appen. Dine enheder, der allerede er logget ind, beder om koden én gang.</p></div>
+      <p class="footnote">Mister du telefonen, kan du slå totrinslogin fra på en computer, hvor du stadig er logget ind.</p>
+      <div class="list" style="margin-top:22px"><button class="row btn-row" data-action="back" data-fallback="#/konto"><span class="grow">Færdig</span></button></div>`;
+  }
+  const back = mfa.step === 1 || mfa.step === 2;
+  return `<main class="page">${topbar({ backTo: "#/konto", title: "Totrinslogin" })}
+    ${body}${err}${mfa.step < 3 ? dots : ""}
+    ${back ? `<p class="footnote"><button class="link-btn" data-action="mfa-prev">Tilbage til forrige trin</button></p>` : ""}
+  </main>`;
+}
+
 let syncing = null;
 async function sync(userInitiated = false) {
   if (DEMO || !state.session) return;
@@ -191,6 +327,14 @@ async function sync(userInitiated = false) {
         await db.setMeta("email", state.email);
         await db.setMeta("userID", s.userID);
         state.records.clear();
+      }
+      // Totrinslogin: kontoen kræver koden, og dette login har den ikke endnu. Intet hentes eller sendes.
+      const need = await cloud.pendingSecondFactor(s);
+      if (need) {
+        Object.assign(mfa, { needs: need, on: true });
+        state.phase = { failed: cloud.SECOND_FACTOR_REQUIRED };
+        render();
+        return;
       }
       const pending = (await db.getMeta("pending")) ?? [];
       if (pending.length) {
@@ -209,8 +353,12 @@ async function sync(userInitiated = false) {
       state.phase = "idle";
       if (rows.length) rebuild();
       render();
+      offerSecondFactorOnce(s);
     } catch (e) {
-      if (e.needsLogin) {
+      if (e.needsSecondFactor) {
+        try { mfa.needs = await cloud.pendingSecondFactor(state.session); } catch { /* prøv igen ved næste synkronisering */ }
+        state.phase = { failed: e.message };
+      } else if (e.needsLogin) {
         state.session = null;
         await db.setMeta("session", undefined);
         state.phase = { failed: "Du er logget ud af kontoen. Log ind igen for at synkronisere." };
@@ -327,6 +475,7 @@ function render() {
     case "hor": html = listenPage(); break;
     case "sortering": html = sortPage(); break;
     case "udseende": html = lookPage(); break;
+    case "totrin": html = mfaPage(); break;
     case "statistik": html = statsPage(); break;
     case "konto": html = accountPage(welcome); break;
     default: html = shelvesPage();
@@ -339,6 +488,7 @@ function render() {
   if (r.name === "scan") unmount = startScanner();
   if (r.name === "hor") unmount = mountListenFlow();
   if (r.name === "statistik") mountStats();
+  if (r.name === "konto" && state.session && mfa.on === null) refreshSecondFactor();
   if (r.name === "sektion" && state.coverFlow) unmount = mountSectionFlow(r.arg);
 }
 
@@ -1047,6 +1197,7 @@ function accountPage(welcome) {
         ${msg}
       </div>
       <p class="footnote">Reoler, placeringer og lyttelog er de samme som på din computer (Mac eller Windows). Appen synkroniserer selv, når den åbnes, kort efter "Spillet" og hvert 5. minut.</p>
+      ${mfaSection()}
       <div class="list" style="margin-top:22px">
         <button class="row btn-row" data-action="sync" ${state.phase === "syncing" ? "disabled" : ""}>${icon("sync")}<span>Synkronisér nu</span></button>
         <button class="row btn-row danger" data-action="logout">${icon("logout")}<span>Log ud</span></button>
@@ -1187,6 +1338,13 @@ document.addEventListener("click", async (ev) => {
   else if (a === "pick") pickRecord();
   else if (a === "stats-refresh") loadStats(true);
   else if (a === "sort-check") toggleSortCheck(Number(el.dataset.id));
+  else if (a === "mfa-start") mfaStart();
+  else if (a === "mfa-next") { mfa.step = 2; mfa.error = null; lastRendered = ""; render(); }
+  else if (a === "mfa-prev") { mfa.step = Math.max(0, mfa.step - 1); mfa.error = null; lastRendered = ""; render(); }
+  else if (a === "mfa-confirm") mfaConfirm();
+  else if (a === "mfa-submit") submitNeededCode();
+  else if (a === "mfa-off") mfaDisable();
+  else if (a === "mfa-copy") { navigator.clipboard?.writeText(mfa.enrollment?.secret ?? "").catch(() => {}); mfa.copied = true; lastRendered = ""; render(); }
   else if (a === "look-theme" || a === "look-style") {
     const k = a === "look-theme" ? "theme" : "style";
     look[k] = el.dataset.v;
@@ -1263,6 +1421,13 @@ document.addEventListener("input", (ev) => {
     listen[t.dataset.filter] = t.dataset.filter === "decade" ? (v === "" ? null : Number(v)) : (v || (t.dataset.filter === "freshness" ? "any" : null));
     lastRendered = "";
     render();
+    return;
+  }
+  if (t.dataset.mfa === "code") {
+    mfa.code = t.value;
+    // Kun knappen opdateres, så feltet beholder fokus.
+    const b = $("[data-action=mfa-confirm], [data-action=mfa-submit]");
+    if (b) b.disabled = mfa.busy || mfa.code.replace(/\D/g, "").length !== 6;
     return;
   }
   const form = t.closest("form[data-form=login]");

@@ -386,3 +386,15 @@ body:has(.cf-page) { background: var(--cf-bg); }
 .look-row .swatch { display: inline-flex; flex: none; width: 34px; height: 34px; border-radius: 9px; overflow: hidden; border: 0.5px solid var(--separator); }
 .look-row .swatch span { flex: 1; }
 .look-row .check { color: var(--accent); font-size: 18px; }
+
+/* Totrinslogin */
+.code-field input { font-size: 28px; letter-spacing: 0.3em; text-align: center; font-variant-numeric: tabular-nums; padding: 14px 0; }
+.qr { display: grid; place-items: center; padding: 18px; }
+.qr img { width: 170px; height: 170px; background: #fff; border-radius: 8px; padding: 6px; }
+.secret { font: 15px ui-monospace, Menlo, monospace; letter-spacing: 0.04em; }
+.link-btn { appearance: none; border: 0; background: none; color: var(--accent); font: inherit; font-size: 15px; cursor: pointer; padding: 0; }
+.steps .row { gap: 14px; }
+.steps .n { width: 26px; height: 26px; border-radius: 13px; background: var(--accent-soft); color: var(--accent-ink); font-size: 14px; font-weight: 600; display: grid; place-items: center; flex: none; }
+.mfa-dots { display: flex; gap: 6px; justify-content: center; margin-top: 22px; }
+.mfa-dots span { width: 6px; height: 6px; border-radius: 3px; background: var(--tertiary); }
+.mfa-dots span.on { width: 16px; background: var(--accent); }

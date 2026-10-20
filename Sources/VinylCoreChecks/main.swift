@@ -2296,8 +2296,13 @@ final class StubCloud: URLProtocol, @unchecked Sendable {
     nonisolated(unsafe) static var rows: [String: [String: Any]] = [:]
     nonisolated(unsafe) static var tick = 0
     nonisolated(unsafe) static var requests: [String] = []
+    /// Totrinslogin: kontoens kode-apps (som Supabases `factors`).
+    nonisolated(unsafe) static var factors: [[String: Any]] = []
     static let lock = NSLock()
-    static func reset() { lock.lock(); rows = [:]; tick = 0; requests = []; lock.unlock() }
+    static func reset() { lock.lock(); rows = [:]; tick = 0; requests = []; factors = []; lock.unlock() }
+    /// Et login med koden skrevet ("aal2"): en JWT, appen kan læse.
+    static let aal2Token = "x." + Data(#"{"sub":"00000000-0000-0000-0000-000000000001","aal":"aal2","exp":2000000000}"#.utf8).base64EncodedString()
+        .replacingOccurrences(of: "=", with: "").replacingOccurrences(of: "+", with: "-").replacingOccurrences(of: "/", with: "_") + ".y"
     override class func canInit(with request: URLRequest) -> Bool { true }
     override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
     private func body() -> Data? {
@@ -2331,6 +2336,34 @@ final class StubCloud: URLProtocol, @unchecked Sendable {
         case ("PUT", "/auth/v1/user"):
             if request.value(forHTTPHeaderField: "Authorization") != "Bearer adgang" { status = 401; out = ["code": 401]; break }
             out = ["id": "00000000-0000-0000-0000-000000000001", "email": "test@example.com"]
+        case ("GET", "/auth/v1/user"):
+            out = ["id": "00000000-0000-0000-0000-000000000001", "email": "test@example.com", "factors": Self.factors]
+        case ("POST", "/auth/v1/factors"):
+            let id = "f\(Self.factors.count + Self.tick + 1)"
+            Self.tick += 1
+            Self.factors.append(["id": id, "factor_type": "totp", "status": "unverified"])
+            out = ["id": id, "type": "totp", "totp": ["qr_code": "data:image/svg+xml;utf-8,<svg/>", "secret": "JBSWY3DPEHPK3PXP",
+                                                      "uri": "otpauth://totp/Vinyl%20Shelf:test@example.com?secret=JBSWY3DPEHPK3PXP&issuer=Vinyl%20Shelf"]]
+        case ("DELETE", _) where path.hasPrefix("/auth/v1/factors/"):
+            let id = String(path.dropFirst("/auth/v1/factors/".count))
+            let verified = Self.factors.contains { $0["id"] as? String == id && $0["status"] as? String == "verified" }
+            if verified && request.value(forHTTPHeaderField: "Authorization") != "Bearer \(Self.aal2Token)" {
+                status = 403; out = ["code": 403, "error_code": "insufficient_aal"]; break
+            }
+            Self.factors.removeAll { $0["id"] as? String == id }
+        case ("POST", _) where path.hasPrefix("/auth/v1/factors/") && path.hasSuffix("/challenge"):
+            out = ["id": "c1", "type": "totp", "expires_at": 2000000000]
+        case ("POST", _) where path.hasPrefix("/auth/v1/factors/") && path.hasSuffix("/verify"):
+            let id = path.dropFirst("/auth/v1/factors/".count).dropLast("/verify".count)
+            let j = json as? [String: Any]
+            guard (j?["challenge_id"] as? String) == "c1", (j?["code"] as? String) == "123456",
+                  let i = Self.factors.firstIndex(where: { $0["id"] as? String == String(id) }) else {
+                status = 422; out = ["code": 422, "error_code": "mfa_verification_failed", "msg": "Invalid TOTP code entered"]; break
+            }
+            Self.factors[i]["status"] = "verified"
+            var s2 = session
+            s2["access_token"] = Self.aal2Token
+            out = s2
         case ("GET", "/rest/v1/sync_records"):
             if request.value(forHTTPHeaderField: "Authorization") != "Bearer adgang" { status = 401; out = ["code": "PGRST301"]; break }
             let from = (q["updated_at"] ?? "").replacingOccurrences(of: "gte.", with: "")
@@ -2463,6 +2496,30 @@ do { try MainActor.assumeIsolated {
     check(viaPassword.accessToken == "adgang" && viaPassword.email == "test@example.com", "login med e-mail og adgangskode")
     check(errorText(onMain { try await cloud.signIn(email: "test@example.com", password: "forkert-kode") }) == CloudClient.wrongPassword.message,
           "forkert adgangskode giver en dansk besked")
+
+    // Totrinslogin (TOTP): slå til med en kode fra kode-appen, log ind med koden bagefter, og slå fra igen.
+    check(CloudClient.assurance(session) == "aal1", "totrinslogin: et almindeligt login er aal1")
+    check((try? onMain { try await cloud.pendingSecondFactor(session: session) }.get()) == .some(nil), "totrinslogin: uden kode-app kræves ingen kode")
+    _ = onMain { try await cloud.enrollSecondFactor(session: session) }
+    guard case .success(let enrol) = onMain({ try await cloud.enrollSecondFactor(session: session) }) else { throw CloudError("tilmelding fejlede i testen") }
+    check(StubCloud.factors.count == 1 && enrol.groupedSecret == "JBSW Y3DP EHPK 3PXP" && enrol.uri.hasPrefix("otpauth://totp/"),
+          "totrinslogin: et nyt forsøg fjerner det halvfærdige, og koden kan skrives af i grupper")
+    check(errorText(onMain { try await cloud.verifySecondFactor(factorID: enrol.factorID, code: "000000", session: session) }) == CloudClient.wrongSecondFactorCode.message
+          && errorText(onMain { try await cloud.verifySecondFactor(factorID: enrol.factorID, code: "12", session: session) }) == CloudClient.wrongSecondFactorCode.message,
+          "totrinslogin: en forkert kode giver en dansk besked")
+    guard case .success(let strong) = onMain({ try await cloud.verifySecondFactor(factorID: enrol.factorID, code: "123 456", session: session) }) else {
+        throw CloudError("bekræftelse fejlede i testen")
+    }
+    check(CloudClient.assurance(strong) == "aal2" && strong.email == session.email, "totrinslogin: koden giver et sikrere login (aal2)")
+    let pending = try? onMain { try await cloud.pendingSecondFactor(session: session) }.get()
+    check(pending?.id == enrol.factorID && (try? onMain { try await cloud.pendingSecondFactor(session: strong) }.get()) == .some(nil),
+          "totrinslogin: et login uden koden skal skrive den, et login med koden skal ikke")
+    check(errorText(onMain { try await cloud.removeSecondFactor(factorID: enrol.factorID, session: session) }) == CloudClient.secondFactorRequired.message,
+          "totrinslogin: kan ikke slås fra uden koden")
+    check(errorText(onMain { try await cloud.removeSecondFactor(factorID: enrol.factorID, session: strong) }) == nil && StubCloud.factors.isEmpty,
+          "totrinslogin: kan slås fra med koden")
+    check(CloudClient.error(status: 403, data: Data(#"{"code":"42501","message":"new row violates row-level security policy"}"#.utf8)).needsSecondFactor,
+          "totrinslogin: en afvist post betyder, at koden mangler")
 
     // Udløbet login.
     let bad = CloudSession(accessToken: "forkert", refreshToken: "x", expiresAt: 0, userID: session.userID, email: session.email)

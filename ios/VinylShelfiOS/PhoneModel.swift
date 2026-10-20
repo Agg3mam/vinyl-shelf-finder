@@ -66,6 +66,12 @@ final class PhoneModel {
     var cloudPhase: CloudPhase = .idle
     var cloudLastSync: Date?
     var cloudChoice: CloudSync.NeedsChoice?
+    /// Totrinslogin: kontoen kræver koden fra kode-appen, før der kan synkroniseres (nil = ingen kode mangler).
+    var cloudNeedsCode: CloudFactor?
+    /// Totrinslogin er slået til på kontoen (nil = ikke hentet endnu).
+    var cloudSecondFactorOn: Bool?
+    /// Tilbuddet om totrinslogin (én gang efter login).
+    var showSecondFactorGuide = false
     @ObservationIgnored private var cloudSession: CloudSession?
     @ObservationIgnored private var cloudDebounce: Task<Void, Never>?
     @ObservationIgnored private var cloudChoicePostponed = false
@@ -213,6 +219,8 @@ final class PhoneModel {
         KeychainSecret.cloudSession.delete()
         cloudSession = nil
         cloudLoggedIn = false
+        cloudNeedsCode = nil
+        cloudSecondFactorOn = nil
         cloudPhase = .idle
         // Data på telefonen bliver, hvor de er, og det sidst synkroniserede huskes (som på Mac og Windows).
     }
@@ -253,6 +261,13 @@ final class PhoneModel {
         cloudPhase = .syncing
         do {
             let s = try await validCloudSession()
+            // Totrinslogin: kontoen kræver koden, og dette login har den ikke endnu. Intet hentes eller sendes.
+            if let f = try await cloud.pendingSecondFactor(session: s) {
+                cloudNeedsCode = f
+                cloudSecondFactorOn = true
+                cloudPhase = .failed(CloudClient.secondFactorRequired.message)
+                return
+            }
             let report = try await CloudSync.run(store: store, client: cloud, session: s, device: Self.cloudDevice,
                                                  firstSync: firstSync, safetyCopy: { [store] in
                 let folder = DatabaseBackup.defaultFolder()
@@ -263,6 +278,7 @@ final class PhoneModel {
             cloudLastSync = Date()
             store.setSetting("cloud_last_sync", String(Date().timeIntervalSince1970))
             cloudPhase = .idle
+            await offerSecondFactorOnce(s)
         } catch let choice as CloudSync.NeedsChoice {
             if cloudChoicePostponed && !userInitiated {
                 cloudPhase = .failed("Vælg, hvilke reoler der skal bruges: træk ned for at synkronisere.")
@@ -271,12 +287,72 @@ final class PhoneModel {
                 cloudChoice = choice
                 cloudPhase = .idle
             }
+        } catch let e as CloudError where e.needsSecondFactor {
+            if let s = try? await validCloudSession() { cloudNeedsCode = try? await cloud.pendingSecondFactor(session: s) }
+            cloudPhase = .failed(e.message)
         } catch let e as CloudError where e.needsLogin {
             logOutCloud()
             cloudPhase = .failed("Du er logget ud af kontoen. Log ind igen for at synkronisere.")
         } catch {
             cloudPhase = .failed(error.localizedDescription)
         }
+    }
+
+    // MARK: Totrinslogin (samme forløb som Mac, AppModel+Cloud.swift)
+
+    /// Koden fra kode-appen, når kontoen kræver den. `nil` = koden passede, ellers fejlbeskeden.
+    func submitSecondFactorCode(_ code: String) async -> String? {
+        guard let f = cloudNeedsCode else { return nil }
+        do {
+            let s = try await cloud.verifySecondFactor(factorID: f.id, code: code, session: try await validCloudSession())
+            try saveCloudSession(s)
+            cloudNeedsCode = nil
+            cloudSecondFactorOn = true
+            cloudPhase = .idle
+            await syncCloud()
+            return nil
+        } catch {
+            return error.localizedDescription
+        }
+    }
+
+    func refreshSecondFactorStatus() async {
+        guard cloudLoggedIn, let s = try? await validCloudSession(), let factors = try? await cloud.factors(session: s) else { return }
+        cloudSecondFactorOn = factors.contains(where: \.verified)
+    }
+
+    func beginSecondFactor() async throws -> TOTPEnrollment {
+        try await cloud.enrollSecondFactor(session: try await validCloudSession())
+    }
+
+    func confirmSecondFactor(_ e: TOTPEnrollment, code: String) async -> String? {
+        do {
+            let s = try await cloud.verifySecondFactor(factorID: e.factorID, code: code, session: try await validCloudSession())
+            try saveCloudSession(s)
+            cloudSecondFactorOn = true
+            return nil
+        } catch {
+            return error.localizedDescription
+        }
+    }
+
+    func disableSecondFactor() async -> String? {
+        do {
+            let s = try await validCloudSession()
+            for f in try await cloud.factors(session: s) { try await cloud.removeSecondFactor(factorID: f.id, session: s) }
+            cloudSecondFactorOn = false
+            return nil
+        } catch {
+            return error.localizedDescription
+        }
+    }
+
+    /// Én gang efter login: et venligt tilbud om totrinslogin, hvis det ikke allerede er slået til.
+    private func offerSecondFactorOnce(_ s: CloudSession) async {
+        guard !UserDefaults.standard.bool(forKey: "mfa_offer_shown"), let factors = try? await cloud.factors(session: s) else { return }
+        UserDefaults.standard.set(true, forKey: "mfa_offer_shown")
+        cloudSecondFactorOn = factors.contains(where: \.verified)
+        if cloudSecondFactorOn == false { showSecondFactorGuide = true }
     }
 
     func resolveCloudChoice(_ choice: CloudSync.FirstSync) {

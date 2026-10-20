@@ -48,7 +48,23 @@ public sealed class CloudException : Exception
 {
     /// Login er udløbet eller tilbagekaldt: brugeren skal logge ind igen.
     public bool NeedsLogin { get; }
-    public CloudException(string message, bool needsLogin = false) : base(message) => NeedsLogin = needsLogin;
+    /// Kontoen har totrinslogin, og dette login mangler koden fra kode-appen.
+    public bool NeedsSecondFactor { get; }
+    public CloudException(string message, bool needsLogin = false, bool needsSecondFactor = false) : base(message)
+    {
+        NeedsLogin = needsLogin;
+        NeedsSecondFactor = needsSecondFactor;
+    }
+}
+
+/// <summary>En kode-app på kontoen (totrinslogin). Verified = slået til (en kode er bekræftet).</summary>
+public sealed record CloudFactor(string Id, bool Verified);
+
+/// <summary>Det, kode-appen skal have for at lave koder: Uri (otpauth://…, også som QR-kode) eller Secret (skrives ind).</summary>
+public sealed record TotpEnrollment(string FactorId, string Secret, string Uri)
+{
+    /// <summary>Hemmeligheden i grupper á 4, så den er nem at skrive af.</summary>
+    public string GroupedSecret => string.Join(" ", Enumerable.Range(0, (Secret.Length + 3) / 4).Select(i => Secret.Substring(i * 4, Math.Min(4, Secret.Length - i * 4))));
 }
 
 public sealed class CloudClient
@@ -240,6 +256,83 @@ public sealed class CloudClient
         }
     }
 
+    // MARK: Totrinslogin (TOTP), som CloudClient i Cloud.swift
+    //
+    // Et login med adgangskode eller mail er "aal1"; når koden er skrevet, bliver det "aal2". supabase/mfa.sql
+    // sørger for, at en konto med totrinslogin kun kan læse og skrive sine poster med "aal2".
+
+    /// <summary>"aal1" (adgangskode eller mail) eller "aal2" (også koden fra kode-appen).</summary>
+    public static string Assurance(CloudSession s) => JwtClaims(s.AccessToken)?["aal"]?.GetValue<string>() ?? "aal1";
+
+    public async Task<List<CloudFactor>> FactorsAsync(CloudSession s) =>
+        FactorsFrom(await SendAsync("GET", "auth/v1/user", null, s.AccessToken).ConfigureAwait(false));
+
+    internal static List<CloudFactor> FactorsFrom(byte[] data)
+    {
+        var list = new List<CloudFactor>();
+        try
+        {
+            if (JsonNode.Parse(data)?["factors"] is JsonArray a)
+                foreach (var f in a.OfType<JsonObject>())
+                    if (f["id"]?.GetValue<string>() is string id && f["factor_type"]?.GetValue<string>() == "totp")
+                        list.Add(new CloudFactor(id, f["status"]?.GetValue<string>() == "verified"));
+        }
+        catch (Exception e) when (e is JsonException or InvalidOperationException) { }
+        return list;
+    }
+
+    /// <summary>Kontoen har totrinslogin, men dette login mangler koden: den kode-app, koden skal komme fra. Ellers null.</summary>
+    public async Task<CloudFactor?> PendingSecondFactorAsync(CloudSession s)
+    {
+        if (Assurance(s) == "aal2") return null;
+        return (await FactorsAsync(s).ConfigureAwait(false)).FirstOrDefault(f => f.Verified);
+    }
+
+    /// <summary>Begynder at slå totrinslogin til. Halvfærdige forsøg fjernes først.</summary>
+    public async Task<TotpEnrollment> EnrollSecondFactorAsync(CloudSession s)
+    {
+        foreach (var f in await FactorsAsync(s).ConfigureAwait(false))
+            if (!f.Verified) await SendAsync("DELETE", $"auth/v1/factors/{f.Id}", null, s.AccessToken).ConfigureAwait(false);
+        var data = await SendAsync("POST", "auth/v1/factors", new JsonObject
+        {
+            ["factor_type"] = "totp", ["friendly_name"] = $"Vinyl Shelf {DateTimeOffset.UtcNow.ToUnixTimeSeconds()}", ["issuer"] = "Vinyl Shelf",
+        }, s.AccessToken).ConfigureAwait(false);
+        return EnrollmentFrom(data) ?? throw new CloudException("Svaret fra kontoen kunne ikke læses.");
+    }
+
+    internal static TotpEnrollment? EnrollmentFrom(byte[] data)
+    {
+        try
+        {
+            var o = JsonNode.Parse(data) as JsonObject;
+            if (o?["id"]?.GetValue<string>() is string id && o["totp"] is JsonObject t
+                && t["secret"]?.GetValue<string>() is string secret && t["uri"]?.GetValue<string>() is string uri)
+                return new TotpEnrollment(id, secret, uri);
+        }
+        catch (Exception e) when (e is JsonException or InvalidOperationException) { }
+        return null;
+    }
+
+    /// <summary>Bekræfter en kode fra kode-appen. Giver et nyt, sikrere login ("aal2"), som skal gemmes i stedet for det gamle.</summary>
+    public async Task<CloudSession> VerifySecondFactorAsync(string factorId, string code, CloudSession s)
+    {
+        var digits = new string(code.Where(char.IsDigit).ToArray());
+        if (digits.Length != 6) throw new CloudException(WrongSecondFactorCode);
+        var ch = await SendAsync("POST", $"auth/v1/factors/{factorId}/challenge", new JsonObject(), s.AccessToken).ConfigureAwait(false);
+        string? challenge = null;
+        try { challenge = JsonNode.Parse(ch)?["id"]?.GetValue<string>(); } catch (Exception e) when (e is JsonException or InvalidOperationException) { }
+        if (challenge is null) throw new CloudException("Svaret fra kontoen kunne ikke læses.");
+        var data = await SendAsync("POST", $"auth/v1/factors/{factorId}/verify", new JsonObject { ["challenge_id"] = challenge, ["code"] = digits }, s.AccessToken).ConfigureAwait(false);
+        return SessionFrom(data, s.Email);
+    }
+
+    /// <summary>Slår totrinslogin fra (kræver et login, hvor koden er skrevet).</summary>
+    public async Task RemoveSecondFactorAsync(string factorId, CloudSession s) =>
+        await SendAsync("DELETE", $"auth/v1/factors/{factorId}", null, s.AccessToken).ConfigureAwait(false);
+
+    public const string WrongSecondFactorCode = "Koden passer ikke. Skriv de 6 tal, kode-appen viser lige nu, ud for Vinyl Shelf.";
+    public const string SecondFactorRequired = "Skriv koden fra din kode-app for at synkronisere.";
+
     // MARK: HTTP
 
     private async Task<byte[]> SendAsync(string method, string path, JsonNode? body, string? token, params (string, string)[] headers)
@@ -282,6 +375,10 @@ public sealed class CloudClient
             case "over_request_rate_limit": return new CloudException("Der er sendt for mange koder for nylig. Vent lidt, og prøv igen.");
             case "email_address_invalid":
             case "validation_failed": return new CloudException("E-mailadressen ser forkert ud.");
+            case "mfa_verification_failed":
+            case "mfa_challenge_expired": return new CloudException(WrongSecondFactorCode);
+            case "insufficient_aal":
+            case "42501": return new CloudException(SecondFactorRequired, needsSecondFactor: true); // afvist af supabase/mfa.sql
             case "invalid_grant":
             case "refresh_token_not_found":
             case "refresh_token_already_used":

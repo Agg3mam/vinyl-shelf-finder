@@ -7,8 +7,13 @@ export const PUBLISHABLE_KEY = "sb_publishable_q7aX_h3J1W6uyvzQsYEk4Q_85bkkwQm";
 export const DEVICE = "web";
 
 export class CloudError extends Error {
-  constructor(message, needsLogin = false) { super(message); this.needsLogin = needsLogin; }
+  constructor(message, needsLogin = false, needsSecondFactor = false) {
+    super(message); this.needsLogin = needsLogin; this.needsSecondFactor = needsSecondFactor;
+  }
 }
+
+export const WRONG_SECOND_FACTOR = "Koden passer ikke. Skriv de 6 tal, kode-appen viser lige nu, ud for Vinyl Shelf.";
+export const SECOND_FACTOR_REQUIRED = "Skriv koden fra din kode-app for at synkronisere.";
 
 export const WRONG_PASSWORD = "Forkert e-mail eller adgangskode. Har du valgt en adgangskode under Konto i appen på computeren?";
 const EXPIRED_CODE = "Koden er forkert eller udløbet. Bed om en ny kode.";
@@ -23,6 +28,8 @@ function errorFor(status, body) {
     case "over_email_send_rate_limit": case "over_request_rate_limit":
       return new CloudError("Der er sendt for mange koder for nylig. Vent lidt, og prøv igen.");
     case "email_address_invalid": case "validation_failed": return new CloudError("E-mailadressen ser forkert ud.");
+    case "mfa_verification_failed": case "mfa_challenge_expired": return new CloudError(WRONG_SECOND_FACTOR);
+    case "insufficient_aal": case "42501": return new CloudError(SECOND_FACTOR_REQUIRED, false, true);
     case "invalid_grant": case "refresh_token_not_found": case "refresh_token_already_used": case "session_not_found": case "bad_jwt":
       return new CloudError("Du skal logge ind igen.", true);
   }
@@ -133,6 +140,49 @@ export function sessionFromHash(hash) {
   const expiresAt = Number(p.get("expires_at")) || claims.exp || Date.now() / 1000 + (Number(p.get("expires_in")) || 3600);
   return { accessToken: access, refreshToken, expiresAt, userID: claims.sub, email: claims.email ?? "" };
 }
+
+// MARK: Totrinslogin (TOTP), som CloudClient i Cloud.swift
+
+/** "aal1" (adgangskode eller mail) eller "aal2" (også koden fra kode-appen). */
+export const assurance = (s) => jwtClaims(s?.accessToken)?.aal ?? "aal1";
+
+/** Kontoens kode-apps: [{ id, verified }]. */
+export async function factors(s) {
+  const u = await send("GET", "auth/v1/user", null, s.accessToken);
+  return (u?.factors ?? []).filter((f) => f.factor_type === "totp" && f.id).map((f) => ({ id: f.id, verified: f.status === "verified" }));
+}
+
+/** Kontoen har totrinslogin, men loginnet mangler koden: den kode-app, koden skal komme fra. Ellers null. */
+export async function pendingSecondFactor(s) {
+  if (assurance(s) === "aal2") return null;
+  return (await factors(s)).find((f) => f.verified) ?? null;
+}
+
+/** Begynder at slå totrinslogin til: { factorID, secret, uri, qr }. Halvfærdige forsøg fjernes først. */
+export async function enrollSecondFactor(s) {
+  for (const f of await factors(s)) if (!f.verified) await send("DELETE", `auth/v1/factors/${f.id}`, null, s.accessToken);
+  const o = await send("POST", "auth/v1/factors",
+    { factor_type: "totp", friendly_name: `Vinyl Shelf ${Math.floor(Date.now() / 1000)}`, issuer: "Vinyl Shelf" }, s.accessToken);
+  if (!o?.id || !o?.totp?.secret || !o?.totp?.uri) throw new CloudError("Svaret fra kontoen kunne ikke læses.");
+  return { factorID: o.id, secret: o.totp.secret, uri: o.totp.uri, qr: o.totp.qr_code ?? null };
+}
+
+/** Bekræfter en kode fra kode-appen og giver et nyt, sikrere login ("aal2"). */
+export async function verifySecondFactor(factorID, code, s) {
+  const digits = String(code).replace(/\D/g, "");
+  if (digits.length !== 6) throw new CloudError(WRONG_SECOND_FACTOR);
+  const ch = await send("POST", `auth/v1/factors/${factorID}/challenge`, {}, s.accessToken);
+  if (!ch?.id) throw new CloudError("Svaret fra kontoen kunne ikke læses.");
+  return sessionFrom(await send("POST", `auth/v1/factors/${factorID}/verify`, { challenge_id: ch.id, code: digits }, s.accessToken), s.email);
+}
+
+/** Slår totrinslogin fra (kræver et login, hvor koden er skrevet). */
+export async function removeSecondFactor(factorID, s) {
+  await send("DELETE", `auth/v1/factors/${factorID}`, null, s.accessToken);
+}
+
+/** Hemmeligheden i grupper á 4, så den er nem at skrive af. */
+export const groupedSecret = (x) => (x.match(/.{1,4}/g) ?? []).join(" ");
 
 // MARK: Poster
 

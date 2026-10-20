@@ -133,6 +133,7 @@ enum Snapshotter {
         model.lookTheme = savedTheme
         model.lookStyle = savedStyle
         render(LookSettings().appRoot().environment(model), size: CGSize(width: 640, height: 560), to: dir.appendingPathComponent("20b-indstillinger-udseende.png"))
+        render(SecondFactorGuide().appRoot().environment(model), size: CGSize(width: 460, height: 540), to: dir.appendingPathComponent("21-totrinslogin-guide.png"))
         // Sorteringslisten med to flueben. Fluebenene fjernes igen bagefter.
         let order = SortList.build(model.library, rules: model.rules).filter { $0.number != nil }
         for e in order.prefix(2) { model.setSortChecked(e.id, true) }

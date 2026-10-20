@@ -24,6 +24,7 @@ public partial class App : Application
         CultureInfo.CurrentUICulture = da;
 
         InitializeComponent();
+        ApplyStartupLook();
 
         UnhandledException += (_, e) =>
         {
@@ -31,6 +32,27 @@ public partial class App : Application
             TryWrite(Path.Combine(_smokeDir, "smoke-error.txt"), e.Exception?.ToString() ?? e.Message);
             Environment.Exit(1);
         };
+    }
+
+    /// <summary>Tema og stil, appen startede med. Windows lader kun tema og knapfarve skifte ved start.</summary>
+    internal static (LookTheme Theme, LookStyle Style) StartedWith { get; private set; }
+
+    internal static readonly string[] AccentKeys =
+        { "SystemAccentColor", "SystemAccentColorDark1", "SystemAccentColorDark2", "SystemAccentColorDark3", "SystemAccentColorLight1", "SystemAccentColorLight2", "SystemAccentColorLight3" };
+
+    /// <summary>Indstillinger › Udseende: lys/mørk og stilens knapfarve, før det første vindue tegnes.</summary>
+    private void ApplyStartupLook()
+    {
+        StartedWith = LookFile.Read();
+        if (StartedWith.Theme == LookTheme.Light) RequestedTheme = ApplicationTheme.Light;
+        else if (StartedWith.Theme == LookTheme.Dark) RequestedTheme = ApplicationTheme.Dark;
+        if (StartedWith.Style.Palette() is { } p)
+        {
+            // Lys tilstand bruger de mørke trin af accenten, mørk tilstand de lyse (sådan læser WinUI dem).
+            var colors = new[] { p.Light.Accent, p.Light.Accent, p.Light.AccentInk, p.Light.AccentInk, p.Dark.Accent, p.Dark.Accent, p.Dark.AccentInk };
+            for (int i = 0; i < AccentKeys.Length; i++)
+                Resources[AccentKeys[i]] = Windows.UI.Color.FromArgb(255, (byte)(colors[i] >> 16), (byte)(colors[i] >> 8), (byte)colors[i]);
+        }
     }
 
     protected override void OnLaunched(LaunchActivatedEventArgs args)
@@ -200,14 +222,13 @@ public partial class App : Application
                 if (m.Library.Locations.FirstOrDefault() is Location first)
                 {
                     m.Sidebar = SidebarItem.ForSection(first.Id);
-                    foreach (var (style, theme) in new[] { (LookStyle.Kasse, LookTheme.Light), (LookStyle.Kasse, LookTheme.Dark), (LookStyle.Fokus, LookTheme.Light), (LookStyle.Cover, LookTheme.Dark) })
+                    // Tema og knapfarve skifter først ved næste start, så billederne viser baggrund, skrift og covers.
+                    foreach (var style in new[] { LookStyle.Kasse, LookStyle.Fokus })
                     {
                         m.LookStyle = style;
-                        m.LookTheme = theme;
-                        await Shot($"14-stil-{style.Id()}-{theme.Id()}.png");
+                        await Shot($"14-stil-{style.Id()}.png");
                     }
                     m.LookStyle = LookStyle.Standard;
-                    m.LookTheme = LookTheme.Auto;
                 }
                 _window.OpenSettings();
                 await Shot("11-indstillinger.png");
@@ -227,5 +248,34 @@ public partial class App : Application
     private static void TryWrite(string path, string text)
     {
         try { File.WriteAllText(path, text); } catch { }
+    }
+}
+
+/// <summary>
+/// Udseendet til næste start (tema og stil), i en lille fil ved siden af appens data. Læses, før databasen åbnes,
+/// fordi Windows kun lader tema og knapfarve skifte, når appen starter. Det samme står i databasen (AppModel).
+/// </summary>
+internal static class LookFile
+{
+    private static string FilePath => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "VinylShelfFinder", "look.txt");
+
+    public static (LookTheme, LookStyle) Read()
+    {
+        try
+        {
+            var lines = File.ReadAllLines(FilePath);
+            return (Look.ThemeFrom(lines.ElementAtOrDefault(0)), Look.StyleFrom(lines.ElementAtOrDefault(1)));
+        }
+        catch { return (LookTheme.Auto, LookStyle.Standard); }
+    }
+
+    public static void Write(LookTheme theme, LookStyle style)
+    {
+        try
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(FilePath)!);
+            File.WriteAllLines(FilePath, new[] { theme.Id(), style.Id() });
+        }
+        catch { /* udseendet er ikke vigtigt nok til at forstyrre */ }
     }
 }

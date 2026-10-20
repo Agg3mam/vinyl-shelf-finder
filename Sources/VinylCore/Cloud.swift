@@ -10,6 +10,29 @@ public enum CloudConfig {
     public static let publishableKey = "sb_publishable_q7aX_h3J1W6uyvzQsYEk4Q_85bkkwQm"
 }
 
+/// En kode-app på kontoen (totrinslogin). `verified` = slået til (en kode er bekræftet).
+public struct CloudFactor: Equatable, Sendable {
+    public let id: String
+    public let verified: Bool
+    public init(id: String, verified: Bool) { self.id = id; self.verified = verified }
+}
+
+/// Det, kode-appen skal have for at lave koder: `uri` (otpauth://…, også som QR-kode) eller `secret` (skrives ind).
+public struct TOTPEnrollment: Equatable, Sendable {
+    public let factorID: String
+    public let secret: String
+    public let uri: String
+    public init(factorID: String, secret: String, uri: String) { self.factorID = factorID; self.secret = secret; self.uri = uri }
+
+    /// Hemmeligheden i grupper á 4, så den er nem at skrive af.
+    public var groupedSecret: String {
+        stride(from: 0, to: secret.count, by: 4).map { i in
+            let a = secret.index(secret.startIndex, offsetBy: i), b = secret.index(a, offsetBy: min(4, secret.count - i))
+            return String(secret[a..<b])
+        }.joined(separator: " ")
+    }
+}
+
 /// Et login. Gemmes som JSON i nøgleringen (`KeychainSecret.cloudSession`).
 public struct CloudSession: Codable, Equatable, Sendable {
     public var accessToken: String
@@ -34,7 +57,11 @@ public struct CloudError: LocalizedError, Equatable {
     public let message: String
     /// Login er udløbet eller tilbagekaldt: brugeren skal logge ind igen.
     public var needsLogin = false
-    public init(_ message: String, needsLogin: Bool = false) { self.message = message; self.needsLogin = needsLogin }
+    /// Kontoen har totrinslogin, og dette login mangler koden fra kode-appen.
+    public var needsSecondFactor = false
+    public init(_ message: String, needsLogin: Bool = false, needsSecondFactor: Bool = false) {
+        self.message = message; self.needsLogin = needsLogin; self.needsSecondFactor = needsSecondFactor
+    }
     public var errorDescription: String? { message }
 }
 
@@ -162,6 +189,73 @@ public final class CloudClient: @unchecked Sendable {
                             userID: id, email: (user["email"] as? String) ?? email)
     }
 
+    // MARK: Totrinslogin (en kode fra en kode-app, TOTP)
+    //
+    // Supabases indbyggede totrinslogin. Et login med adgangskode eller mail er "aal1"; når koden er skrevet,
+    // bliver det "aal2". supabase/mfa.sql sørger for, at en konto med totrinslogin kun kan læse og skrive sine
+    // poster med "aal2". Fornyede logins beholder "aal2".
+
+    /// Hvor sikkert et login er: "aal1" (adgangskode eller mail) eller "aal2" (også koden fra kode-appen).
+    public static func assurance(_ s: CloudSession) -> String { (jwtClaims(s.accessToken)?["aal"] as? String) ?? "aal1" }
+
+    /// Kontoens kode-apps (kun TOTP).
+    public func factors(session s: CloudSession) async throws -> [CloudFactor] {
+        Self.factors(from: try await send("GET", "auth/v1/user", body: nil, token: s.accessToken))
+    }
+
+    static func factors(from data: Data) -> [CloudFactor] {
+        let o = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] ?? [:]
+        return ((o["factors"] as? [[String: Any]]) ?? []).compactMap { f in
+            guard let id = f["id"] as? String, (f["factor_type"] as? String) == "totp" else { return nil }
+            return CloudFactor(id: id, verified: (f["status"] as? String) == "verified")
+        }
+    }
+
+    /// Kontoen har totrinslogin, men dette login mangler koden: den kode-app, koden skal komme fra. Ellers nil.
+    public func pendingSecondFactor(session s: CloudSession) async throws -> CloudFactor? {
+        guard Self.assurance(s) != "aal2" else { return nil }
+        return try await factors(session: s).first(where: \.verified)
+    }
+
+    /// Begynder at slå totrinslogin til: giver koden til kode-appen (QR-kode og tekst). Først når en kode fra
+    /// appen er bekræftet (`verifySecondFactor`), er totrinslogin slået til. Halvfærdige forsøg fjernes først.
+    public func enrollSecondFactor(session s: CloudSession) async throws -> TOTPEnrollment {
+        for f in try await factors(session: s) where !f.verified {
+            _ = try await send("DELETE", "auth/v1/factors/\(f.id)", body: nil, token: s.accessToken)
+        }
+        let data = try await send("POST", "auth/v1/factors",
+                                  body: ["factor_type": "totp", "friendly_name": "Vinyl Shelf \(Int(Date().timeIntervalSince1970))", "issuer": "Vinyl Shelf"],
+                                  token: s.accessToken)
+        guard let e = Self.enrollment(from: data) else { throw CloudError("Svaret fra kontoen kunne ikke læses.") }
+        return e
+    }
+
+    static func enrollment(from data: Data) -> TOTPEnrollment? {
+        guard let o = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any], let id = o["id"] as? String,
+              let t = o["totp"] as? [String: Any], let secret = t["secret"] as? String, let uri = t["uri"] as? String else { return nil }
+        return TOTPEnrollment(factorID: id, secret: secret, uri: uri)
+    }
+
+    /// Bekræfter en kode fra kode-appen. Giver et nyt, sikrere login ("aal2"), som skal gemmes i stedet for det gamle.
+    public func verifySecondFactor(factorID: String, code: String, session s: CloudSession) async throws -> CloudSession {
+        let digits = code.filter(\.isNumber)
+        guard digits.count == 6 else { throw Self.wrongSecondFactorCode }
+        let ch = try await send("POST", "auth/v1/factors/\(factorID)/challenge", body: [String: String](), token: s.accessToken)
+        guard let challenge = ((try? JSONSerialization.jsonObject(with: ch)) as? [String: Any])?["id"] as? String else {
+            throw CloudError("Svaret fra kontoen kunne ikke læses.")
+        }
+        let data = try await send("POST", "auth/v1/factors/\(factorID)/verify", body: ["challenge_id": challenge, "code": digits], token: s.accessToken)
+        return try Self.session(from: data, email: s.email)
+    }
+
+    /// Slår totrinslogin fra (kræver et login, hvor koden er skrevet).
+    public func removeSecondFactor(factorID: String, session s: CloudSession) async throws {
+        _ = try await send("DELETE", "auth/v1/factors/\(factorID)", body: nil, token: s.accessToken)
+    }
+
+    public static let wrongSecondFactorCode = CloudError("Koden passer ikke. Skriv de 6 tal, kode-appen viser lige nu, ud for Vinyl Shelf.")
+    public static let secondFactorRequired = CloudError("Skriv koden fra din kode-app for at synkronisere.", needsSecondFactor: true)
+
     // MARK: Poster
 
     /// Poster ændret siden `since` (serverens tid), og det nye `since`. Henter i sider á 1000.
@@ -232,7 +326,7 @@ public final class CloudClient: @unchecked Sendable {
     /// Hvert link virker kun én gang – også når man har klikket på det i mailen.
     public static let usedLink = CloudError("Linket er allerede brugt eller er ikke fra den nyeste mail. Hvert link virker kun én gang – også hvis du har klikket på det. Bed om en ny mail, og klik ikke på linket.")
 
-    static func error(status: Int, data: Data) -> CloudError {
+    public static func error(status: Int, data: Data) -> CloudError {
         let o = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] ?? [:]
         let code = (o["error_code"] as? String) ?? (o["code"] as? String) ?? (o["error"] as? String) ?? ""
         switch code {
@@ -243,6 +337,9 @@ public final class CloudClient: @unchecked Sendable {
         case "over_email_send_rate_limit", "over_request_rate_limit":
             return CloudError("Der er sendt for mange koder for nylig. Vent lidt, og prøv igen.")
         case "email_address_invalid", "validation_failed": return CloudError("E-mailadressen ser forkert ud.")
+        case "mfa_verification_failed", "mfa_challenge_expired": return wrongSecondFactorCode
+        case "insufficient_aal": return secondFactorRequired
+        case "42501": return secondFactorRequired // rækken blev afvist (supabase/mfa.sql): koden mangler
         case "invalid_grant", "refresh_token_not_found", "refresh_token_already_used", "session_not_found", "bad_jwt":
             return CloudError("Du skal logge ind igen.", needsLogin: true)
         default: break

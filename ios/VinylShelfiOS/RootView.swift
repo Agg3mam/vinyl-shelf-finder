@@ -27,6 +27,7 @@ struct RootView: View {
                 tabs
             }
         }
+        .sheet(isPresented: $model.showSecondFactorGuide) { SecondFactorGuide() }
         .sheet(item: $model.openedSection) { s in
             NavigationStack {
                 SectionView(route: SectionRoute(medium: s.medium, locationID: s.locationID)).lookScreen()

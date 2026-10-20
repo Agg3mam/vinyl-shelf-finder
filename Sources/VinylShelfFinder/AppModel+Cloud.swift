@@ -148,6 +148,8 @@ extension AppModel {
         KeychainSecret.cloudSession.delete()
         cloudSession = nil
         cloudLoggedIn = false
+        cloudNeedsCode = nil
+        cloudSecondFactorOn = nil
         cloudPhase = .idle
         // Data på denne Mac bliver, hvor de er, og det sidst synkroniserede huskes, så ændringer, der laves
         // imens, sendes op ved næste login. Logger man ind på en anden konto, sammenlignes der forfra (CloudSync.run).
@@ -172,6 +174,68 @@ extension AppModel {
         return s
     }
 
+    // MARK: Totrinslogin
+
+    /// Koden fra kode-appen, når kontoen kræver den. `nil` = koden passede, ellers fejlbeskeden.
+    func submitSecondFactorCode(_ code: String) async -> String? {
+        guard let f = cloudNeedsCode else { return nil }
+        do {
+            let s = try await cloud.verifySecondFactor(factorID: f.id, code: code, session: try await validCloudSession())
+            try saveCloudSession(s)
+            cloudNeedsCode = nil
+            cloudSecondFactorOn = true
+            cloudPhase = .idle
+            await syncCloud()
+            return nil
+        } catch {
+            return error.localizedDescription
+        }
+    }
+
+    /// Henter, om totrinslogin er slået til (til fanen Konto).
+    func refreshSecondFactorStatus() async {
+        guard cloudEnabled, cloudLoggedIn, let s = try? await validCloudSession(),
+              let factors = try? await cloud.factors(session: s) else { return }
+        cloudSecondFactorOn = factors.contains(where: \.verified)
+    }
+
+    /// Guiden, trin 3: koden til kode-appen.
+    func beginSecondFactor() async throws -> TOTPEnrollment {
+        try await cloud.enrollSecondFactor(session: try await validCloudSession())
+    }
+
+    /// Guiden, trin 4: den første kode fra kode-appen slår totrinslogin til. `nil` = slået til, ellers fejlbeskeden.
+    func confirmSecondFactor(_ e: TOTPEnrollment, code: String) async -> String? {
+        do {
+            let s = try await cloud.verifySecondFactor(factorID: e.factorID, code: code, session: try await validCloudSession())
+            try saveCloudSession(s)
+            cloudSecondFactorOn = true
+            return nil
+        } catch {
+            return error.localizedDescription
+        }
+    }
+
+    /// Slår totrinslogin fra (kun fra et login, hvor koden er skrevet). `nil` = slået fra, ellers fejlbeskeden.
+    func disableSecondFactor() async -> String? {
+        do {
+            let s = try await validCloudSession()
+            for f in try await cloud.factors(session: s) { try await cloud.removeSecondFactor(factorID: f.id, session: s) }
+            cloudSecondFactorOn = false
+            return nil
+        } catch {
+            return error.localizedDescription
+        }
+    }
+
+    /// Én gang efter login: et venligt tilbud om totrinslogin, hvis det ikke allerede er slået til.
+    private func offerSecondFactorOnce(_ s: CloudSession) async {
+        guard !UserDefaults.standard.bool(forKey: "mfa_offer_shown"), let factors = try? await cloud.factors(session: s) else { return }
+        UserDefaults.standard.set(true, forKey: "mfa_offer_shown")
+        cloudSecondFactorOn = factors.contains(where: \.verified)
+        if cloudSecondFactorOn == false { showSecondFactorGuide = true }
+    }
+
     // MARK: Synkronisering
 
     /// `userInitiated`: brugeren trykkede "Synkronisér nu" (så stilles et udskudt spørgsmål igen).
@@ -180,6 +244,13 @@ extension AppModel {
         cloudPhase = .syncing
         do {
             let s = try await validCloudSession()
+            // Totrinslogin: kontoen kræver koden, og dette login har den ikke endnu. Intet hentes eller sendes.
+            if let f = try await cloud.pendingSecondFactor(session: s) {
+                cloudNeedsCode = f
+                cloudSecondFactorOn = true
+                cloudPhase = .failed(CloudClient.secondFactorRequired.message)
+                return
+            }
             let report = try await CloudSync.run(store: store, client: cloud, session: s, device: Self.cloudDevice,
                                                  firstSync: firstSync, safetyCopy: { [self] in try cloudSafetyCopy() })
             if report.received > 0 {
@@ -191,6 +262,7 @@ extension AppModel {
             cloudLastSync = Date()
             store.setSetting("cloud_last_sync", String(Date().timeIntervalSince1970))
             cloudPhase = .idle
+            await offerSecondFactorOnce(s)
         } catch let choice as CloudSync.NeedsChoice {
             if cloudChoicePostponed && !userInitiated {
                 cloudPhase = .failed("Vælg, hvilke reoler der skal bruges: tryk Synkronisér nu.")
@@ -199,6 +271,9 @@ extension AppModel {
                 cloudChoice = choice
                 cloudPhase = .idle
             }
+        } catch let e as CloudError where e.needsSecondFactor {
+            if let s = try? await validCloudSession() { cloudNeedsCode = try? await cloud.pendingSecondFactor(session: s) }
+            cloudPhase = .failed(e.message)
         } catch let e as CloudError where e.needsLogin {
             logOutCloud()
             cloudPhase = .failed("Du er logget ud af kontoen. Log ind igen for at synkronisere.")

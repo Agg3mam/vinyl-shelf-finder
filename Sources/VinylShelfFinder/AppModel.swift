@@ -109,6 +109,12 @@ final class AppModel {
     var cloudLastSync: Date?
     /// Første gang: kontoen og denne Mac har hver deres reoler.
     var cloudChoice: CloudSync.NeedsChoice?
+    /// Totrinslogin: kontoen kræver koden fra kode-appen, før der kan synkroniseres (nil = ingen kode mangler).
+    var cloudNeedsCode: CloudFactor?
+    /// Totrinslogin er slået til på kontoen (nil = ikke hentet endnu).
+    var cloudSecondFactorOn: Bool?
+    /// Tilbuddet om totrinslogin (én gang efter login).
+    var showSecondFactorGuide = false
     @ObservationIgnored var cloudSession: CloudSession?
     @ObservationIgnored var cloudDebounce: Task<Void, Never>?
     @ObservationIgnored var cloudTimer: Task<Void, Never>?

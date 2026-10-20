@@ -265,6 +265,7 @@ struct MainSheets: ViewModifier {
             .sheet(item: idBinding(\.moveCopy)) { box in MoveSheet(copyID: box.id) }
             .sheet(item: idBinding(\.checkSection)) { box in CheckShelfView(locationID: box.id) }
             .sheet(isPresented: $model.showSyncReport) { SyncReportView() }
+            .sheet(isPresented: $model.showSecondFactorGuide) { SecondFactorGuide() }
     }
 
     private func idBinding(_ path: ReferenceWritableKeyPath<AppModel, Int64?>) -> Binding<IDBox?> {

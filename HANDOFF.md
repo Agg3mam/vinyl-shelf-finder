@@ -576,6 +576,21 @@ projektet med egen konto (RLS adskiller data), men hver skal have sit eget Disco
   CI-billeder `14-stil-*`. Windows er kun tjekket af CI.
 - Windows: Cover Flow-rækken klippes nu ved kanten (sidecoverne lå hen over listen i "Hvad skal jeg høre?").
 
+### 20. okt (eftermiddag): totrinslogin på alle fire – START HER i en ny session
+
+- **Status:** skrevet på Mac, Windows, iPhone og web; Swift-checks 585 grønne (falsk Supabase med MFA i `StubCloud`),
+  webapp-checks 711, iPhone bygger, webguiden afprøvet i browseren. **Windows er ikke bygget** (ikke pushet endnu, kun CI kan).
+  Udseende (`9eb4f58`, `d8611d6`) er grønt på `claude/webapp`, men ikke ført til `main`.
+- **Forløb:** login giver "aal1". Hver synkronisering tjekker `pendingSecondFactor`; har kontoen en kode-app, stopper den og
+  beder om koden (Konto). Koden giver "aal2" (gemmes). Guiden (3 trin) vises én gang efter login (`mfa_offer_shown`,
+  lokalt) og fra Konto. Slå fra kræver "aal2".
+- **Brugeren skal selv** køre `supabase/mfa.sql` i Supabase › SQL Editor (gør totrinslogin nødvendigt; uden den er det pynt).
+- **Windows-udseende:** tema og knapfarve sættes ved start (`App.ApplyStartupLook`, `look.txt` i LocalAppData); skift giver
+  "Genstart nu". CI-billeder `14-stil-kasse/fokus`.
+- **Næste:** push → tjek Windows-CI og billedet af Konto; så Google-login (brugeren opretter OAuth-nøgle selv, jeg guider) og
+  stregkodescanneren (Discogs-nøglen følger kontoen, brugerens ønske; udgaver vælges fra en liste).
+- Skitsefiler `web/_*.html` er lokale og må ikke committes.
+
 ### Ikke færdigt / næste skridt (spørg brugeren om rækkefølgen)
 
 1. **Mobilside på det lokale netværk (opgave 1)**, så QR-koderne virker. Det er det største åbne punkt.

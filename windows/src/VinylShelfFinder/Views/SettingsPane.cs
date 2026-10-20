@@ -54,12 +54,14 @@ public sealed class SettingsPane : IPane
             or nameof(AppModel.LastBackup) or nameof(AppModel.BackupError) or nameof(AppModel.SyncState))
             Rebuild();
         else if (_tab == "cloud" && property is nameof(AppModel.CloudLoggedIn) or nameof(AppModel.CloudEmail) or nameof(AppModel.CloudSyncing)
-                 or nameof(AppModel.CloudMessage) or nameof(AppModel.CloudLastSync))
+                 or nameof(AppModel.CloudMessage) or nameof(AppModel.CloudLastSync) or nameof(AppModel.CloudNeedsCode) or nameof(AppModel.CloudSecondFactorOn))
             Rebuild();
         else if (_tab == "discogs" && property is nameof(AppModel.TrackProgress) or nameof(AppModel.FetchingTracks))
             Rebuild();
         else if (property == nameof(AppModel.Rules) && _tab == "sort" && !_building)
             Rebuild();
+        else if (_tab == "look" && property is nameof(AppModel.LookTheme) or nameof(AppModel.LookStyle))
+            _scroll.DispatcherQueue.TryEnqueue(Rebuild); // efter valget, så knapperne ikke bygges om midt i et klik
     }
 
     private static List<string> List(string s) => s.Split(',').Select(x => x.Trim()).Where(x => x.Length > 0).ToList();
@@ -97,6 +99,46 @@ public sealed class SettingsPane : IPane
         _building = false;
     }
 
+    private readonly TextBox _secondFactorCode = new() { Header = "Kode fra kode-appen", PlaceholderText = "123 456", MaxWidth = 240, HorizontalAlignment = HorizontalAlignment.Left };
+    private string? _secondFactorNote;
+
+    /// <summary>Totrinslogin til/fra, og feltet til koden, når kontoen kræver den (SecondFactorSettings på Mac).</summary>
+    private void SecondFactorGroup(StackPanel p)
+    {
+        if (_model.CloudSecondFactorOn is null) _ = _model.RefreshSecondFactorStatusAsync();
+        var rows = new List<UIElement> { Ui.Text("Totrinslogin", "BodyStrongTextBlockStyle") };
+        if (_model.CloudNeedsCode is not null)
+        {
+            Detach(_secondFactorCode);
+            rows.Add(Ui.Text("Din konto har totrinslogin. Åbn kode-appen, og skriv de 6 tal ud for Vinyl Shelf. Så synkroniserer denne pc igen.", color: Ui.Secondary));
+            rows.Add(_secondFactorCode);
+            rows.Add(Ui.Btn("Fortsæt", async (b, _) =>
+            {
+                ((Button)b).IsEnabled = false;
+                _secondFactorNote = await _model.SubmitSecondFactorCodeAsync(_secondFactorCode.Text);
+                if (_secondFactorNote is null) _secondFactorCode.Text = "";
+                Rebuild();
+            }, accent: true));
+        }
+        rows.Add(Row("Totrinslogin", _model.CloudSecondFactorOn switch { true => "Til", false => "Fra", _ => "…" }));
+        if (_secondFactorNote is string note) rows.Add(Ui.Label(Ui.Glyph.Warning, note, color: Ui.Secondary));
+        if (_model.CloudSecondFactorOn == true && _model.CloudNeedsCode is null)
+            rows.Add(Ui.Btn("Slå totrinslogin fra…", async (_, _) =>
+            {
+                var ask = new ContentDialog
+                {
+                    XamlRoot = _root.XamlRoot, Title = "Slå totrinslogin fra?",
+                    Content = "Så er en adgangskode eller et mail-link igen nok til at logge ind på kontoen.",
+                    PrimaryButtonText = "Slå fra", CloseButtonText = "Annullér",
+                };
+                if (await ask.ShowAsync() == ContentDialogResult.Primary) { _secondFactorNote = await _model.DisableSecondFactorAsync(); Rebuild(); }
+            }));
+        else if (_model.CloudSecondFactorOn == false)
+            rows.Add(Ui.Btn("Slå totrinslogin til…", async (_, _) => { await SecondFactorDialog.ShowAsync(_model, _root.XamlRoot); Rebuild(); }));
+        rows.Add(Footer("Med totrinslogin skal du også skrive en kode fra din telefon, når du logger ind på en ny enhed. Så kan ingen komme ind med kun din adgangskode eller din mail."));
+        p.Children.Add(Group(rows.ToArray()));
+    }
+
     /// <summary>Udseende: tema og stil, som på Mac, telefonen og i webappen. Gælder kun på denne computer.</summary>
     private void LookTab(StackPanel p)
     {
@@ -110,6 +152,21 @@ public sealed class SettingsPane : IPane
         styles.SelectionChanged += (_, _) => { if (!_building && styles.SelectedIndex >= 0) _model.LookStyle = (LookStyle)styles.SelectedIndex; };
         p.Children.Add(Group(themes, styles,
             Ui.Text("Hver stil har en lys og en mørk udgave. Valget gælder kun på denne computer.", "CaptionTextBlockStyle", Ui.Secondary)));
+        // Windows skifter kun tema og knapfarve, når appen starter.
+        if (_model.LookNeedsRestart)
+        {
+            var bar = new InfoBar
+            {
+                IsOpen = true,
+                IsClosable = false,
+                Severity = InfoBarSeverity.Informational,
+                Title = "Genstart for at se det hele",
+                Message = "Baggrund og skrift er skiftet. Tema og knapfarve skifter, når appen starter igen.",
+                ActionButton = new Button { Content = "Genstart nu" },
+            };
+            ((Button)bar.ActionButton).Click += (_, _) => _model.Restart();
+            p.Children.Add(bar);
+        }
     }
 
     /// <summary>En stil med en lille farveprøve (baggrund, mørk baggrund, accent), navn og forklaring.</summary>
@@ -182,6 +239,7 @@ public sealed class SettingsPane : IPane
             rows.Add(Ui.HStack(8, now, Ui.Btn("Log ud", (_, _) => _model.LogOutCloud())));
             rows.Add(Footer("Reoler, placeringer, flueben, lyttelog og sorteringsregler er de samme på alle dine enheder. Appen synkroniserer selv ved start, kort efter hver ændring og hvert 5. minut. Discogs-tokenet og iMusic-adressen bliver på denne pc."));
             p.Children.Add(Group(rows.ToArray()));
+            SecondFactorGroup(p);
 
             Detach(_cloudNewPassword);
             var pw = new List<UIElement> { Ui.Text("Adgangskode", "BodyStrongTextBlockStyle"), _cloudNewPassword };

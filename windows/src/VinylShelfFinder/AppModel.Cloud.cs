@@ -33,6 +33,16 @@ public sealed partial class AppModel
     /// Første gang: kontoen og denne pc har hver deres reoler.
     public NeedsChoiceException? CloudChoice { get => _cloudChoice; set => Set(ref _cloudChoice, value); }
 
+    private CloudFactor? _cloudNeedsCode;
+    /// Totrinslogin: kontoen kræver koden fra kode-appen, før der kan synkroniseres (null = ingen kode mangler).
+    public CloudFactor? CloudNeedsCode { get => _cloudNeedsCode; private set => Set(ref _cloudNeedsCode, value); }
+    private bool? _cloudSecondFactorOn;
+    /// Totrinslogin er slået til på kontoen (null = ikke hentet endnu).
+    public bool? CloudSecondFactorOn { get => _cloudSecondFactorOn; private set => Set(ref _cloudSecondFactorOn, value); }
+    private bool _showSecondFactorGuide;
+    /// Tilbuddet om totrinslogin (én gang efter login).
+    public bool ShowSecondFactorGuide { get => _showSecondFactorGuide; set => Set(ref _showSecondFactorGuide, value); }
+
     public bool CloudEnabled => !IsDemo;
 
     public void StartCloud()
@@ -158,6 +168,8 @@ public sealed partial class AppModel
         _cloudSecret.Delete();
         _cloudSession = null;
         CloudLoggedIn = false;
+        CloudNeedsCode = null;
+        CloudSecondFactorOn = null;
         CloudMessage = null;
         // Data på denne pc bliver, hvor de er, og det sidst synkroniserede huskes, så ændringer, der laves
         // imens, sendes op ved næste login. Logger man ind på en anden konto, sammenlignes der forfra (CloudSync.RunAsync).
@@ -193,6 +205,14 @@ public sealed partial class AppModel
         try
         {
             var s = await ValidCloudSessionAsync();
+            // Totrinslogin: kontoen kræver koden, og dette login har den ikke endnu. Intet hentes eller sendes.
+            if (await _cloud.PendingSecondFactorAsync(s) is CloudFactor need)
+            {
+                CloudNeedsCode = need;
+                CloudSecondFactorOn = true;
+                CloudMessage = CloudClient.SecondFactorRequired;
+                return;
+            }
             var report = await CloudSync.RunAsync(Store, _cloud, s, CloudDevice, firstSync, CloudSafetyCopy);
             if (report.Received > 0)
             {
@@ -203,11 +223,17 @@ public sealed partial class AppModel
             CloudLastSync = DateTimeOffset.Now;
             Store.SetSetting("cloud_last_sync", (DateTimeOffset.Now.ToUnixTimeMilliseconds() / 1000.0).ToString("R", System.Globalization.CultureInfo.InvariantCulture));
             CloudMessage = null;
+            await OfferSecondFactorOnceAsync(s);
         }
         catch (NeedsChoiceException choice)
         {
             if (_cloudChoicePostponed && !userInitiated) CloudMessage = "Vælg, hvilke reoler der skal bruges: tryk Synkronisér nu.";
             else { _cloudChoicePostponed = false; CloudChoice = choice; }
+        }
+        catch (CloudException ex) when (ex.NeedsSecondFactor)
+        {
+            try { CloudNeedsCode = await _cloud.PendingSecondFactorAsync(await ValidCloudSessionAsync()); } catch (CloudException) { }
+            CloudMessage = ex.Message;
         }
         catch (CloudException ex) when (ex.NeedsLogin)
         {
@@ -216,6 +242,69 @@ public sealed partial class AppModel
         }
         catch (Exception ex) { CloudMessage = ex is CloudException ? ex.Message : Describe(ex); }
         finally { CloudSyncing = false; }
+    }
+
+    // MARK: Totrinslogin (samme forløb som Mac, AppModel+Cloud.swift)
+
+    /// <summary>Koden fra kode-appen, når kontoen kræver den. null = koden passede, ellers fejlbeskeden.</summary>
+    public async Task<string?> SubmitSecondFactorCodeAsync(string code)
+    {
+        if (CloudNeedsCode is not CloudFactor f) return null;
+        try
+        {
+            SaveCloudSession(await _cloud.VerifySecondFactorAsync(f.Id, code, await ValidCloudSessionAsync()));
+            CloudNeedsCode = null;
+            CloudSecondFactorOn = true;
+            CloudMessage = null;
+            await SyncCloudAsync();
+            return null;
+        }
+        catch (CloudException ex) { return ex.Message; }
+    }
+
+    public async Task RefreshSecondFactorStatusAsync()
+    {
+        if (!CloudEnabled || !CloudLoggedIn) return;
+        try { CloudSecondFactorOn = (await _cloud.FactorsAsync(await ValidCloudSessionAsync())).Any(f => f.Verified); }
+        catch (CloudException) { }
+    }
+
+    public async Task<TotpEnrollment> BeginSecondFactorAsync() => await _cloud.EnrollSecondFactorAsync(await ValidCloudSessionAsync());
+
+    /// <summary>Den første kode fra kode-appen slår totrinslogin til. null = slået til, ellers fejlbeskeden.</summary>
+    public async Task<string?> ConfirmSecondFactorAsync(TotpEnrollment e, string code)
+    {
+        try
+        {
+            SaveCloudSession(await _cloud.VerifySecondFactorAsync(e.FactorId, code, await ValidCloudSessionAsync()));
+            CloudSecondFactorOn = true;
+            return null;
+        }
+        catch (CloudException ex) { return ex.Message; }
+    }
+
+    /// <summary>Slår totrinslogin fra (kun fra et login, hvor koden er skrevet). null = slået fra, ellers fejlbeskeden.</summary>
+    public async Task<string?> DisableSecondFactorAsync()
+    {
+        try
+        {
+            var s = await ValidCloudSessionAsync();
+            foreach (var f in await _cloud.FactorsAsync(s)) await _cloud.RemoveSecondFactorAsync(f.Id, s);
+            CloudSecondFactorOn = false;
+            return null;
+        }
+        catch (CloudException ex) { return ex.Message; }
+    }
+
+    /// <summary>Én gang efter login: et venligt tilbud om totrinslogin, hvis det ikke allerede er slået til.</summary>
+    private async Task OfferSecondFactorOnceAsync(CloudSession s)
+    {
+        if (Store.Setting("mfa_offer_shown") == "1") return;
+        List<CloudFactor> factors;
+        try { factors = await _cloud.FactorsAsync(s); } catch (CloudException) { return; }
+        Store.SetSetting("mfa_offer_shown", "1");
+        CloudSecondFactorOn = factors.Any(f => f.Verified);
+        if (CloudSecondFactorOn == false) ShowSecondFactorGuide = true;
     }
 
     public void ResolveCloudChoice(FirstSync choice)

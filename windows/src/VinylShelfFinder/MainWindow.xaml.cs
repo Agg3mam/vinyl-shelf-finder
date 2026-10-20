@@ -102,27 +102,13 @@ public sealed partial class MainWindow : Window
 
     // MARK: Udseende
 
-    private static readonly string[] AccentKeys =
-        { "SystemAccentColor", "SystemAccentColorDark1", "SystemAccentColorDark2", "SystemAccentColorDark3", "SystemAccentColorLight1", "SystemAccentColorLight2", "SystemAccentColorLight3" };
-
     private static Windows.UI.Color Rgb(uint v) => Windows.UI.Color.FromArgb(255, (byte)(v >> 16), (byte)(v >> 8), (byte)v);
 
-    /// <summary>Tema og stil fra Indstillinger › Udseende: accentfarve, baggrund og lys/mørk.</summary>
+    /// <summary>Stilen fra Indstillinger › Udseende: baggrund, skrift og covers med det samme. Tema og knapfarve
+    /// sættes ved start (App.ApplyStartupLook), fordi Windows kun skifter dem, når appen starter.</summary>
     private void ApplyLook()
     {
         Ui.Style = Model.LookStyle;
-        var res = Application.Current.Resources;
-        if (Model.LookStyle.Palette() is { } p)
-        {
-            // Lys tilstand bruger de mørke trin af accenten, mørk tilstand de lyse (sådan læser WinUI dem).
-            var colors = new[] { p.Light.Accent, p.Light.Accent, p.Light.AccentInk, p.Light.AccentInk, p.Dark.Accent, p.Dark.Accent, p.Dark.AccentInk };
-            for (int i = 0; i < AccentKeys.Length; i++) res[AccentKeys[i]] = Rgb(colors[i]);
-        }
-        else foreach (var k in AccentKeys) res.Remove(k);
-        var theme = Model.LookTheme switch { LookTheme.Light => ElementTheme.Light, LookTheme.Dark => ElementTheme.Dark, _ => ElementTheme.Default };
-        // Accentfarverne læses igen, når temaet skifter: skift kort til det modsatte og tilbage.
-        Root.RequestedTheme = Root.ActualTheme == ElementTheme.Dark ? ElementTheme.Light : ElementTheme.Dark;
-        Root.RequestedTheme = theme;
         UpdateLookBackground();
     }
 
@@ -160,6 +146,9 @@ public sealed partial class MainWindow : Window
                 break;
             case nameof(AppModel.SyncState):
                 UpdateToolbar();
+                break;
+            case nameof(AppModel.ShowSecondFactorGuide):
+                if (Model.ShowSecondFactorGuide) _ = ShowDialog(() => SecondFactorDialog.ShowAsync(Model, Root.XamlRoot), () => Model.ShowSecondFactorGuide = false);
                 break;
             case nameof(AppModel.LookTheme):
             case nameof(AppModel.LookStyle):

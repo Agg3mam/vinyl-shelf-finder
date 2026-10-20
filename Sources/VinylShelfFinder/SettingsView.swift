@@ -434,6 +434,7 @@ struct CloudSettings: View {
         } footer: {
             Text("Reoler, placeringer, flueben, lyttelog og sorteringsregler er de samme på alle dine enheder. Appen synkroniserer selv ved start, kort efter hver ændring og hvert 5. minut. Discogs-tokenet og iMusic-adressen bliver på denne Mac.")
         }
+        SecondFactorSettings()
         Section {
             SecureField("Ny adgangskode", text: $newPassword, prompt: Text("Mindst \(CloudClient.minPasswordLength) tegn"))
                 .onSubmit(savePassword)
