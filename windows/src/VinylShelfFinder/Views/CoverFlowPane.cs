@@ -61,7 +61,12 @@ public sealed class CoverFlowPane
         Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(_root, "Cover Flow");
         ApplyTheme();
         _root.ActualThemeChanged += (_, _) => ApplyTheme();
-        _strip.SizeChanged += (_, _) => Layout();
+        _strip.SizeChanged += (_, e) =>
+        {
+            // Rækken klippes ved kanten, så sidecoverne ikke lægger sig hen over listen til venstre.
+            _strip.Clip = new RectangleGeometry { Rect = new Windows.Foundation.Rect(0, 0, e.NewSize.Width, e.NewSize.Height) };
+            Layout();
+        };
         _root.PointerWheelChanged += (_, e) =>
         {
             var pt = e.GetCurrentPoint(_root).Properties;

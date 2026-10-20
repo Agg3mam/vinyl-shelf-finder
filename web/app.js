@@ -61,6 +61,7 @@ const ICONS = {
   box: '<path d="M3 7.5 12 3l9 4.5v9L12 21l-9-4.5zM3 7.5 12 12l9-4.5M12 12v9"/>',
   dashed: '<circle cx="12" cy="12" r="9" stroke-dasharray="3 3"/>',
   chart: '<path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/>',
+  palette: '<path d="M12 3a9 9 0 0 0 0 18c1.1 0 1.6-.8 1.6-1.6 0-1-.8-1.4-.8-2.3 0-.9.7-1.6 1.6-1.6H16a5 5 0 0 0 5-5C21 6.6 17 3 12 3z"/><circle cx="7.5" cy="11" r="1.2" fill="currentColor"/><circle cx="10.5" cy="7" r="1.2" fill="currentColor"/><circle cx="15.5" cy="7.5" r="1.2" fill="currentColor"/>',
   checklist: '<path d="M10 6h11M10 12h11M10 18h11"/><path d="m3 6 1.5 1.5L7 5M3 12l1.5 1.5L7 11"/><circle cx="5" cy="18" r="1.6"/>',
   circle: '<circle cx="12" cy="12" r="9"/>',
   checked: '<circle cx="12" cy="12" r="10" fill="currentColor" stroke="none"/><path d="m7.5 12.5 3 3 6-6.5" stroke="#fff"/>',
@@ -325,6 +326,7 @@ function render() {
     case "scan": html = scanPage(); break;
     case "hor": html = listenPage(); break;
     case "sortering": html = sortPage(); break;
+    case "udseende": html = lookPage(); break;
     case "statistik": html = statsPage(); break;
     case "konto": html = accountPage(welcome); break;
     default: html = shelvesPage();
@@ -976,13 +978,61 @@ function lastSyncText() {
   return state.lastSync ? new Date(state.lastSync).toLocaleString("da-DK", { dateStyle: "medium", timeStyle: "short" }) : "Ikke endnu";
 }
 
+// MARK: Udseende (tema og stil). Gemmes kun på denne enhed (appearance.js sætter dem, før siden tegnes).
+
+const LOOK_THEMES = [
+  { id: "", name: "Automatisk", note: "Følger telefonen" },
+  { id: "light", name: "Lys" },
+  { id: "dark", name: "Mørk" },
+];
+const LOOK_STYLES = [
+  { id: "", name: "Standard", note: "Rent og enkelt, som iPhones egne apps", swatch: ["#F2F2F7", "#FFFFFF", "#1C6E66"] },
+  { id: "kasse", name: "Pladekasse", note: "Varm benhvid som pap og papir, rustfarvede knapper", swatch: ["#EAE2D3", "#16130F", "#A9572A"] },
+  { id: "cover", name: "Farve fra coveret", note: "Varm papirfarve. Pladeskærmen farves af coveret", swatch: ["#F3EFE8", "#6E2F45", "#E58C6A"] },
+  { id: "fokus", name: "Covers i fokus", note: "Varm papirfarve. Store covers på pladeskærmen og i listerne", swatch: ["#F3EFE8", "#FFFDF9", "#8A7560"] },
+];
+const look = { theme: safeLocal.get("theme") ?? "", style: safeLocal.get("style") ?? "" };
+if (!LOOK_THEMES.some((x) => x.id === look.theme)) look.theme = "";
+if (!LOOK_STYLES.some((x) => x.id === look.style)) look.style = "";
+
+function applyLook() {
+  const root = document.documentElement;
+  if (look.theme) root.dataset.theme = look.theme; else delete root.dataset.theme;
+  if (look.style) root.dataset.style = look.style; else delete root.dataset.style;
+  // Statuslinjen og browserens kant følger baggrunden.
+  const bg = getComputedStyle(root).getPropertyValue("--bg").trim();
+  document.querySelectorAll('meta[name="theme-color"]').forEach((m) => { m.content = bg; });
+}
+applyLook();
+window.matchMedia?.("(prefers-color-scheme: dark)").addEventListener?.("change", applyLook);
+
+function lookRow(action, x, current) {
+  const on = x.id === current;
+  const swatch = x.swatch ? `<span class="swatch" aria-hidden="true">${x.swatch.map((c) => `<span style="background:${c}"></span>`).join("")}</span>` : "";
+  return `<button class="row look-row" data-action="${action}" data-v="${x.id}" aria-pressed="${on}">${swatch}
+    <span class="grow"><div>${esc(x.name)}</div>${x.note ? `<div class="t3" style="white-space:normal">${esc(x.note)}</div>` : ""}</span>
+    ${on ? `<span class="check">${icon("check")}</span>` : ""}</button>`;
+}
+
+function lookPage() {
+  return `<main class="page">${topbar({ backTo: "#/konto", title: "Udseende" })}
+    <h1 class="large-title" style="font-size:28px">Udseende</h1>
+    <div class="group-title">Tema</div>
+    <div class="list">${LOOK_THEMES.map((x) => lookRow("look-theme", x, look.theme)).join("")}</div>
+    <div class="group-title">Stil</div>
+    <div class="list">${LOOK_STYLES.map((x) => lookRow("look-style", x, look.style)).join("")}</div>
+    <p class="footnote">Hver stil har en lys og en mørk udgave. Valget gælder kun på denne enhed.</p>
+  </main>`;
+}
+
 /** "Indstillinger" øverst under Konto (som i iPhone-appen). */
 function settingsGroup(welcome) {
-  if (welcome || (!hasShelves() && !state.isAdmin)) return "";
+  if (welcome) return "";
   return `<div class="group-title">Indstillinger</div>
-    <div class="list">${hasShelves() ? `<a class="row" href="#/sortering" data-nav>${icon("checklist")}<span class="grow">Sorteringsliste</span><span class="chev">${icon("chevR")}</span></a>` : ""}
+    <div class="list"><a class="row" href="#/udseende" data-nav>${icon("palette")}<span class="grow">Udseende</span><span class="t2">${esc(LOOK_STYLES.find((x) => x.id === look.style).name)}</span><span class="chev">${icon("chevR")}</span></a>
+      ${hasShelves() ? `<a class="row" href="#/sortering" data-nav>${icon("checklist")}<span class="grow">Sorteringsliste</span><span class="chev">${icon("chevR")}</span></a>` : ""}
       ${state.isAdmin && state.session ? `<a class="row" href="#/statistik" data-nav>${icon("chart")}<span class="grow">Statistik over brugerne</span><span class="chev">${icon("chevR")}</span></a>` : ""}</div>
-    <p class="footnote">Hele rækkefølgen med flueben, så du kan have telefonen med, når du stiller reolen op. Fluebenene er de samme som på computeren.</p>`;
+    ${hasShelves() ? `<p class="footnote">Sorteringslisten er hele rækkefølgen med flueben, så du kan have telefonen med, når du stiller reolen op. Fluebenene er de samme som på computeren.</p>` : ""}`;
 }
 
 function accountPage(welcome) {
@@ -1137,6 +1187,14 @@ document.addEventListener("click", async (ev) => {
   else if (a === "pick") pickRecord();
   else if (a === "stats-refresh") loadStats(true);
   else if (a === "sort-check") toggleSortCheck(Number(el.dataset.id));
+  else if (a === "look-theme" || a === "look-style") {
+    const k = a === "look-theme" ? "theme" : "style";
+    look[k] = el.dataset.v;
+    safeLocal.set(k, look[k]);
+    applyLook();
+    lastRendered = "";
+    render();
+  }
   else if (a === "sort-next") {
     const next = sortEntries().find((e) => e.number != null && !(state.checked[state.medium] ?? new Set()).has(e.item.id));
     if (next) $(`#sort-${next.item.id}`)?.scrollIntoView({ behavior: "smooth", block: "center" });

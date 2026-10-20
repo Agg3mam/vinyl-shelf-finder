@@ -561,6 +561,16 @@ projektet med egen konto (RLS adskiller data), men hver skal have sit eget Disco
 - **Mørk tilstand:** Cover Flow er hvid i lys tilstand og sort i mørk på alle fire (webappen: `--cf-*` i `app.css`,
   iPhone: `coverFlowStage()`). `sw.js`-cachen er `v5`.
 
+### 20. okt: Udseende i webappen (tema og stil)
+
+- Konto › Indstillinger › Udseende (`#/udseende`, `lookPage` i `app.js`): tema Automatisk/Lys/Mørk (`data-theme`) og stil
+  Standard/Pladekasse/Farve fra coveret/Covers i fokus (`data-style`: `kasse`, `cover`, `fokus`). Hver stil har en lys og
+  en mørk udgave (sidst i `app.css`). `appearance.js` sætter valget, før siden tegnes. Gemmes i `localStorage`
+  (`theme`, `style`), kun på enheden. `sw.js`-cachen er `v6`.
+- Inspiration: Crateful (pladekasse), Apple Music iOS 26.4 (farve fra coveret), Albums-appen (covers i fokus).
+- **Mangler:** det samme i Mac, Windows og iPhone, når brugeren har prøvet stilene og valgt (spørg).
+- Windows: Cover Flow-rækken klippes nu ved kanten (sidecoverne lå hen over listen i "Hvad skal jeg høre?").
+
 ### Ikke færdigt / næste skridt (spørg brugeren om rækkefølgen)
 
 1. **Mobilside på det lokale netværk (opgave 1)**, så QR-koderne virker. Det er det største åbne punkt.
