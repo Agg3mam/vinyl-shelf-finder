@@ -17,12 +17,18 @@ public struct Library {
     public let indexInSection: [Int64: Int]
     /// Kopier uden fysisk placering (typisk nye fra Discogs).
     public let unplaced: [Int64]
-    /// Plader eller cd'er. Styrer ordene i Find-teksterne ("din plade" / "din cd").
-    public let medium: Medium
+    /// Plader eller cd'er, og evt. en kategori med egne reoler. Styrer ordene i Find-teksterne ("din plade" / "din cd").
+    public let kind: ShelfKind
+    public var medium: Medium { kind.medium }
 
     public init(releases: [Int: Release], copies: [Int64: Copy], locations: [Location],
                 placements: [(copyID: Int64, locationID: Int64, position: Int)], medium: Medium = .vinyl) {
-        self.medium = medium
+        self.init(releases: releases, copies: copies, locations: locations, placements: placements, kind: ShelfKind(medium))
+    }
+
+    public init(releases: [Int: Release], copies: [Int64: Copy], locations: [Location],
+                placements: [(copyID: Int64, locationID: Int64, position: Int)], kind: ShelfKind) {
+        self.kind = kind
         self.releases = releases
         self.copies = copies
         let locs = locations.sorted { ($0.sortIndex, $0.id) < ($1.sortIndex, $1.id) }

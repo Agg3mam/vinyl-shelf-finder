@@ -240,6 +240,17 @@ public sealed partial class ShelfStore : IDisposable
                 Db.Execute("PRAGMA user_version = 7");
             });
         }
+        if (Db.UserVersion < 8)
+        {
+            // Kategorier: mappen i Discogs-samlingen (Underholdning) og reoler, der kun er til én kategori.
+            // Samme skema på Mac. Kan køres igen.
+            Db.Transaction(() =>
+            {
+                if (!HasColumn("copies", "discogs_folder")) Db.Execute("ALTER TABLE copies ADD COLUMN discogs_folder TEXT");
+                if (!HasColumn("locations", "category")) Db.Execute("ALTER TABLE locations ADD COLUMN category TEXT");
+                Db.Execute("PRAGMA user_version = 8");
+            });
+        }
     }
 
     private bool HasColumn(string table, string column) =>
@@ -248,8 +259,12 @@ public sealed partial class ShelfStore : IDisposable
     // MARK: Indlæsning
 
     /// Samlingen for én slags hylde: kun plader (standard) eller kun cd'er, med deres egne reoler.
-    public Library LoadLibrary(Medium medium = Medium.Vinyl)
+    public Library LoadLibrary(Medium medium = Medium.Vinyl) => LoadLibrary(new ShelfKind(medium));
+
+    /// Samlingen for én slags hylde, også en kategori med egne reoler (fx jazz-plader).
+    public Library LoadLibrary(ShelfKind kind)
     {
+        var rules = LoadSortRules();
         var releases = new Dictionary<int, Release>();
         foreach (var r in Db.Query("SELECT * FROM releases"))
         {
@@ -263,17 +278,41 @@ public sealed partial class ShelfStore : IDisposable
         {
             var c = CopyFrom(r);
             // Digitale filer kommer hverken på plade- eller cd-hylden.
-            var m = MediumExtensions.ShelfOf(c.MediumOverride, releases.TryGetValue(c.ReleaseId, out var rel) ? rel.Format : null);
-            if (m == medium) copies[c.Id] = c;
+            if (rules.ShelfKindOf(c, releases.TryGetValue(c.ReleaseId, out var rel) ? rel : null) == kind) copies[c.Id] = c;
         }
-        var locations = Db.Query("SELECT * FROM locations WHERE medium = ?", medium.RawValue()).Select(r =>
-            new Location(r.Long("id")!.Value, r.Int("shelf") ?? 0, r.Text("section") ?? "", r.Int("sort_index") ?? 0, r.Text("scan_code"), medium)).ToList();
+        var locations = Db.Query("SELECT * FROM locations WHERE medium = ? AND category IS ?", kind.Medium.RawValue(), kind.Category?.RawValue()).Select(r =>
+            new Location(r.Long("id")!.Value, r.Int("shelf") ?? 0, r.Text("section") ?? "", r.Int("sort_index") ?? 0, r.Text("scan_code"), kind.Medium,
+                kind.Category)).ToList();
         var locationIds = locations.Select(l => l.Id).ToHashSet();
         // En kopi, der står på en reol af den anden slags (fx efter "Flyt til cd-hylden"), regnes som uplaceret.
         var placements = Db.Query("SELECT * FROM placements").Select(r =>
             (r.Long("copy_id")!.Value, r.Long("location_id")!.Value, r.Int("position") ?? 0))
             .Where(p => copies.ContainsKey(p.Item1) && locationIds.Contains(p.Item2)).ToList();
-        return new Library(releases, copies, locations, placements, medium);
+        return new Library(releases, copies, locations, placements, kind);
+    }
+
+    /// Antal kopier pr. slags hylde med de nuværende kategorier, og hylder, der har reoler (også tomme).
+    /// Bruges til skiftet øverst: en hylde vises, når den har kopier eller reoler.
+    public Dictionary<ShelfKind, int> ShelfCounts()
+    {
+        var rules = LoadSortRules();
+        var counts = new Dictionary<ShelfKind, int>();
+        foreach (var r in Db.Query("""
+            SELECT c.medium_override, c.discogs_folder, r.format, r.genres FROM copies c
+            JOIN releases r ON r.discogs_release_id = c.release_id
+            """))
+        {
+            var copy = new Copy(0, null, 0, MediumOverride: MediumExtensions.FromRaw(r.Text("medium_override")), DiscogsFolder: r.Text("discogs_folder"));
+            if (rules.ShelfKindOf(copy, new Release(0, "", "", Format: r.Text("format"), Genres: r.Text("genres"))) is ShelfKind k)
+                counts[k] = counts.GetValueOrDefault(k) + 1;
+        }
+        foreach (var r in Db.Query("SELECT DISTINCT medium, category FROM locations"))
+            if (MediumExtensions.FromRaw(r.Text("medium")) is Medium m)
+            {
+                var k = new ShelfKind(m, CategoryExtensions.FromRaw(r.Text("category")));
+                counts[k] = counts.GetValueOrDefault(k);
+            }
+        return counts;
     }
 
     /// Antal kopier pr. slags hylde (til skiftet "Plader / Cd'er", når der er cd'er).
@@ -305,7 +344,8 @@ public sealed partial class ShelfStore : IDisposable
         r.Text("sort_title_override"),
         r.Text("date_added"),
         r.Int("discogs_rank"),
-        MediumExtensions.FromRaw(r.Text("medium_override")));
+        MediumExtensions.FromRaw(r.Text("medium_override")),
+        r.Text("discogs_folder"));
 
     // MARK: Indstillinger
 
@@ -392,11 +432,11 @@ public sealed partial class ShelfStore : IDisposable
     {
         if (id is null) return "ukendt sektion";
         SqlRow? r;
-        try { r = Db.Query("SELECT shelf, section, medium FROM locations WHERE id = ?", id).FirstOrDefault(); }
+        try { r = Db.Query("SELECT shelf, section, medium, category FROM locations WHERE id = ?", id).FirstOrDefault(); }
         catch (DatabaseException) { r = null; }
         if (r is null) return "ukendt sektion";
-        var medium = MediumExtensions.FromRaw(r.Text("medium")) ?? Medium.Vinyl;
-        return $"{medium.ShelfWord()} {r.Long("shelf") ?? 0} · Sektion {r.Text("section") ?? ""}";
+        var kind = new ShelfKind(MediumExtensions.FromRaw(r.Text("medium")) ?? Medium.Vinyl, CategoryExtensions.FromRaw(r.Text("category")));
+        return $"{kind.ShelfWord} {r.Long("shelf") ?? 0} · Sektion {r.Text("section") ?? ""}";
     }
 
     /// Placering til historikken: "Reol 1 · Sektion A, plads 16".
@@ -491,23 +531,28 @@ public sealed partial class ShelfStore : IDisposable
     /// Opretter reol-strukturen fra onboarding. `layout` er sektioner i rækkefølge med
     /// kopier i fysisk rækkefølge. Erstatter eksisterende struktur for samme slags hylde
     /// (kun efter bekræftelse): pladernes reoler røres ikke, når cd-reolerne oprettes, og omvendt.
-    public void CreateLayout(IReadOnlyList<(int Shelf, string Section, IReadOnlyList<long> Copies)> layout, Medium medium = Medium.Vinyl)
+    public void CreateLayout(IReadOnlyList<(int Shelf, string Section, IReadOnlyList<long> Copies)> layout, Medium medium = Medium.Vinyl) =>
+        CreateLayout(layout, new ShelfKind(medium));
+
+    /// Som ovenfor for én slags hylde, også en kategori med egne reoler. De andre hylders reoler røres ikke.
+    public void CreateLayout(IReadOnlyList<(int Shelf, string Section, IReadOnlyList<long> Copies)> layout, ShelfKind kind)
     {
+        var medium = kind.Medium;
+        var cat = kind.Category?.RawValue();
         Db.Transaction(() =>
         {
-            Db.Run("DELETE FROM placements WHERE location_id IN (SELECT id FROM locations WHERE medium = ?)", medium.RawValue());
-            Db.Run("DELETE FROM locations WHERE medium = ?", medium.RawValue());
+            Db.Run("DELETE FROM placements WHERE location_id IN (SELECT id FROM locations WHERE medium = ? AND category IS ?)", medium.RawValue(), cat);
+            Db.Run("DELETE FROM locations WHERE medium = ? AND category IS ?", medium.RawValue(), cat);
             long offset = Db.Query("SELECT COALESCE(MAX(sort_index) + 1, 0) AS n FROM locations").FirstOrDefault()?.Long("n") ?? 0;
             for (int i = 0; i < layout.Count; i++)
             {
                 var s = layout[i];
-                var locId = Db.Run("INSERT INTO locations(shelf, section, sort_index, medium) VALUES(?, ?, ?, ?)", s.Shelf, s.Section, offset + i, medium.RawValue());
+                var locId = Db.Run("INSERT INTO locations(shelf, section, sort_index, medium, category) VALUES(?, ?, ?, ?, ?)", s.Shelf, s.Section, offset + i, medium.RawValue(), cat);
                 WriteSection(locId, s.Copies);
             }
             int total = layout.Sum(s => s.Copies.Count);
-            var what = medium == Medium.Vinyl ? "Reolerne" : "Cd-reolerne";
             Log(HistoryKind.LayoutCreated, null,
-                $"{what} er oprettet: {(layout.Count == 1 ? "1 sektion" : $"{layout.Count} sektioner")}, {(total == 1 ? $"1 {medium.Singular()}" : $"{total} {medium.Plural()}")}");
+                $"{kind.ShelvesWord} er oprettet: {(layout.Count == 1 ? "1 sektion" : $"{layout.Count} sektioner")}, {(total == 1 ? $"1 {medium.Singular()}" : $"{total} {medium.Plural()}")}");
         });
     }
 
@@ -517,26 +562,32 @@ public sealed partial class ShelfStore : IDisposable
     {
         // Unplace kører sin egen transaktion (og skriver i historikken), derfor ingen ydre transaktion her.
         if (CurrentPlacement(copyId) is { } p
-            && Db.Query("SELECT medium FROM locations WHERE id = ?", p.LocationId).FirstOrDefault() is { } loc)
+            && Db.Query("SELECT medium, category FROM locations WHERE id = ?", p.LocationId).FirstOrDefault() is { } loc
+            && Db.Query("SELECT c.discogs_folder, r.format, r.genres FROM copies c JOIN releases r ON r.discogs_release_id = c.release_id WHERE c.id = ?", copyId)
+                .FirstOrDefault() is { } c)
         {
-            var fmt = Db.Query("SELECT r.format FROM copies c JOIN releases r ON r.discogs_release_id = c.release_id WHERE c.id = ?", copyId)
-                .FirstOrDefault()?.Text("format");
             // null = ingen hylde (en digital fil tilbage til "Følg Discogs"): pladsen fjernes også.
-            var now = MediumExtensions.ShelfOf(medium, fmt);
-            if (now is null || loc.Text("medium") != now.Value.RawValue()) Unplace(copyId);
+            var copy = new Copy(copyId, null, 0, MediumOverride: medium, DiscogsFolder: c.Text("discogs_folder"));
+            var now = LoadSortRules().ShelfKindOf(copy, new Release(0, "", "", Format: c.Text("format"), Genres: c.Text("genres")));
+            var old = new ShelfKind(MediumExtensions.FromRaw(loc.Text("medium")) ?? Medium.Vinyl, CategoryExtensions.FromRaw(loc.Text("category")));
+            if (now != old) Unplace(copyId);
         }
         Db.Run("UPDATE copies SET medium_override = ? WHERE id = ?", medium?.RawValue(), copyId);
     }
 
     /// Tilføjer en ny tom sektion sidst i en reol (eller i en ny reol).
-    public long AddSection(int shelf, string section, Medium medium = Medium.Vinyl) => Db.Transaction(() =>
+    public long AddSection(int shelf, string section, Medium medium = Medium.Vinyl) => AddSection(shelf, section, new ShelfKind(medium));
+
+    public long AddSection(int shelf, string section, ShelfKind kind) => Db.Transaction(() =>
     {
-        var existing = Db.Query("SELECT id, shelf, sort_index FROM locations WHERE medium = ? ORDER BY sort_index", medium.RawValue());
+        var medium = kind.Medium;
+        var cat = kind.Category?.RawValue();
+        var existing = Db.Query("SELECT id, shelf, sort_index FROM locations WHERE medium = ? AND category IS ? ORDER BY sort_index", medium.RawValue(), cat);
         // Indsæt efter den sidste sektion i samme (eller lavere) reol.
         var insertAfter = existing.LastOrDefault(r => (r.Long("shelf") ?? 0) <= shelf);
         long newIndex = insertAfter is null ? 0 : (insertAfter.Long("sort_index") ?? 0) + 1;
         Db.Run("UPDATE locations SET sort_index = sort_index + 1 WHERE sort_index >= ?", newIndex);
-        return Db.Run("INSERT INTO locations(shelf, section, sort_index, medium) VALUES(?, ?, ?, ?)", shelf, section, newIndex, medium.RawValue());
+        return Db.Run("INSERT INTO locations(shelf, section, sort_index, medium, category) VALUES(?, ?, ?, ?, ?)", shelf, section, newIndex, medium.RawValue(), cat);
     });
 
     public void DeleteEmptySection(long locationId)
@@ -595,7 +646,7 @@ public sealed partial class ShelfStore : IDisposable
             }
 
             var copyByInstance = new Dictionary<long, SqlRow>();
-            foreach (var c in Db.Query("SELECT id, discogs_instance_id, in_discogs, release_id FROM copies WHERE discogs_instance_id IS NOT NULL"))
+            foreach (var c in Db.Query("SELECT id, discogs_instance_id, in_discogs, release_id, discogs_folder FROM copies WHERE discogs_instance_id IS NOT NULL"))
                 copyByInstance[c.Long("discogs_instance_id")!.Value] = c;
 
             // Discogs' egen rækkefølge gemmes, så "Præcis som Discogs" kan bruge den.
@@ -611,6 +662,9 @@ public sealed partial class ShelfStore : IDisposable
                     Db.Run("UPDATE copies SET discogs_rank = ? WHERE id = ?", rank, id);
                     if (c.Int("release_id") != it.Release.Id)
                         Db.Run("UPDATE copies SET release_id = ? WHERE id = ?", it.Release.Id, id);
+                    // Mappen kendes kun, når Discogs har sendt mappernes navne.
+                    if (it.Folder is string folder && c.Text("discogs_folder") != folder)
+                        Db.Run("UPDATE copies SET discogs_folder = ? WHERE id = ?", folder, id);
                     if (c.Long("in_discogs") == 0)
                     {
                         Db.Run("UPDATE copies SET in_discogs = 1, removed_from_discogs_at = NULL WHERE id = ?", id);
@@ -620,9 +674,9 @@ public sealed partial class ShelfStore : IDisposable
                 else
                 {
                     var id = Db.Run("""
-                        INSERT INTO copies(discogs_instance_id, release_id, status, in_discogs, date_added, created_at, discogs_rank)
-                        VALUES(?, ?, 'home', 1, ?, ?, ?)
-                        """, it.InstanceId, it.Release.Id, it.DateAdded, now, rank);
+                        INSERT INTO copies(discogs_instance_id, release_id, status, in_discogs, date_added, created_at, discogs_rank, discogs_folder)
+                        VALUES(?, ?, 'home', 1, ?, ?, ?, ?)
+                        """, it.InstanceId, it.Release.Id, it.DateAdded, now, rank, it.Folder);
                     // Digitale filer gemmes (så de ikke ser "fjernet" ud), men meldes ikke som nye plader.
                     if (!MediumExtensions.IsDigital(it.Release.Format)) report.NewCopies.Add(id);
                     Log(HistoryKind.AddedFromDiscogs, id, $"Ny i Discogs: {it.Release.Artist} – {it.Release.Title}");

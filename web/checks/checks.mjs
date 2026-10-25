@@ -2,7 +2,7 @@
 // Køres med JavaScriptCore (samme motor som Safari på iPhone) af web/checks/run.sh:
 //   jsc -m web/checks/checks.mjs -- <facit.json fra dump/main.swift>
 
-import { buildLibraries, mediumOf, shelfOf, MEDIA } from "../core/library.js";
+import { buildLibraries, mediumOf, shelfOf, MEDIA, MEDIUM, parseRules, sortList } from "../core/library.js";
 import { normalize } from "../core/search.js";
 import { sessionFromHash } from "../core/cloud.js";
 
@@ -56,6 +56,31 @@ check(copies === Object.keys(want.advice).length, `samme plader på hylderne (${
 check(mediumOf("2×CD, Album") === "cd" && mediumOf("Vinyl, LP") === "vinyl" && mediumOf(null) === "vinyl" && mediumOf(",CD") === "cd", "format → plade eller cd");
 check(shelfOf(null, "File, MP3") === null && shelfOf("vinyl", "File, MP3") === "vinyl" && shelfOf("cd", "Vinyl") === "cd", "digitale filer står ikke på en hylde");
 check(normalize("Ágætis Byrjun") === "agaetis byrjun" && normalize("AC/DC & Co") === "ac dc and co" && normalize("Ｆｕｌｌ") === "full", "normalisering");
+
+// Kategorier (som på Mac): egne reoler, mappe fra Discogs og kategorier til sidst.
+check(parseRules('{"categories":{"jazz":"own","polka":"end","classical":"?"}}').categories.jazz === "own"
+  && Object.keys(parseRules('{"categories":{"jazz":"own","polka":"end","classical":"?"}}').categories).length === 1
+  && Object.keys(parseRules('{"numbersLast":true}').categories).length === 0, "kategorierne læses; ukendte springes over, gamle regler: fra");
+check(MEDIA.length === 8 && MEDIUM["vinyl.jazz"].shelfWord === "Jazz-reol" && MEDIUM["cd.classical"].shelfWord === "Klassisk-cd-reol"
+  && MEDIUM["cd.entertainment"].title === "Underholdning (cd'er)", "hylder og navne som på Mac");
+const rec = (kind, key, data, t) => ({ kind, key, data, updated_at: `2026-10-23T10:00:0${t}Z` });
+const catRecords = [
+  rec("release", "1", { artist: "Coltrane", title: "A", format: "Vinyl, LP", genres: "Jazz" }, 0),
+  rec("release", "2", { artist: "Beatles", title: "B", format: "Vinyl, LP", genres: "Rock" }, 0),
+  rec("release", "3", { artist: "Bach", title: "C", format: "Vinyl, LP", genres: "Classical" }, 0),
+  rec("release", "4", { artist: "Kim Larsen", title: "D", format: "Vinyl, LP", genres: "Pop" }, 0),
+  rec("copy", "i1", { release: 1, status: "home", rank: 2 }, 1), rec("copy", "i2", { release: 2, status: "home", rank: 0 }, 1),
+  rec("copy", "i3", { release: 3, status: "home", rank: 1 }, 1), rec("copy", "i4", { release: 4, status: "home", rank: 3, folder: "Underholdning" }, 1),
+  rec("location", "L1", { shelf: 1, section: "A", sortIndex: 0, medium: "vinyl" }, 2),
+  rec("location", "J1", { shelf: 1, section: "A", sortIndex: 1, medium: "vinyl", category: "jazz" }, 2),
+  rec("section", "J1", { copies: ["i1"] }, 3),
+  rec("setting", "sort_rules", { value: '{"useDiscogsOrder":true,"categories":{"jazz":"own","entertainment":"end","classical":"end"}}' }, 3),
+];
+const cat = buildLibraries(catRecords);
+check(cat.libraries["vinyl.jazz"].copies.size === 1 && cat.libraries["vinyl.jazz"].locations.length === 1 && cat.libraries["vinyl.jazz"].unplaced.length === 0
+  && cat.libraries.vinyl.copies.size === 3 && cat.libraries.vinyl.locations.length === 1, "egne reoler: jazz står på jazz-reolen");
+check(sortList(cat.libraries.vinyl, cat.rules).map((e) => e.item.release.artist).join(",") === "Beatles,Kim Larsen,Bach",
+  "sidst på reolerne: Underholdning (Discogs-mappen) før Klassisk");
 
 // Login fra mail-linket.
 const hash = "#access_token=x.eyJzdWIiOiJ1MSIsImVtYWlsIjoidEBleC5kayIsImV4cCI6MTk5OTk5OTk5OX0.y&refresh_token=r&expires_at=1999999999";

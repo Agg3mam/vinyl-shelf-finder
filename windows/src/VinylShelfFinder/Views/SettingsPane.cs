@@ -341,6 +341,25 @@ public sealed class SettingsPane : IPane
         p.Children.Add(Group(discogs, Footer("Pladerne står i den rækkefølge, Discogs selv sorterer samlingen (kunstner A–Z). Reglerne herunder bruges kun, når dette er slået fra."),
             numbers, Footer("10cc, 2Pac og The 1975 står efter Z og Æ Ø Å. Gælder også med Discogs' rækkefølge, hvor tallene ellers står først.")));
 
+        // Kategorier: Jazz, Underholdning, Klassisk (som på Mac).
+        var catRows = new List<UIElement> { Ui.Text("Kategorier", "BodyStrongTextBlockStyle") };
+        foreach (var c in CategoryExtensions.All)
+        {
+            var box = new ComboBox { Header = Ui.HStack(8, Ui.SectionTab(c.Title()[..1], Ui.CategoryBrush(c)), Ui.Text(c.Title())), MinWidth = 220 };
+            foreach (var m in CategoryModeExtensions.All) box.Items.Add(m.Label());
+            box.SelectedIndex = Array.IndexOf(CategoryModeExtensions.All, rules.Mode(c));
+            var cat = c;
+            box.SelectionChanged += (_, _) =>
+            {
+                if (box.SelectedIndex < 0) return;
+                var mode = CategoryModeExtensions.All[box.SelectedIndex];
+                UpdateRules(r => { if (mode == CategoryMode.Off) r.Categories.Remove(cat); else r.Categories[cat] = mode; });
+            };
+            catRows.Add(box);
+        }
+        catRows.Add(Footer("Jazz og Klassisk er genrerne på Discogs. Underholdning er din mappe “Underholdning” i Discogs-samlingen. Sidst på reolerne: Jazz, så Underholdning, så Klassisk. Egne reoler: kategorien får sine egne reoler (plader og cd'er hver for sig) – opret dem under Reol. Passer en plade i flere, vinder den første."));
+        p.Children.Add(Group(catRows.ToArray()));
+
         int fresh = SurnameDialog.NewCount(_model);
         var surname = Ui.Btn(fresh > 0 ? $"Vælg personer… ({fresh} nye forslag)" : "Vælg personer…",
             async (b, _) => await Safe(() => SurnameDialog.ShowAsync(_model, ((FrameworkElement)b).XamlRoot)));
@@ -394,18 +413,15 @@ public sealed class SettingsPane : IPane
     private void Shelf(StackPanel p)
     {
         var lib = _model.Library;
-        var word = _model.Medium.ShelfWord();
+        var word = _model.Kind.ShelfWord;
         if (_model.ShowsMediumPicker)
         {
-            var bar = new SelectorBar();
-            foreach (var m in new[] { Medium.Vinyl, Medium.Cd })
-            {
-                var item = new SelectorBarItem { Text = m.Title(), Tag = m };
-                bar.Items.Add(item);
-                if (m == _model.Medium) bar.SelectedItem = item;
-            }
-            bar.SelectionChanged += (_, _) => { if (!_building && bar.SelectedItem?.Tag is Medium m) _model.Medium = m; };
-            p.Children.Add(Group(bar, Footer("Plader og cd'er har hver deres reoler. Ændringerne herunder gælder den valgte hylde.")));
+            var kinds = _model.ShelfKinds;
+            var box = new ComboBox { Header = "Hylde", MinWidth = 220 };
+            foreach (var k in kinds) box.Items.Add(k.Title);
+            box.SelectedIndex = Math.Max(0, kinds.ToList().IndexOf(_model.Kind));
+            box.SelectionChanged += (_, _) => { if (!_building && box.SelectedIndex >= 0) _model.Kind = kinds[box.SelectedIndex]; };
+            p.Children.Add(Group(box, Footer("Plader, cd'er og kategorier med egne reoler har hver deres reoler. Ændringerne herunder gælder den valgte hylde.")));
         }
         var structure = new List<UIElement> { Ui.Text("Struktur", "BodyStrongTextBlockStyle") };
         var shelves = lib.Locations.Select(l => l.Shelf).Distinct().ToList();
@@ -441,7 +457,7 @@ public sealed class SettingsPane : IPane
             g.Children.Add(addSec);
             structure.Add(g);
         }
-        structure.Add(Ui.Btn(_model.Medium == Medium.Vinyl ? "Ny reol" : "Ny cd-reol", (_, _) => _model.AddSection((shelves.Count == 0 ? 0 : shelves.Max()) + 1), Ui.Glyph.Add));
+        structure.Add(Ui.Btn($"Ny {word.ToLowerInvariant()}", (_, _) => _model.AddSection((shelves.Count == 0 ? 0 : shelves.Max()) + 1), Ui.Glyph.Add));
         p.Children.Add(Group(structure.ToArray()));
 
         var labels = Ui.Btn("Udskriv reolskilte med QR-kode… (Ctrl+P)", async (_, _) => await Safe(() => LabelsPrint.ExportAsync(_model)), Ui.Glyph.QrCode);

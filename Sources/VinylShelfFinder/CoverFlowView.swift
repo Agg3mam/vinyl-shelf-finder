@@ -68,7 +68,7 @@ struct ListenCoverFlow: View {
         guard let loc = lib.location(of: item.id), let nr = lib.shelfNumbers(in: loc.id)[item.id] else {
             return item.awayMessage ?? "Ude af reolen"
         }
-        return "\(loc.medium.shelfWord) \(loc.shelf) · Sektion \(loc.section) · Nr. \(nr) af \(lib.onShelfCount(in: loc.id))"
+        return "\(loc.kind.shelfWord) \(loc.shelf) · Sektion \(loc.section) · Nr. \(nr) af \(lib.onShelfCount(in: loc.id))"
     }
 }
 

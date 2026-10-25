@@ -13,11 +13,13 @@ struct OnboardingView: View {
             VStack(alignment: .leading, spacing: Spacing.l) {
                 VStack(alignment: .leading, spacing: Spacing.xs) {
                     HStack(alignment: .firstTextBaseline) {
-                        Text(model.medium == .cd ? "Dine cd'er" : "Vinyl Shelf Finder").font(.system(size: 34, weight: .heavy))
+                        Text(model.shelfKind.category != nil ? model.shelfKind.title : model.medium == .cd ? "Dine cd'er" : "Vinyl Shelf Finder").font(.system(size: 34, weight: .heavy))
                         Spacer()
                         if model.showsMediumPicker { MediumPicker() }
                     }
-                    Text(model.medium == .cd
+                    Text(model.shelfKind.category != nil
+                         ? "\(model.shelfKind.title) får deres egne reoler og sektioner. De andre reoler og deres placeringer røres ikke."
+                         : model.medium == .cd
                          ? "Cd'erne får deres egne reoler og sektioner. Dine plader og deres placeringer røres ikke."
                          : "Find dine plader i reolen. Tre trin, så er du i gang.")
                         .font(.title3).foregroundStyle(.secondary)
@@ -194,7 +196,7 @@ struct LayoutStep: View {
                         if sectionsPerShelf.count > 1 { sectionsPerShelf.removeLast() }
                     })
                     ForEach(sectionsPerShelf.indices, id: \.self) { i in
-                        Stepper("\(model.medium.shelfWord) \(i + 1): \(sectionCount(i)) \(sectionCount(i) == 1 ? "sektion" : "sektioner")", value: sectionBinding(i), in: 1...26)
+                        Stepper("\(model.shelfKind.shelfWord) \(i + 1): \(sectionCount(i)) \(sectionCount(i) == 1 ? "sektion" : "sektioner")", value: sectionBinding(i), in: 1...26)
                             .padding(.leading, Spacing.s)
                     }
                     Button("Fordel jævnt") { redistribute(items.count) }
@@ -207,7 +209,7 @@ struct LayoutStep: View {
                     ForEach(plan.indices, id: \.self) { i in
                         let start = ranges[i], end = start + plan[i].count
                         HStack(alignment: .top) {
-                            Text("\(model.medium == .vinyl ? "Reol" : "Cd") \(plan[i].shelf) · \(plan[i].section)")
+                            Text("\(model.shelfKind.category?.title ?? (model.medium == .vinyl ? "Reol" : "Cd")) \(plan[i].shelf) · \(plan[i].section)")
                                 .font(.callout.weight(.semibold)).frame(width: 90, alignment: .leading)
                             // Grænsekontrol: bindingen kan blive læst for en række, der lige er
                             // fjernet (færre reoler/sektioner), og så ville `plan[i]` crashe.
@@ -241,7 +243,7 @@ struct LayoutStep: View {
                 if model.forceOnboarding {
                     Button("Annullér") { model.forceOnboarding = false }
                 }
-                Button(model.medium == .vinyl ? "Opret reol" : "Opret cd-reol") {
+                Button("Opret \(model.shelfKind.shelfWord.lowercased())") {
                     if model.library.locations.isEmpty { model.createLayout(plan) } else { confirmReplace = true }
                 }
                 .buttonStyle(.borderedProminent)
@@ -265,8 +267,10 @@ struct LayoutStep: View {
         .confirmationDialog("Erstat den nuværende reolstruktur?", isPresented: $confirmReplace) {
             Button("Erstat alle placeringer", role: .destructive) { model.createLayout(plan) }
         } message: {
-            Text(model.medium == .vinyl
+            Text(model.shelfKind == .vinyl
                  ? "Alle nuværende fysiske placeringer erstattes med den sorterede rækkefølge. Historikken bevares."
+                 : model.shelfKind.category != nil
+                 ? "\(model.shelfKind.title): de nuværende placeringer erstattes med den sorterede rækkefølge. De andre reoler røres ikke. Historikken bevares."
                  : "Cd'ernes nuværende placeringer erstattes med den sorterede rækkefølge. Pladerne røres ikke. Historikken bevares.")
         }
     }
@@ -298,7 +302,7 @@ struct LayoutStep: View {
             acc = e
             if let cur = shelfRanges[p.shelf] { shelfRanges[p.shelf] = (cur.0, e) } else { shelfRanges[p.shelf] = (s, e) }
         }
-        return shelfRanges.keys.sorted().map { "\(model.medium.shelfWord) \($0): \(shelfRanges[$0]!.0)–\(shelfRanges[$0]!.1)" }.joined(separator: " · ")
+        return shelfRanges.keys.sorted().map { "\(model.shelfKind.shelfWord) \($0): \(shelfRanges[$0]!.0)–\(shelfRanges[$0]!.1)" }.joined(separator: " · ")
     }
 }
 

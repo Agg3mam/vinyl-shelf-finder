@@ -73,14 +73,20 @@ public sealed class Library
     /// Kopier uden fysisk placering (typisk nye fra Discogs).
     public IReadOnlyList<long> Unplaced { get; }
 
-    /// Plader eller cd'er. Styrer ordene i Find-teksterne ("din plade" / "din cd").
-    public Medium Medium { get; }
+    /// Plader eller cd'er, og evt. en kategori med egne reoler. Styrer ordene i Find-teksterne ("din plade" / "din cd").
+    public ShelfKind Kind { get; }
+    public Medium Medium => Kind.Medium;
 
     public Library(IReadOnlyDictionary<int, Release> releases, IReadOnlyDictionary<long, Copy> copies,
                    IEnumerable<Location> locations, IEnumerable<(long CopyId, long LocationId, int Position)> placements,
                    Medium medium = Medium.Vinyl)
+        : this(releases, copies, locations, placements, new ShelfKind(medium)) { }
+
+    public Library(IReadOnlyDictionary<int, Release> releases, IReadOnlyDictionary<long, Copy> copies,
+                   IEnumerable<Location> locations, IEnumerable<(long CopyId, long LocationId, int Position)> placements,
+                   ShelfKind kind)
     {
-        Medium = medium;
+        Kind = kind;
         Releases = releases;
         Copies = copies;
         var locs = locations.OrderBy(l => l.SortIndex).ThenBy(l => l.Id).ToList();

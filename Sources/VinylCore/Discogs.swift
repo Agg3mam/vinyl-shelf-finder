@@ -5,9 +5,13 @@ public struct DiscogsCollectionItem: Equatable {
     public var instanceID: Int
     public var dateAdded: String?
     public var release: Release
+    /// Mappen i Discogs-samlingen (fx 1 = "Uncategorized"), og dens navn, når mappernes navne er hentet.
+    public var folderID: Int?
+    public var folder: String?
 
-    public init(instanceID: Int, dateAdded: String?, release: Release) {
+    public init(instanceID: Int, dateAdded: String?, release: Release, folderID: Int? = nil, folder: String? = nil) {
         self.instanceID = instanceID; self.dateAdded = dateAdded; self.release = release
+        self.folderID = folderID; self.folder = folder
     }
 }
 
@@ -129,6 +133,8 @@ public struct DiscogsClient: Sendable {
         var page = 1, pages = 1
         var all: [DiscogsCollectionItem] = []
         let user = username.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? username
+        // Mappernes navne (til kategorien Underholdning). Fejler det, hentes samlingen alligevel uden mapper.
+        let folders = (try? Self.parseFolders(await get("/users/\(user)/collection/folders"))) ?? [:]
         repeat {
             let data = try await get("/users/\(user)/collection/folders/0/releases", query: [
                 URLQueryItem(name: "per_page", value: "100"),
@@ -140,7 +146,7 @@ public struct DiscogsClient: Sendable {
             do { decoded = try Self.parseCollectionPage(data) }
             catch { throw DiscogsError.decoding("samlingen, side \(page)") }
             pages = decoded.pages
-            all.append(contentsOf: decoded.items)
+            all.append(contentsOf: decoded.items.map { var it = $0; it.folder = it.folderID.flatMap { folders[$0] }; return it })
             progress(all.count, decoded.total)
             page += 1
         } while page <= pages
@@ -148,6 +154,12 @@ public struct DiscogsClient: Sendable {
     }
 
     // MARK: - JSON
+
+    /// Mappe-ID → navn, fx 1 → "Uncategorized".
+    public static func parseFolders(_ data: Data) throws -> [Int: String] {
+        struct Folders: Decodable { struct F: Decodable { let id: Int; let name: String }; let folders: [F] }
+        return Dictionary(try JSONDecoder().decode(Folders.self, from: data).folders.map { ($0.id, $0.name) }, uniquingKeysWith: { a, _ in a })
+    }
 
     public static func parseCollectionPage(_ data: Data) throws -> (items: [DiscogsCollectionItem], pages: Int, total: Int) {
         let page = try JSONDecoder().decode(CollectionPage.self, from: data)
@@ -160,6 +172,7 @@ public struct DiscogsClient: Sendable {
             let id: Int
             let instance_id: Int
             let date_added: String?
+            let folder_id: Int?
             let basic_information: Basic
         }
         struct Basic: Decodable {
@@ -204,7 +217,7 @@ public struct DiscogsClient: Sendable {
             coverURL: nonEmpty(b.cover_image),
             thumbURL: nonEmpty(b.thumb),
             genres: b.genres?.joined(separator: ", "))
-        return DiscogsCollectionItem(instanceID: it.instance_id, dateAdded: it.date_added, release: release)
+        return DiscogsCollectionItem(instanceID: it.instance_id, dateAdded: it.date_added, release: release, folderID: it.folder_id)
     }
 
     /// Samler kunstnernavne som Discogs viser dem: "Simon & Garfunkel", "Nirvana (2)" → "Nirvana".

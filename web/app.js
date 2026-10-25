@@ -2,7 +2,7 @@
 // Reol, Scan, Søg og Konto, "Find i reolen" og "Spillet". Data kommer fra kontoen og gemmes i browseren,
 // så appen virker uden net. Webappen ændrer aldrig reolerne; den skriver kun "Spillet".
 
-import { buildLibraries, MEDIA, MEDIUM, STATUS, isOnShelf, locationName, shortName, fullName, detailLine, awayMessage,
+import { buildLibraries, MEDIA, MEDIUM, STATUS, isOnShelf, locationName, shortName, fullName, pressingLine, awayMessage,
   FRESHNESS, genres, decades, candidates, pick, noMatchMessage, sortList } from "./core/library.js";
 import { mountCoverFlow } from "./coverflow.js";
 import { haptic } from "./haptics.js";
@@ -87,8 +87,33 @@ const ICONS = {
 const icon = (name, extra = "") => `<svg class="i ${extra}" viewBox="0 0 24 24" aria-hidden="true">${ICONS[name]}</svg>`;
 const STATUS_ICON = { home: "house", wall: "frame", lent: "person", stored: "box", missing: "dashed" };
 
-function cover(url, cls = "") {
-  return `<span class="cover ${cls}">${icon("note")}${url ? `<img src="${esc(url)}" alt="" loading="lazy" decoding="async" referrerpolicy="no-referrer" onerror="this.remove()">` : ""}</span>`;
+/** Cover. Uden billede: et blankt omslag i kunstnerens faste farve med forbogstaverne (som på Mac). */
+function cover(url, cls = "", release = null) {
+  const sleeve = release ? ` style="background:${sleeveColor(release.artist)}" data-initials="${esc(initials(release.artist))}"` : "";
+  return `<span class="cover ${release ? "sleeve" : ""} ${cls}"${sleeve}>${release ? "" : icon("note")}${url ? `<img src="${esc(url)}" alt="" loading="lazy" decoding="async" referrerpolicy="no-referrer" onerror="this.remove()">` : ""}</span>`;
+}
+
+/** Kunstnerens faste farve (samme mønster som CoverTone.fallback på Mac: FNV-1a, 24 nuancer). */
+function sleeveColor(artist) {
+  let h = 0xcbf29ce484222325n;
+  for (const b of new TextEncoder().encode(artist.toLowerCase())) h = ((h ^ BigInt(b)) * 0x100000001b3n) & 0xffffffffffffffffn;
+  const hue = Number(h % 24n) / 24;
+  const sat = Math.min(Math.max([0.30, 0.42][Number((h / 24n) % 2n)], 0.5), 0.75), v = 0.34;
+  const f = (k) => { const x = (k + hue * 6) % 6; return v - v * sat * Math.max(0, Math.min(x, 4 - x, 1)); };
+  return `rgb(${Math.round(f(5) * 255)} ${Math.round(f(3) * 255)} ${Math.round(f(1) * 255)})`;
+}
+
+function initials(artist) {
+  const w = artist.split(" ").filter((x) => x && x.toLowerCase() !== "the");
+  return (w.length >= 2 ? w[0][0] + w[1][0] : (w[0] ?? "").slice(0, 2)).toUpperCase();
+}
+
+/** Skillekortets farve: kategoriens farve, ellers accentfarven. */
+const CATEGORY_COLOR = { jazz: ["#1F4F8F", "#3A6DB5"], entertainment: ["#85621A", "#A67C24"], classical: ["#6E2433", "#93394B"] };
+function dividerColor(loc) {
+  const cat = loc.medium.split(".")[1];
+  if (!CATEGORY_COLOR[cat]) return "var(--accent)";
+  return matchMedia("(prefers-color-scheme: dark)").matches && document.documentElement.dataset.theme !== "light" ? CATEGORY_COLOR[cat][1] : CATEGORY_COLOR[cat][0];
 }
 
 function relative(sec) {
@@ -540,7 +565,7 @@ function recordRow({ medium, item, track = null, trackIndex = null, number = nul
   const q = trackIndex != null ? `?sang=${trackIndex}` : "";
   return `<a class="row ${number != null ? "numbered" : "with-cover"} ${isOnShelf(item) ? "" : "away"}" href="#/plade/${encodeURIComponent(item.copy.uid)}${q}" data-nav>
     ${number != null ? `<span class="num">${number ?? ""}</span>` : ""}
-    ${cover(item.release.thumbURL ?? item.release.coverURL)}
+    ${cover(item.release.thumbURL ?? item.release.coverURL, "", item.release)}
     <span class="grow">
       <div class="t1">${esc(item.release.artist)}</div>
       <div class="t2">${esc(item.release.title)}</div>
@@ -575,6 +600,7 @@ function sectionRow(L, loc) {
   const onShelf = L.items(loc.id).filter(isOnShelf);
   const first = onShelf[0]?.release.artist, last = onShelf.at(-1)?.release.artist;
   return `<a class="row" href="#/sektion/${encodeURIComponent(loc.uid)}" data-nav>
+    <span class="section-tab" style="--divider:${dividerColor(loc)}" aria-hidden="true">${esc(loc.section)}</span>
     <span class="grow">
       <div class="t1">Sektion ${esc(loc.section)}</div>
       ${first ? `<div class="t2">${esc(first === last ? first : `${first} – ${last}`)}</div>` : ""}
@@ -916,17 +942,17 @@ function recordPage(uid, trackParam) {
   if (loc && adv && n) {
     const away = !isOnShelf(item);
     const position = n.position ?? 1;
-    const word = MEDIUM[where.medium].singular;
-    const hint = `${away ? "Plads" : word.charAt(0).toUpperCase() + word.slice(1)} ${position} af ${n.sectionCount} fra venstre`;
-    place = `<section class="card" aria-label="${esc(locationName(loc))}">
+    const hint = `${away ? "Plads" : "Nr."} ${position} af ${n.sectionCount} fra venstre`;
+    const dc = dividerColor(loc);
+    place = `<section class="card" aria-label="${esc(locationName(loc))}" style="--divider:${dc}">
         <div class="eyebrow">${away ? "Her plejer den at stå" : "Gå til"}</div>
-        <div class="placement">${icon("books", "ic")}<span>${esc(MEDIUM[loc.medium].shelfWord)} ${loc.shelf}</span><span class="sep">${icon("chevR")}</span><span>Sektion ${esc(loc.section)}</span></div>
+        <div class="divider"><span class="tab">${esc(loc.section)}</span><span class="names"><span class="shelf">${esc(MEDIUM[loc.medium].shelfWord)} ${loc.shelf}</span><span class="sec">Sektion ${esc(loc.section)}</span></span></div>
         <svg class="spines" data-position="${position}" data-count="${n.sectionCount}" role="img" aria-label="Plade ${position} af ${n.sectionCount} i sektionen"></svg>
         <div class="hint">${esc(hint)}</div>
       </section>
       ${away ? `<div class="away-line">${icon(STATUS_ICON[item.copy.status])}<span>${esc(STATUS[item.copy.status].label)}${item.copy.statusNote ? `: ${esc(item.copy.statusNote)}` : ""}</span></div>` : ""}
-      ${refCard("Find først", adv.primary)}
-      ${adv.secondary ? refCard("Dernæst", adv.secondary) : ""}
+      ${refCard("Start ved", adv.primary)}
+      ${adv.secondary ? refCard("Så", adv.secondary) : ""}
       ${adv.artistBlockHint || adv.sectionEdgeHint ? `<div class="hints">
         ${adv.artistBlockHint ? `<div>${icon("stack")}<span>${esc(adv.artistBlockHint)}</span></div>` : ""}
         ${adv.sectionEdgeHint ? `<div>${icon(n.reachedSectionEnd ? "toRight" : "toLeft")}<span>${esc(adv.sectionEdgeHint)}</span></div>` : ""}
@@ -944,8 +970,9 @@ function recordPage(uid, trackParam) {
   const img = r.coverURL ?? r.thumbURL;
   return `<div class="backdrop" aria-hidden="true">${img ? `<img src="${esc(img)}" alt="" referrerpolicy="no-referrer" onerror="this.remove()">` : ""}</div>
     <main class="page has-play">${topbar({ backTo: `#/${state.tab}`, title: r.artist })}
-      <header class="record-head">${cover(img)}<div style="min-width:0">
-        <div class="artist">${esc(r.artist)}</div><div class="title">${esc(r.title)}</div><div class="detail">${esc(detailLine(r))}</div>
+      <header class="record-head">${cover(img, "", r)}<div style="min-width:0">
+        <div class="artist">${esc(r.artist)}</div><div class="title">${esc(r.title)}</div>
+        ${pressingLine(r) ? `<div class="detail">${esc(pressingLine(r))}</div>` : ""}${r.format ? `<div class="detail faint">${esc(r.format)}</div>` : ""}
       </div></header>
       ${place}
       ${plays}
@@ -956,7 +983,7 @@ function recordPage(uid, trackParam) {
 
 function refCard(title, ref) {
   const it = ref.item;
-  const pic = it ? cover(it.release.thumbURL ?? it.release.coverURL)
+  const pic = it ? cover(it.release.thumbURL ?? it.release.coverURL, "", it.release)
     : `<span class="cover">${icon(ref.side === "sectionStart" ? "toLeft" : "toRight")}</span>`;
   return `<section class="card thin"><div class="ref">${pic}<div style="min-width:0">
     <div class="eyebrow">${esc(title)}</div>
@@ -968,20 +995,23 @@ function refCard(title, ref) {
 /** Sektionen som pladerygge set forfra: én streg pr. plade, målet fremhævet (som på Mac og iPhone). */
 function drawSpines() {
   for (const svg of document.querySelectorAll("svg.spines")) {
-    const width = svg.clientWidth || 300, height = 24;
+    const width = svg.clientWidth || 300, height = 30;
     const n = Math.max(Number(svg.dataset.count), 1);
     const idx = Math.min(Math.max(Number(svg.dataset.position) - 1, 0), n - 1);
     const slot = width / n;
     let out = "";
     if (slot >= 3) {
-      const w = Math.min(Math.max(slot * 0.45, 2), 6);
+      // Rygge i forskellig tykkelse, som rigtige plader (samme mønster som på Mac).
+      const maxW = Math.min(Math.max(slot * 0.8, 2), 14);
       for (let i = 0; i < n; i++) {
-        const x = slot * (i + 0.5) - w / 2, t = i === idx, h = t ? height : height * 0.55;
-        out += `<rect x="${x.toFixed(1)}" y="${(height - h).toFixed(1)}" width="${(t ? w + 2 : w).toFixed(1)}" height="${h.toFixed(1)}" rx="1.5" fill="${t ? "var(--accent)" : "var(--tertiary)"}"/>`;
+        const r = Number((BigInt(i) * 2654435761n) % 1000n) / 1000, t = i === idx;
+        const w = t ? maxW : maxW * (0.45 + 0.55 * r), h = t ? height : height * (0.72 + 0.16 * (1 - r));
+        const x = slot * (i + 0.5) - w / 2;
+        out += `<rect x="${x.toFixed(1)}" y="${(height - h).toFixed(1)}" width="${w.toFixed(1)}" height="${h.toFixed(1)}" rx="1" fill="${t ? "var(--divider, var(--accent))" : "var(--tertiary)"}"/>`;
       }
     } else {
       const x = n > 1 ? (idx / (n - 1)) * (width - 6) : 0;
-      out = `<rect x="0" y="${height - 6}" width="${width}" height="6" rx="3" fill="var(--tertiary)"/><rect x="${x.toFixed(1)}" y="0" width="6" height="${height}" rx="2" fill="var(--accent)"/>`;
+      out = `<rect x="0" y="${height - 6}" width="${width}" height="6" rx="3" fill="var(--tertiary)"/><rect x="${x.toFixed(1)}" y="0" width="6" height="${height}" rx="2" fill="var(--divider, var(--accent))"/>`;
     }
     svg.setAttribute("viewBox", `0 0 ${width} ${height}`);
     svg.innerHTML = out;
@@ -1460,7 +1490,7 @@ setInterval(() => { if (document.visibilityState === "visible") sync(); }, SYNC_
 // MARK: Start
 
 async function start() {
-  state.medium = safeLocal.get("medium") === "cd" ? "cd" : "vinyl";
+  state.medium = MEDIA.includes(safeLocal.get("medium")) ? safeLocal.get("medium") : "vinyl";
   state.coverFlow = safeLocal.get("coverFlow") === "1";
   if (DEMO) {
     try {

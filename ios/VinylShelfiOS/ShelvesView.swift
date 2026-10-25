@@ -95,7 +95,7 @@ struct SectionView: View {
             Group {
                 if coverFlow { flow(lib, loc) } else { list(lib, loc) }
             }
-            .navigationTitle("\(loc.medium.shelfWord) \(loc.shelf) · Sektion \(loc.section)")
+            .navigationTitle("\(loc.kind.shelfWord) \(loc.shelf) · Sektion \(loc.section)")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {

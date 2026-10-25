@@ -84,6 +84,114 @@ public enum Medium: String, CaseIterable, Identifiable {
     public var shelfWord: String { self == .vinyl ? "Reol" : "Cd-reol" }
 }
 
+// MARK: - Kategorier (Jazz, Underholdning, Klassisk)
+
+/// Musik, der kan stå for sig: til sidst på reolerne eller på egne reoler. Rækkefølgen her er også rækkefølgen
+/// til sidst på reolerne, og passer en plade i flere kategorier, vinder den første. Gemmes som tekst (`rawValue`).
+public enum Category: String, CaseIterable, Identifiable, Codable {
+    case jazz
+    case entertainment
+    case classical
+
+    public var id: String { rawValue }
+
+    /// "Jazz" / "Underholdning" / "Klassisk"
+    public var title: String {
+        switch self {
+        case .jazz: return "Jazz"
+        case .entertainment: return "Underholdning"
+        case .classical: return "Klassisk"
+        }
+    }
+
+    /// Underholdning er brugerens egen mappe i Discogs-samlingen med dette navn.
+    public static let entertainmentFolder = "Underholdning"
+
+    /// Jazz og Klassisk er Discogs-genrer ("Jazz, Rock" tæller som jazz). Underholdning er Discogs-mappen.
+    public func matches(genres: String?, folder: String?) -> Bool {
+        switch self {
+        case .jazz: return Self.hasGenre(genres, "jazz")
+        case .classical: return Self.hasGenre(genres, "classical")
+        case .entertainment:
+            return folder?.trimmingCharacters(in: .whitespaces).lowercased() == Self.entertainmentFolder.lowercased()
+        }
+    }
+
+    /// Skillekortets farve (lys og mørk tilstand), som RGB-hex. Hvid tekst ovenpå. Samme farver på Windows og i webappen.
+    public var colorHex: (light: UInt32, dark: UInt32) {
+        switch self {
+        case .jazz: return (0x1F4F8F, 0x3A6DB5)
+        case .entertainment: return (0x85621A, 0xA67C24)
+        case .classical: return (0x6E2433, 0x93394B)
+        }
+    }
+
+    static func hasGenre(_ genres: String?, _ name: String) -> Bool {
+        (genres ?? "").split(separator: ",").contains { $0.trimmingCharacters(in: .whitespaces).lowercased() == name }
+    }
+}
+
+/// Hvor en kategori står. `off` = sammen med alt det andet (som før).
+public enum CategoryMode: String, CaseIterable, Identifiable, Codable {
+    case off
+    case end
+    case own
+
+    public var id: String { rawValue }
+
+    public var label: String {
+        switch self {
+        case .off: return "Fra"
+        case .end: return "Sidst på reolerne"
+        case .own: return "Egne reoler"
+        }
+    }
+}
+
+/// En slags hylde med egne reoler, sektioner og nummerering: plader eller cd'er, og evt. en kategori med
+/// egne reoler (fx jazz-cd'er). Gemmes som tekst: "vinyl", "cd", "vinyl.jazz", "cd.classical" osv.
+public struct ShelfKind: Hashable, Identifiable {
+    public var medium: Medium
+    public var category: Category?
+
+    public init(_ medium: Medium, _ category: Category? = nil) { self.medium = medium; self.category = category }
+
+    public static let vinyl = ShelfKind(.vinyl)
+    public static let cd = ShelfKind(.cd)
+
+    public var rawValue: String { category.map { "\(medium.rawValue).\($0.rawValue)" } ?? medium.rawValue }
+    public var id: String { rawValue }
+
+    public init?(rawValue: String) {
+        let parts = rawValue.split(separator: ".", omittingEmptySubsequences: false).map(String.init)
+        guard let m = Medium(rawValue: parts[0]), parts.count <= 2 else { return nil }
+        if parts.count == 2 {
+            guard let c = Category(rawValue: parts[1]) else { return nil }
+            self.init(m, c)
+        } else {
+            self.init(m)
+        }
+    }
+
+    /// Alle slags hylder i fast rækkefølge: plader, cd'er, og så kategorierne (plader før cd'er).
+    public static var all: [ShelfKind] {
+        Medium.allCases.map { ShelfKind($0) } + Category.allCases.flatMap { c in Medium.allCases.map { ShelfKind($0, c) } }
+    }
+
+    /// "Plader" / "Cd'er" / "Jazz (plader)" / "Klassisk (cd'er)" – til skiftet øverst og overskrifter.
+    public var title: String { category.map { "\($0.title) (\(medium.plural))" } ?? medium.title }
+    /// "Reol" / "Cd-reol" / "Jazz-reol" / "Klassisk-cd-reol"
+    public var shelfWord: String {
+        guard let category else { return medium.shelfWord }
+        return medium == .vinyl ? "\(category.title)-reol" : "\(category.title)-cd-reol"
+    }
+    /// "plade" / "cd" og "plader" / "cd'er" (som mediet).
+    public var singular: String { medium.singular }
+    public var plural: String { medium.plural }
+    /// "Reolerne" / "Cd-reolerne" / "Jazz-reolerne" – til historikken.
+    public var shelvesWord: String { shelfWord + "erne" }
+}
+
 // MARK: - Fysisk data ("Denne konkrete kopi står her")
 
 /// Pladens fysiske status. Gemmes som tekst (`rawValue`) i `copies.status`.
@@ -141,17 +249,20 @@ public struct Copy: Equatable, Hashable, Identifiable {
     public var discogsRank: Int?
     /// Brugerens eget valg af hylde, når Discogs' format ikke passer (fx en boks med en cd).
     public var mediumOverride: Medium?
+    /// Navnet på mappen i Discogs-samlingen (fx "Underholdning"). nil, indtil den er hentet.
+    public var discogsFolder: String?
 
     public init(id: Int64, instanceID: Int?, releaseID: Int, status: CopyStatus = .home,
                 statusNote: String? = nil, inDiscogs: Bool = true, removedFromDiscogsAt: Date? = nil,
                 sortArtistOverride: String? = nil, sortTitleOverride: String? = nil, dateAdded: String? = nil,
-                discogsRank: Int? = nil, mediumOverride: Medium? = nil) {
+                discogsRank: Int? = nil, mediumOverride: Medium? = nil, discogsFolder: String? = nil) {
         self.id = id; self.instanceID = instanceID; self.releaseID = releaseID; self.status = status
         self.statusNote = statusNote; self.inDiscogs = inDiscogs; self.removedFromDiscogsAt = removedFromDiscogsAt
         self.sortArtistOverride = sortArtistOverride; self.sortTitleOverride = sortTitleOverride
         self.dateAdded = dateAdded
         self.discogsRank = discogsRank
         self.mediumOverride = mediumOverride
+        self.discogsFolder = discogsFolder
     }
 }
 
@@ -166,14 +277,20 @@ public struct Location: Equatable, Hashable, Identifiable {
     public var scanCode: String?
     /// Plade- eller cd-reol.
     public var medium: Medium
+    /// En kategori med egne reoler (fx jazz). nil = de almindelige reoler.
+    public var category: Category?
 
-    public init(id: Int64, shelf: Int, section: String, sortIndex: Int, scanCode: String? = nil, medium: Medium = .vinyl) {
+    public init(id: Int64, shelf: Int, section: String, sortIndex: Int, scanCode: String? = nil, medium: Medium = .vinyl,
+                category: Category? = nil) {
         self.id = id; self.shelf = shelf; self.section = section; self.sortIndex = sortIndex; self.scanCode = scanCode
         self.medium = medium
+        self.category = category
     }
 
-    /// "Reol 1 · Sektion A" eller "Cd-reol 1 · Sektion A".
-    public var name: String { "\(medium.shelfWord) \(shelf) · Sektion \(section)" }
+    public var kind: ShelfKind { ShelfKind(medium, category) }
+
+    /// "Reol 1 · Sektion A", "Cd-reol 1 · Sektion A" eller "Jazz-reol 1 · Sektion A".
+    public var name: String { "\(kind.shelfWord) \(shelf) · Sektion \(section)" }
     public var shortName: String { "\(shelf)\(section)" }
 }
 
@@ -207,13 +324,18 @@ public struct RecordItem: Identifiable, Hashable {
     /// Plade eller cd: brugerens valg, ellers Discogs' format.
     public var medium: Medium { copy.mediumOverride ?? Medium.of(format: release.format) }
 
-    /// "1973 • Harvest • SHVL 804 • Vinyl, LP" – bruges til at skelne pressings.
+    /// "Harvest SHVL 804 (1973)" – pladeselskab og katalognummer, som samlere skriver dem.
+    public var pressingLine: String {
+        let label = release.label.flatMap { $0.isEmpty ? nil : $0 }
+        let cat = release.catalogNumber.flatMap { $0.isEmpty || $0.lowercased() == "none" ? nil : $0 }
+        let name = [label, cat].compactMap { $0 }.joined(separator: " ")
+        guard let y = release.year, y > 0 else { return name }
+        return name.isEmpty ? String(y) : "\(name) (\(y))"
+    }
+
+    /// "Harvest SHVL 804 (1973). Vinyl, LP" – bruges til at skelne pressings. Samme tekst på Windows og i webappen.
     public var detailLine: String {
-        var parts: [String] = []
-        if let y = release.year, y > 0 { parts.append(String(y)) }
-        if let l = release.label, !l.isEmpty { parts.append(l) }
-        if let c = release.catalogNumber, !c.isEmpty, c.lowercased() != "none" { parts.append(c) }
-        if let f = release.format, !f.isEmpty { parts.append(f) }
-        return parts.joined(separator: " • ")
+        let f = release.format.flatMap { $0.isEmpty ? nil : $0 }
+        return [pressingLine.isEmpty ? nil : pressingLine, f].compactMap { $0 }.joined(separator: ". ")
     }
 }

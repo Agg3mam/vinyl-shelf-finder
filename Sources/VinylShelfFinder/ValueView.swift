@@ -87,7 +87,7 @@ struct ValueHeader: View {
     var body: some View {
         @Bindable var model = model
         VStack(alignment: .leading, spacing: Spacing.s) {
-            Text("DISCOGS' ESTIMAT FOR SAMLINGEN").font(Typo.eyebrow).foregroundStyle(.secondary).tracking(Typo.eyebrowTracking)
+            Text("Discogs' estimat for samlingen").font(Typo.eyebrow).foregroundStyle(.secondary)
             if let v = model.collectionValue {
                 HStack(spacing: 0) {
                     stat("Min", v.minimum)

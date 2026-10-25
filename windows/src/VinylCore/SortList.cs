@@ -40,26 +40,32 @@ public static class SortList
 
 public sealed partial class ShelfStore
 {
-    private static string SortCheckedKey(Medium m) => $"sort_checked_{m.RawValue()}";
+    /// "sort_checked_vinyl", "sort_checked_cd", "sort_checked_vinyl.jazz" …
+    internal static string SortCheckedKey(ShelfKind k) => $"sort_checked_{k.RawValue}";
 
     /// Kopierne, der er sat flueben ved i sorteringslisten for én hylde.
-    public HashSet<long> SortChecked(Medium medium)
+    public HashSet<long> SortChecked(Medium medium) => SortChecked(new ShelfKind(medium));
+
+    public HashSet<long> SortChecked(ShelfKind kind)
     {
-        var raw = Setting(SortCheckedKey(medium)) ?? "";
+        var raw = Setting(SortCheckedKey(kind)) ?? "";
         return raw.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
                   .Select(s => long.TryParse(s, NumberStyles.Integer, CultureInfo.InvariantCulture, out var id) ? id : (long?)null)
                   .OfType<long>().ToHashSet();
     }
 
-    public void SetSortChecked(Medium medium, long copyId, bool isChecked)
+    public void SetSortChecked(Medium medium, long copyId, bool isChecked) => SetSortChecked(new ShelfKind(medium), copyId, isChecked);
+
+    public void SetSortChecked(ShelfKind kind, long copyId, bool isChecked)
     {
-        var set = SortChecked(medium);
+        var set = SortChecked(kind);
         if (isChecked ? !set.Add(copyId) : !set.Remove(copyId)) return;
-        SaveSortChecked(medium, set);
+        SaveSortChecked(kind, set);
     }
 
-    public void ClearSortChecked(Medium medium) => SaveSortChecked(medium, new HashSet<long>());
+    public void ClearSortChecked(Medium medium) => ClearSortChecked(new ShelfKind(medium));
+    public void ClearSortChecked(ShelfKind kind) => SaveSortChecked(kind, new HashSet<long>());
 
-    private void SaveSortChecked(Medium medium, HashSet<long> set) =>
-        SetSetting(SortCheckedKey(medium), string.Join(",", set.OrderBy(x => x).Select(x => x.ToString(CultureInfo.InvariantCulture))));
+    private void SaveSortChecked(ShelfKind kind, HashSet<long> set) =>
+        SetSetting(SortCheckedKey(kind), string.Join(",", set.OrderBy(x => x).Select(x => x.ToString(CultureInfo.InvariantCulture))));
 }

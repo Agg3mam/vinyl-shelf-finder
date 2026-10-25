@@ -150,7 +150,7 @@ enum Snapshotter {
         model.forceOnboarding = false
 
         // Cd-hylden: egne reoler, samme skærme. Skiftet sættes tilbage til pladerne bagefter.
-        model.medium = .cd
+        model.shelfKind = .cd
         if let loc = model.library.locations.first {
             model.sidebar = .section(loc.id)
             model.selection = model.library.sections[loc.id]?.dropFirst().first
@@ -162,7 +162,7 @@ enum Snapshotter {
         }
         model.forceOnboarding = true
         render(ContentView().appRoot().environment(model), size: CGSize(width: 1000, height: 900), to: dir.appendingPathComponent("14c-cd-opdeling.png"))
-        model.medium = .vinyl
+        model.shelfKind = .vinyl
         NSApp.terminate(nil)
     }
 

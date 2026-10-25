@@ -31,13 +31,13 @@ struct RecordView: View {
                     let position = n.position ?? 1
                     LocationCard(location: loc, position: position, count: n.sectionCount,
                                  title: away ? "Her plejer den at stå" : "Gå til",
-                                 hint: "\(away ? "Plads" : loc.medium.singular.capitalized) \(position) af \(n.sectionCount) fra venstre")
+                                 hint: "\(away ? "Plads" : "Nr.") \(position) af \(n.sectionCount) fra venstre")
                     if away {
                         Label("\(item.copy.status.label)\(item.copy.statusNote.map { ": \($0)" } ?? "")", systemImage: item.copy.status.symbol)
                             .font(.callout.weight(.semibold)).foregroundStyle(.orange)
                     }
-                    ReferenceCard(title: "Find først", ref: adv.primary, medium: route.medium)
-                    if let s = adv.secondary { ReferenceCard(title: "Dernæst", ref: s, medium: route.medium) }
+                    ReferenceCard(title: "Start ved", ref: adv.primary, medium: route.medium)
+                    if let s = adv.secondary { ReferenceCard(title: "Så", ref: s, medium: route.medium) }
                     hints(adv, n)
                     NavigationLink(value: SectionRoute(medium: route.medium, locationID: loc.id)) {
                         Label("Vis hele sektion \(loc.shortName)", systemImage: "list.number")
@@ -89,17 +89,18 @@ struct RecordView: View {
         layout {
             if lookStyle.bigCovers {
                 Color.clear.aspectRatio(1, contentMode: .fit)
-                    .overlay { CoverImage(url: url, corner: 14) }
+                    .overlay { CoverImage(url: url, corner: 14, release: item.release) }
                     .clipShape(.rect(cornerRadius: 14))
                     .shadow(radius: 12, y: 6)
             } else {
-                CoverImage(url: url, size: 130, corner: 10)
+                CoverImage(url: url, size: 130, corner: 10, release: item.release)
                     .shadow(radius: 12, y: 6)
             }
             VStack(alignment: .leading, spacing: 4) {
                 Text(item.artist).font(.title3.weight(.semibold))
                 Text(item.title).font(.title2.weight(.bold)).fontDesign(lookStyle.serifTitles ? .serif : nil)
-                Text(item.detailLine).font(.footnote).foregroundStyle(.secondary).lineLimit(2)
+                if !item.pressingLine.isEmpty { Text(item.pressingLine).font(.footnote).foregroundStyle(.secondary).lineLimit(1) }
+                if let f = item.release.format, !f.isEmpty { Text(f).font(.footnote).foregroundStyle(.tertiary).lineLimit(1) }
             }
         }
     }
@@ -157,10 +158,10 @@ private struct LocationCard: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text(title.uppercased()).font(.caption.weight(.semibold)).foregroundStyle(.secondary)
-            PlacementLine(location: location).font(.title.weight(.bold))
-            ShelfSpines(position: position, count: count)
-            Text(hint).font(.callout.monospacedDigit()).foregroundStyle(.secondary)
+            Text(title).font(.callout.weight(.semibold)).foregroundStyle(.secondary)
+            PlacementLine(location: location)
+            ShelfSpines(position: position, count: count, accent: location.category?.color ?? AppAccent.color)
+            Text(hint).font(.system(size: 19, weight: .medium).width(.condensed).monospacedDigit()).foregroundStyle(.secondary)
         }
         .padding(18)
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -172,19 +173,19 @@ private struct LocationCard: View {
 private struct ReferenceCard: View {
     let title: String
     let ref: Library.Reference
-    let medium: Medium
+    let medium: ShelfKind
 
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
             if let it = ref.item {
-                CoverImage(url: it.release.thumbURL ?? it.release.coverURL, size: 56)
+                CoverImage(url: it.release.thumbURL ?? it.release.coverURL, size: 56, release: it.release)
             } else {
                 Image(systemName: ref.side == .sectionStart ? "arrow.left.to.line" : "arrow.right.to.line")
                     .font(.title2).frame(width: 56, height: 56)
                     .background(.quaternary, in: .rect(cornerRadius: 6))
             }
             VStack(alignment: .leading, spacing: 4) {
-                Text(title.uppercased()).font(.caption.weight(.semibold)).foregroundStyle(.secondary)
+                Text(title).font(.callout.weight(.semibold)).foregroundStyle(.secondary)
                 if let it = ref.item { Text(it.fullName).font(.subheadline.weight(.semibold)) }
                 Text(ref.reason).font(.callout).fixedSize(horizontal: false, vertical: true)
             }

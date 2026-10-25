@@ -66,8 +66,11 @@ public sealed class OnboardingView : IPane
 
         var p = new StackPanel { Spacing = 20, Padding = new Thickness(32), MaxWidth = 820, HorizontalAlignment = HorizontalAlignment.Stretch };
         var title = new StackPanel { Spacing = 6 };
-        title.Children.Add(Ui.Text(m == Medium.Cd ? "Dine cd'er" : "Vinyl Shelf Finder", "TitleLargeTextBlockStyle"));
-        title.Children.Add(Ui.Text(m == Medium.Cd
+        var kind = _model.Kind;
+        title.Children.Add(Ui.Text(kind.Category is not null ? kind.Title : m == Medium.Cd ? "Dine cd'er" : "Vinyl Shelf Finder", "TitleLargeTextBlockStyle"));
+        title.Children.Add(Ui.Text(kind.Category is not null
+            ? $"{kind.Title} får deres egne reoler og sektioner. De andre reoler og deres placeringer røres ikke."
+            : m == Medium.Cd
             ? "Cd'erne får deres egne reoler og sektioner. Dine plader og deres placeringer røres ikke."
             : "Find dine plader i reolen. Tre trin, så er du i gang.", "SubtitleTextBlockStyle", Ui.Secondary));
         p.Children.Add(title);
@@ -205,7 +208,7 @@ public sealed class OnboardingView : IPane
         for (int i = 0; i < _sectionsPerShelf.Count; i++)
         {
             int idx = i;
-            var box = new NumberBox { Header = $"{m.ShelfWord()} {i + 1}: sektioner", Value = _sectionsPerShelf[i], Minimum = 1, Maximum = 26, SpinButtonPlacementMode = NumberBoxSpinButtonPlacementMode.Inline, Margin = new Thickness(12, 0, 0, 0) };
+            var box = new NumberBox { Header = $"{_model.Kind.ShelfWord} {i + 1}: sektioner", Value = _sectionsPerShelf[i], Minimum = 1, Maximum = 26, SpinButtonPlacementMode = NumberBoxSpinButtonPlacementMode.Inline, Margin = new Thickness(12, 0, 0, 0) };
             box.ValueChanged += (_, e) =>
             {
                 if (double.IsNaN(e.NewValue) || idx >= _sectionsPerShelf.Count) return;
@@ -229,7 +232,7 @@ public sealed class OnboardingView : IPane
             row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(80) });
             row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(120) });
             row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-            var name = Ui.Text($"{(m == Medium.Vinyl ? "Reol" : "Cd")} {plan.Shelf} · {plan.Section}", "BodyStrongTextBlockStyle", wrap: false);
+            var name = Ui.Text($"{_model.Kind.Category?.Title() ?? (m == Medium.Vinyl ? "Reol" : "Cd")} {plan.Shelf} · {plan.Section}", "BodyStrongTextBlockStyle", wrap: false);
             name.VerticalAlignment = VerticalAlignment.Center;
             row.Children.Add(name);
             var count = new NumberBox { Value = plan.Count, Minimum = 0, Maximum = items.Count, SpinButtonPlacementMode = NumberBoxSpinButtonPlacementMode.Inline };
@@ -269,7 +272,7 @@ public sealed class OnboardingView : IPane
             buttons.Children.Add(Ui.Btn("Se hele rækkefølgen", (_, _) => _model.Sidebar = new SidebarItem(SidebarKind.SortList),
                 tooltip: $"Sorteringslisten: alle {m.Plural()} i den rækkefølge, de skal stå"));
         if (_model.ForceOnboarding) buttons.Children.Add(Ui.Btn("Annullér", (_, _) => _model.ForceOnboarding = false));
-        var create = Ui.Btn(m == Medium.Vinyl ? "Opret reol" : "Opret cd-reol", async (s, _) =>
+        var create = Ui.Btn($"Opret {_model.Kind.ShelfWord.ToLowerInvariant()}", async (s, _) =>
         {
             try
             {
@@ -278,8 +281,10 @@ public sealed class OnboardingView : IPane
                 {
                     XamlRoot = ((FrameworkElement)s).XamlRoot,
                     Title = "Erstat den nuværende reolstruktur?",
-                    Content = m == Medium.Vinyl
+                    Content = _model.Kind == ShelfKind.Vinyl
                         ? "Alle nuværende fysiske placeringer erstattes med den sorterede rækkefølge. Historikken bevares."
+                        : _model.Kind.Category is not null
+                        ? $"{_model.Kind.Title}: de nuværende placeringer erstattes med den sorterede rækkefølge. De andre reoler røres ikke. Historikken bevares."
                         : "Cd'ernes nuværende placeringer erstattes med den sorterede rækkefølge. Pladerne røres ikke. Historikken bevares.",
                     PrimaryButtonText = "Erstat alle placeringer",
                     CloseButtonText = "Annullér",
@@ -308,7 +313,7 @@ public sealed class OnboardingView : IPane
             acc = e;
             ranges[p.Shelf] = ranges.TryGetValue(p.Shelf, out var cur) ? (cur.Start, e) : (s, e);
         }
-        return string.Join(" · ", ranges.Select(kv => $"{_model.Medium.ShelfWord()} {kv.Key}: {kv.Value.Start}–{kv.Value.End}"));
+        return string.Join(" · ", ranges.Select(kv => $"{_model.Kind.ShelfWord} {kv.Key}: {kv.Value.Start}–{kv.Value.End}"));
     }
 
     /// <summary>De vigtigste sorteringsregler direkte i opsætningen.</summary>

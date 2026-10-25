@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Text;
+using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
 using VinylShelfFinder.Core;
 
@@ -70,6 +71,7 @@ static class DataChecks
         CoverFlow();
         Planner();
         Cds();
+        CategoryStore();
         SortListChecks();
         Transfer();
         Surname();
@@ -129,6 +131,47 @@ static class DataChecks
         var nlJson = new SortRules { NumbersLast = false }.ToJson();
         Check.That(nlJson.Contains("\"numbersLast\":false") && SortRules.FromJson(nlJson)!.NumbersLast == false
                    && SortRules.FromJson("{\"danishAlphabet\":true}")!.NumbersLast, "tal-reglen gemmes; gamle regler får standarden (tal sidst)");
+
+        // Kategorier: Jazz, Underholdning, Klassisk (samme checks som på Mac).
+        var cd0 = new SortRules();
+        Check.That(cd0.Categories.Count == 0 && CategoryExtensions.All.All(c => cd0.Mode(c) == CategoryMode.Off),
+                   "kategorierne er slået fra som standard (sorteringen må ikke ændre sig ved opdatering)");
+        Check.That(Category.Jazz.Matches("Jazz, Rock", null) && !Category.Jazz.Matches("Rock", null)
+                   && Category.Classical.Matches("Stage & Screen, Classical", null) && !Category.Classical.Matches("Neoclassical", null)
+                   && Category.Entertainment.Matches("Pop", " underholdning ") && !Category.Entertainment.Matches("Pop", "Uncategorized")
+                   && !Category.Entertainment.Matches(null, null), "jazz og klassisk ud fra genren, underholdning ud fra Discogs-mappen");
+        Check.That(ShelfKind.FromRaw("cd.jazz") == new ShelfKind(Medium.Cd, Category.Jazz) && ShelfKind.FromRaw("vinyl") == ShelfKind.Vinyl
+                   && ShelfKind.FromRaw("vinyl.x") is null && ShelfKind.FromRaw("kassette") is null && new ShelfKind(Medium.Vinyl, Category.Classical).RawValue == "vinyl.classical"
+                   && ShelfKind.All.Count == 8 && ShelfKind.All[0] == ShelfKind.Vinyl && ShelfKind.All[1] == ShelfKind.Cd, "hylderne har faste navne");
+        Check.That(new ShelfKind(Medium.Vinyl, Category.Jazz).ShelfWord == "Jazz-reol" && new ShelfKind(Medium.Cd, Category.Classical).ShelfWord == "Klassisk-cd-reol"
+                   && new ShelfKind(Medium.Cd, Category.Entertainment).Title == "Underholdning (cd'er)" && ShelfKind.Cd.ShelfWord == "Cd-reol", "navne på kategori-reoler");
+        static RecordItem Cat(long id, string artist, string? genres, string? folder, int? rank) =>
+            new(new Copy(id, id, (int)id, DiscogsRank: rank, DiscogsFolder: folder), new Release((int)id, artist, "T", Format: "Vinyl, LP", Genres: genres));
+        var cats = new[] { Cat(1, "Bach", "Classical", null, 0), Cat(2, "Beatles", "Rock", null, 1), Cat(3, "Coltrane", "Jazz", null, 2),
+                           Cat(4, "Kim Larsen", "Pop", "Underholdning", 3), Cat(5, "Miles Davis", "Jazz, Classical", null, 4), Cat(6, "Zappa", "Rock", null, 5) };
+        Check.That(cd0.Sorted(cats).Select(i => i.Artist).SequenceEqual(new[] { "Bach", "Beatles", "Coltrane", "Kim Larsen", "Miles Davis", "Zappa" }), "slået fra: uændret rækkefølge");
+        var catEnd = new SortRules();
+        foreach (var c in CategoryExtensions.All) catEnd.Categories[c] = CategoryMode.End;
+        Check.That(catEnd.Sorted(cats).Select(i => i.Artist).SequenceEqual(new[] { "Beatles", "Zappa", "Coltrane", "Miles Davis", "Kim Larsen", "Bach" }),
+                   "sidst på reolerne: Jazz, så Underholdning, så Klassisk; jazz vinder over klassisk");
+        var onlyClassical = new SortRules { Categories = { [Category.Classical] = CategoryMode.End } };
+        Check.That(onlyClassical.Sorted(cats).Select(i => i.Artist).SequenceEqual(new[] { "Beatles", "Coltrane", "Kim Larsen", "Zappa", "Bach", "Miles Davis" }),
+                   "kun klassisk slået til: også jazz med genren Classical står blandt klassisk");
+        var catOwn = new SortRules { Categories = { [Category.Jazz] = CategoryMode.Own } };
+        Check.That(catOwn.ShelfKindOf(cats[2].Copy, cats[2].Release) == new ShelfKind(Medium.Vinyl, Category.Jazz)
+                   && catOwn.ShelfKindOf(cats[1].Copy, cats[1].Release) == ShelfKind.Vinyl
+                   && catEnd.ShelfKindOf(cats[2].Copy, cats[2].Release) == ShelfKind.Vinyl, "egne reoler: jazz får sin egen hylde, sidst på reolerne gør ikke");
+        var cdCopy = new Copy(9, 9, 9);
+        Check.That(catOwn.ShelfKindOf(cdCopy, new Release(9, "A", "T", Format: "CD, Album", Genres: "Jazz")) == new ShelfKind(Medium.Cd, Category.Jazz)
+                   && catOwn.ShelfKindOf(cdCopy, new Release(9, "A", "T", Format: "File, MP3", Genres: "Jazz")) is null,
+                   "jazz-cd'er står på jazz-cd-reolerne, digitale filer ingen steder");
+        var catJson = catOwn.ToJson();
+        Check.That(catJson.Contains("\"categories\":{\"jazz\":\"own\"}") && SortRules.FromJson(catJson)!.Mode(Category.Jazz) == CategoryMode.Own,
+                   "kategorierne gemmes og læses (samme nøgle som Mac)");
+        Check.That(!cd0.ToJson().Contains("categories"), "uden kategorier gemmes reglerne som før");
+        var odd = SortRules.FromJson("{\"categories\":{\"jazz\":\"end\",\"polka\":\"own\",\"classical\":\"?\",\"entertainment\":\"off\"}}")!;
+        Check.That(odd.Categories.Count == 1 && odd.Mode(Category.Jazz) == CategoryMode.End, "ukendte kategorier og valg springes over");
+        Check.That(SortRules.FromJson("{\"numbersLast\":true}")!.Categories.Count == 0, "gemte regler fra før kategorierne: forbliver slået fra");
     });
 
     // MARK: Database-wrapperen
@@ -539,6 +582,74 @@ static class DataChecks
     });
 
     // MARK: Sorteringslisten (plader og cd'er hver for sig)
+
+    private static void CategoryStore() => Check.Section("kategorier i databasen", () =>
+    {
+        // Discogs-mappe, egne reoler og synkronisering (samme checks som på Mac).
+        using var s = new ShelfStore(TempDb("kategorier"));
+        Check.That(s.Db.UserVersion == 8, "skema v8");
+        static DiscogsCollectionItem It(int i, string artist, string format, string genres, string? folder) =>
+            new(60_000 + i, null, new Release(6_000 + i, artist, $"T{i}", Format: format, Genres: genres), 1, folder);
+        s.ApplyCollection(new[] { It(1, "Beatles", "Vinyl, LP", "Rock", "Uncategorized"), It(2, "Coltrane", "Vinyl, LP", "Jazz", "Uncategorized"),
+                                  It(3, "Kim Larsen", "Vinyl, LP", "Pop", "Underholdning"), It(4, "Monk", "CD, Album", "Jazz", null) });
+        var all = s.LoadLibrary(Medium.Vinyl);
+        Check.That(all.Copies.Count == 3 && all.AllItems.First(i => i.Artist == "Kim Larsen").Copy.DiscogsFolder == "Underholdning", "mappen fra Discogs gemmes pr. kopi");
+        s.ApplyCollection(new[] { It(1, "Beatles", "Vinyl, LP", "Rock", "Underholdning"), It(2, "Coltrane", "Vinyl, LP", "Jazz", null),
+                                  It(3, "Kim Larsen", "Vinyl, LP", "Pop", "Underholdning"), It(4, "Monk", "CD, Album", "Jazz", null) });
+        var again = s.LoadLibrary(Medium.Vinyl);
+        Check.That(again.AllItems.First(i => i.Artist == "Beatles").Copy.DiscogsFolder == "Underholdning"
+                   && again.AllItems.First(i => i.Artist == "Coltrane").Copy.DiscogsFolder == "Uncategorized",
+                   "flyttet mappe opdateres; ukendt mappe (navnene ikke hentet) bevarer den gamle");
+        s.CreateLayout(new[] { (1, "A", (IReadOnlyList<long>)again.Copies.Keys.OrderBy(x => x).ToList()) }, Medium.Vinyl);
+        var before = PlacementRows(s);
+        var rules = s.LoadSortRules(); rules.Categories[Category.Jazz] = CategoryMode.Own;
+        s.SaveSortRules(rules);
+        var jazzKind = new ShelfKind(Medium.Vinyl, Category.Jazz);
+        var main = s.LoadLibrary(ShelfKind.Vinyl); var jazz = s.LoadLibrary(jazzKind); var jazzCd = s.LoadLibrary(new ShelfKind(Medium.Cd, Category.Jazz));
+        Check.That(main.Copies.Count == 2 && jazz.Copies.Count == 1 && jazz.Unplaced.Count == 1 && jazzCd.Copies.Count == 1 && s.LoadLibrary(ShelfKind.Cd).Copies.Count == 0,
+                   "egne reoler: jazz-pladen og jazz-cd'en flytter til deres egne hylder og venter på en plads");
+        Check.That(PlacementRows(s).SequenceEqual(before) && main.GlobalOrder.Count == 2, "at slå egne reoler til flytter ingen placeringer i databasen");
+        var counts = s.ShelfCounts();
+        Check.That(counts.GetValueOrDefault(ShelfKind.Vinyl) == 2 && counts.GetValueOrDefault(jazzKind) == 1
+                   && counts.GetValueOrDefault(new ShelfKind(Medium.Cd, Category.Jazz)) == 1 && !counts.ContainsKey(ShelfKind.Cd), "antal pr. hylde");
+        s.CreateLayout(new[] { (1, "A", (IReadOnlyList<long>)jazz.Copies.Keys.ToList()) }, jazzKind);
+        var jazz2 = s.LoadLibrary(jazzKind); var main2 = s.LoadLibrary(ShelfKind.Vinyl);
+        Check.That(jazz2.Locations.Count == 1 && jazz2.Unplaced.Count == 0 && jazz2.Locations[0].Name == "Jazz-reol 1 · Sektion A" && main2.Locations.Count == 1
+                   && main2.Locations[0].Category is null, "jazz-reolen oprettes uden at røre de almindelige reoler");
+        Check.That(s.History(1).First().Summary.StartsWith("Jazz-reolerne er oprettet", StringComparison.Ordinal), "historikken nævner jazz-reolerne");
+        s.AddSection(1, "B", jazzKind);
+        Check.That(s.LoadLibrary(jazzKind).Locations.Select(l => l.ShortName).SequenceEqual(new[] { "1A", "1B" }) && s.LoadLibrary(ShelfKind.Vinyl).Locations.Count == 1,
+                   "ny sektion på jazz-reolen");
+        // Synkronisering: mappe og kategori følger med, og en ældre version uden felterne sletter dem ikke.
+        var docs = s.ExportSyncDocs();
+        var coltrane = jazz2.AllItems.First().Copy;
+        var copyDoc = docs.First(d => d.Kind == SyncKind.Copy && d.Data?["instance"]?.GetValue<long>() == coltrane.InstanceId);
+        var jazzLoc = docs.First(d => d.Kind == SyncKind.Location && d.Data?["category"] is not null);
+        Check.That(copyDoc.Data!["folder"]?.GetValue<string>() == "Uncategorized" && jazzLoc.Data!["category"]?.GetValue<string>() == "jazz"
+                   && docs.Count(d => d.Kind == SyncKind.Location && d.Data?["category"] is null) == 1, "mappe og kategori sendes med (kun når de findes)");
+        using var b = new ShelfStore(TempDb("kategorier-b"));
+        b.ApplySyncDocs(docs);
+        b.SaveSortRules(rules);
+        var bj = b.LoadLibrary(jazzKind);
+        Check.That(bj.Locations.Count == 2 && bj.Copies.Count == 1 && bj.Unplaced.Count == 0 && bj.Locations.All(l => l.Category == Category.Jazz),
+                   "en anden enhed får jazz-reolen med pladen på");
+        var oldCopyData = (JsonObject)copyDoc.Data!.DeepClone(); oldCopyData.Remove("folder");
+        var oldLocData = (JsonObject)jazzLoc.Data!.DeepClone(); oldLocData.Remove("category");
+        b.ApplySyncDocs(new[] { new SyncDoc(SyncKind.Copy, copyDoc.Key, oldCopyData), new SyncDoc(SyncKind.Location, jazzLoc.Key, oldLocData) });
+        Check.That(b.LoadLibrary(jazzKind).Locations.Count == 2
+                   && b.Db.Query("SELECT discogs_folder FROM copies WHERE discogs_instance_id = ?", coltrane.InstanceId).First().Text("discogs_folder") == "Uncategorized",
+                   "poster fra en ældre version uden mappe/kategori sletter dem ikke");
+        s.SetSortChecked(jazzKind, coltrane.Id, true);
+        Check.That(s.SortChecked(jazzKind).SetEquals(new[] { coltrane.Id }) && s.SortChecked(ShelfKind.Vinyl).Count == 0
+                   && s.ExportSyncDocs().Any(d => d.Kind == SyncKind.Setting && d.Key == "sort_checked_vinyl.jazz")
+                   && !s.ExportSyncDocs().Any(d => d.Key == "sort_checked_cd.jazz"), "flueben pr. kategori-hylde (og kun brugte sendes)");
+        // Plader → cd: en jazz-plade, der markeres som cd, fjernes fra jazz-pladereolen.
+        s.SetMedium(coltrane.Id, Medium.Cd);
+        Check.That(s.LoadLibrary(new ShelfKind(Medium.Cd, Category.Jazz)).Unplaced.Contains(coltrane.Id) && s.LoadLibrary(jazzKind).Copies.Count == 0,
+                   "\"Det er en cd\" flytter jazz-pladen til jazz-cd'erne");
+        var folders = DiscogsClient.ParseFolders(System.Text.Encoding.UTF8.GetBytes("{\"folders\":[{\"id\":0,\"name\":\"All\",\"count\":3},{\"id\":7,\"name\":\"Underholdning\",\"count\":1}]}"));
+        Check.That(folders.Count == 2 && folders[0] == "All" && folders[7] == "Underholdning", "mappernes navne fra Discogs læses");
+    });
 
     private static void SortListChecks() => Check.Section("sorteringsliste", () =>
     {
@@ -968,7 +1079,7 @@ static class DataChecks
         var path = TempDb("schema");
         using (var s = new ShelfStore(path))
         {
-            Check.That(s.Db.UserVersion == 7, "skema v7");
+            Check.That(s.Db.UserVersion == 8, "skema v8");
             s.ApplyCollection(new[] { Item(1, 1, "O'Brien", "Robert'); DROP TABLE copies;--") });
         }
         using var reopened = new ShelfStore(path);
@@ -991,7 +1102,7 @@ static class DataChecks
         var cid = up.LoadLibrary().Copies.Keys.First();
         bool ok;
         try { up.LogPlay(cid); ok = true; } catch (DatabaseException) { ok = false; }
-        Check.That(up.Db.UserVersion == 7 && ok, "migration v3→v7 opretter plays og bevarer kopier");
+        Check.That(up.Db.UserVersion == 8 && ok, "migration v3→v8 opretter plays og bevarer kopier");
     });
 
     // Søgning: Unicode og grænsetilfælde

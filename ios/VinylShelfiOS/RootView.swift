@@ -3,12 +3,12 @@ import VinylCore
 
 /// Navigation: en plade eller en sektion på en bestemt hylde (plader eller cd'er).
 struct RecordRoute: Hashable {
-    let medium: Medium
+    let medium: ShelfKind
     let copyID: Int64
     /// Sangen, man søgte på (fremhæves i sanglisten).
     var track: Track? = nil
 }
-struct SectionRoute: Hashable { let medium: Medium; let locationID: Int64 }
+struct SectionRoute: Hashable { let medium: ShelfKind; let locationID: Int64 }
 
 struct RootView: View {
     @Environment(PhoneModel.self) private var model

@@ -25,10 +25,14 @@ public static class LabelsPrint
             .grid { display: grid; grid-template-columns: 89mm 89mm; gap: 5mm; }
             .label { box-sizing: border-box; width: 89mm; height: 60mm; padding: 5mm; border: 0.3mm solid #ccc; border-radius: 3mm;
                      display: flex; flex-direction: column; break-inside: avoid; }
-            .top { display: flex; justify-content: space-between; align-items: flex-start; }
-            .shelf { font-size: 11px; font-weight: 700; letter-spacing: 2px; color: #777; }
-            .section { font-size: 24px; font-weight: 800; }
-            .qr svg { width: 22mm; height: 22mm; display: block; }
+            .top { display: flex; align-items: flex-end; gap: 3mm; border-bottom: 1mm solid var(--c); padding-bottom: 0; }
+            .tab { background: var(--c); color: #fff; font-family: Bahnschrift, "Segoe UI", sans-serif; font-stretch: condensed;
+                   font-weight: 700; font-size: 40px; line-height: 1; padding: 1mm 4mm 0; min-width: 9mm; text-align: center;
+                   border-radius: 2mm 2mm 0 0; }
+            .shelf { font-family: Bahnschrift, "Segoe UI", sans-serif; font-stretch: condensed; font-size: 17px; font-weight: 600; }
+            .section { font-size: 11px; color: #777; margin-bottom: 1mm; }
+            .qr { margin-left: auto; margin-bottom: 1mm; }
+            .qr svg { width: 20mm; height: 20mm; display: block; }
             .names { margin-top: auto; font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
             .first { font-weight: 600; }
             .count { font-size: 9px; color: #777; margin-top: 3px; }
@@ -42,16 +46,19 @@ public static class LabelsPrint
         {
             using var data = gen.CreateQrCode(l.ScanCode, QRCodeGenerator.ECCLevel.M);
             var svg = new SvgQRCode(data).GetGraphic(4);
-            sb.Append("<div class=\"label\"><div class=\"top\"><div>");
-            sb.Append($"<div class=\"shelf\">{E(l.Location.Medium.ShelfWord().ToUpperInvariant())} {l.Location.Shelf}</div>");
-            sb.Append($"<div class=\"section\">SEKTION {E(l.Location.Section)}</div></div>");
+            // Skiltet er et skillekort (som på Mac): bogstavet på en fane i kategoriens farve, sort for de almindelige reoler.
+            var color = l.Location.Category is Category c ? $"#{c.ColorHex().Light:X6}" : "#000000";
+            sb.Append($"<div class=\"label\" style=\"--c:{color}\"><div class=\"top\">");
+            sb.Append($"<div class=\"tab\">{E(l.Location.Section)}</div><div>");
+            sb.Append($"<div class=\"shelf\">{E(l.Location.Kind.ShelfWord)} {l.Location.Shelf}</div>");
+            sb.Append($"<div class=\"section\">Sektion {E(l.Location.Section)}</div></div>");
             sb.Append($"<div class=\"qr\">{svg}</div></div>");
             if (l.FirstArtist is string first && l.LastArtist is string last)
             {
-                sb.Append($"<div class=\"names first\">{E(first)}</div>");
-                sb.Append($"<div class=\"names\" style=\"margin-top:0\">→ {E(last)}</div>");
+                sb.Append($"<div class=\"names first\">Fra {E(first)}</div>");
+                sb.Append($"<div class=\"names\" style=\"margin-top:0\">Til {E(last)}</div>");
             }
-            else sb.Append("<div class=\"empty\">(tom sektion)</div>");
+            else sb.Append("<div class=\"empty\">Tom sektion</div>");
             var word = l.Location.Medium == Medium.Cd ? (l.Count == 1 ? "cd" : "cd'er") : (l.Count == 1 ? "plade" : "plader");
             sb.Append($"<div class=\"count\">{l.Count} {word}</div></div>");
         }

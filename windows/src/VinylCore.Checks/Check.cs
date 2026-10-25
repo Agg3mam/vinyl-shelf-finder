@@ -51,7 +51,7 @@ static class ModelChecks
         Check.That(HistoryKind.StatusChanged.RawValue() == "statusChanged" && HistoryKindExtensions.FromRaw("layoutCreated") == HistoryKind.LayoutCreated,
                    "historik-typer som på Mac");
         var it = new RecordItem(new Copy(1, 1, 106), new Release(106, "Pink Floyd", "The Dark Side Of The Moon", 1973, "Harvest", "SHVL 804", "Vinyl, LP"));
-        Check.That(it.DetailLine == "1973 • Harvest • SHVL 804 • Vinyl, LP" && it.FullName == "Pink Floyd – The Dark Side Of The Moon",
+        Check.That(it.DetailLine == "Harvest SHVL 804 (1973). Vinyl, LP" && it.PressingLine == "Harvest SHVL 804 (1973)" && it.FullName == "Pink Floyd – The Dark Side Of The Moon",
                    "detaljelinje og fulde navn");
         Check.That(new Location(1, 2, "B", 0).Name == "Reol 2 · Sektion B" && new Location(1, 2, "B", 0).ShortName == "2B", "sektionsnavne");
     });

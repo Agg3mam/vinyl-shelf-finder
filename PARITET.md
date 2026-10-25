@@ -26,6 +26,9 @@ Hvad hver app kan. Målet er ✅ i begge kolonner. Opdatér tabellen i samme com
 | instance_id over 32 bit | ✅ | ✅ | Mac havde aldrig fejlen (Swift `Int` er 64 bit) |
 | Digitale filer står ikke på en hylde | ✅ | ✅ | En fil, der allerede har en plads, bliver stående (begge apps) |
 | Sortering: "Tal sidst" | ✅ | ✅ | Standard: til på Windows, fra på Mac (en opdatering må ikke ændre Mac-sorteringen) |
+| Udseende: skillekortet (fane med sektionsbogstav, kategorifarver, rygge i forskellig tykkelse), blanke omslag, roligere overskrifter, ny detaljelinje, reolskilte som skillekort | ✅ | ✅ | Mac/iPhone: systemets smalle skrift; Windows: Bahnschrift. Sidepanelet: fane med bogstav på Mac, farvet bogstav som ikon på Windows (NavigationView tillader kun ikoner). Webappen følger med |
+| Kategorier Jazz / Underholdning / Klassisk: Fra, Sidst på reolerne, Egne reoler | ✅ | ✅ | Standard: fra på begge; `categories` i sort_rules (kun når mindst én er slået til). Jazz og Klassisk = Discogs-genre, Underholdning = Discogs-mappen "Underholdning". Webappen og iPhone viser de samme hylder |
+| Egne reoler pr. kategori (`ShelfKind`, fx "vinyl.jazz"), skiftet øverst, "Også på …" i søgningen | ✅ | ✅ | Skema v8: `copies.discogs_folder`, `locations.category`; synkroniseres som `folder`/`category` (kun når de findes) |
 | Sortering: "Efternavn først" | ✅ | ✅ | |
 | Eksport / import / nulstil | ✅ | ✅ | Samme filformat: en eksport fra den ene kan importeres i den anden |
 | `vinylshelf://`-adresser (QR åbner appen) | ✅ | ✅ | Windows registrerer adressen for brugeren og kører kun ét vindue |

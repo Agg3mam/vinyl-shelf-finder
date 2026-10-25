@@ -568,7 +568,7 @@ do {
     check(SQLValue.double(.nan).int == nil && SQLValue.double(1e300).int == nil && SQLValue.double(3.9).int == 3, "REAL→Int crasher ikke")
     let (s, url) = try freshStore("schema")
     defer { try? FileManager.default.removeItem(at: url) }
-    check(s.db.userVersion == 7, "skema v7")
+    check(s.db.userVersion == 8, "skema v8")
     _ = try s.applyCollection([item(1, 1, "O'Brien", "Robert'); DROP TABLE copies;--")])
     let reopened = try ShelfStore(path: url.path)
     check((try? reopened.loadLibrary())?.allItems.first?.title == "Robert'); DROP TABLE copies;--", "genåbning + strenge bindes sikkert")
@@ -582,7 +582,7 @@ do {
     try s.db.execute("DROP TABLE plays; PRAGMA user_version = 3;")
     let up = try ShelfStore(path: url.path)
     let cid = try up.loadLibrary().copies.keys.first!
-    check(up.db.userVersion == 7 && (try? up.logPlay(copyID: cid)) != nil, "migration v3→v7 opretter plays og bevarer kopier")
+    check(up.db.userVersion == 8 && (try? up.logPlay(copyID: cid)) != nil, "migration v3→v8 opretter plays og bevarer kopier")
 }
 
 // Søgning: Unicode og grænsetilfælde
@@ -1942,6 +1942,131 @@ do {
     let old = try JSONDecoder().decode(SortRules.self, from: Data(#"{"danishAlphabet":true}"#.utf8))
     check(!old.numbersLast, "gemte regler fra før tal-reglen: forbliver slået fra")
 } catch { check(false, "tal sidst: \(error)") }
+
+// MARK: Detaljelinjen (samme tekst som Windows og webappen)
+do {
+    let it = RecordItem(copy: Copy(id: 1, instanceID: 1, releaseID: 106),
+                        release: Release(id: 106, artist: "Pink Floyd", title: "The Dark Side Of The Moon", year: 1973, label: "Harvest", catalogNumber: "SHVL 804", format: "Vinyl, LP"))
+    check(it.detailLine == "Harvest SHVL 804 (1973). Vinyl, LP" && it.pressingLine == "Harvest SHVL 804 (1973)", "detaljelinjen: selskab, katalognr. (år). Format")
+    let bare = RecordItem(copy: Copy(id: 2, instanceID: 2, releaseID: 2), release: Release(id: 2, artist: "A", title: "B", year: 1980, catalogNumber: "none"))
+    check(bare.detailLine == "1980" && RecordItem(copy: bare.copy, release: Release(id: 2, artist: "A", title: "B")).detailLine.isEmpty, "detaljelinjen uden selskab og format")
+}
+
+// MARK: Kategorier: Jazz, Underholdning, Klassisk (samme checks som på Windows)
+do {
+    let d = SortRules()
+    check(d.categories.isEmpty && Category.allCases.allSatisfy { d.mode($0) == .off },
+          "kategorierne er slået fra som standard (sorteringen må ikke ændre sig ved opdatering)")
+    check(Category.jazz.matches(genres: "Jazz, Rock", folder: nil) && !Category.jazz.matches(genres: "Rock", folder: nil)
+          && Category.classical.matches(genres: "Stage & Screen, Classical", folder: nil) && !Category.classical.matches(genres: "Neoclassical", folder: nil)
+          && Category.entertainment.matches(genres: "Pop", folder: " underholdning ") && !Category.entertainment.matches(genres: "Pop", folder: "Uncategorized")
+          && !Category.entertainment.matches(genres: nil, folder: nil), "jazz og klassisk ud fra genren, underholdning ud fra Discogs-mappen")
+    check(ShelfKind(rawValue: "cd.jazz") == ShelfKind(.cd, .jazz) && ShelfKind(rawValue: "vinyl") == .vinyl
+          && ShelfKind(rawValue: "vinyl.x") == nil && ShelfKind(rawValue: "kassette") == nil && ShelfKind(.vinyl, .classical).rawValue == "vinyl.classical"
+          && ShelfKind.all.count == 8 && ShelfKind.all.prefix(2) == [.vinyl, .cd], "hylderne har faste navne")
+    check(ShelfKind(.vinyl, .jazz).shelfWord == "Jazz-reol" && ShelfKind(.cd, .classical).shelfWord == "Klassisk-cd-reol"
+          && ShelfKind(.cd, .entertainment).title == "Underholdning (cd'er)" && ShelfKind.cd.shelfWord == "Cd-reol", "navne på kategori-reoler")
+    func rec(_ id: Int64, _ artist: String, _ genres: String?, _ folder: String? = nil, _ rank: Int?) -> RecordItem {
+        RecordItem(copy: Copy(id: id, instanceID: Int(id), releaseID: Int(id), discogsRank: rank, discogsFolder: folder),
+                   release: Release(id: Int(id), artist: artist, title: "T", format: "Vinyl, LP", genres: genres))
+    }
+    let items = [rec(1, "Bach", "Classical", nil, 0), rec(2, "Beatles", "Rock", nil, 1), rec(3, "Coltrane", "Jazz", nil, 2),
+                 rec(4, "Kim Larsen", "Pop", "Underholdning", 3), rec(5, "Miles Davis", "Jazz, Classical", nil, 4), rec(6, "Zappa", "Rock", nil, 5)]
+    check(d.sorted(items).map(\.artist) == ["Bach", "Beatles", "Coltrane", "Kim Larsen", "Miles Davis", "Zappa"], "slået fra: uændret rækkefølge")
+    var end = d
+    for c in Category.allCases { end.categories[c] = .end }
+    check(end.sorted(items).map(\.artist) == ["Beatles", "Zappa", "Coltrane", "Miles Davis", "Kim Larsen", "Bach"],
+          "sidst på reolerne: Jazz, så Underholdning, så Klassisk; jazz vinder over klassisk")
+    var onlyClassical = d; onlyClassical.categories[.classical] = .end
+    check(onlyClassical.sorted(items).map(\.artist) == ["Beatles", "Coltrane", "Kim Larsen", "Zappa", "Bach", "Miles Davis"],
+          "kun klassisk slået til: også jazz med genren Classical står blandt klassisk")
+    var own = d; own.categories[.jazz] = .own
+    check(own.shelfKind(of: items[2].copy, release: items[2].release) == ShelfKind(.vinyl, .jazz)
+          && own.shelfKind(of: items[1].copy, release: items[1].release) == .vinyl
+          && end.shelfKind(of: items[2].copy, release: items[2].release) == .vinyl, "egne reoler: jazz får sin egen hylde, sidst på reolerne gør ikke")
+    let cdCopy = Copy(id: 9, instanceID: 9, releaseID: 9)
+    check(own.shelfKind(of: cdCopy, release: Release(id: 9, artist: "A", title: "T", format: "CD, Album", genres: "Jazz")) == ShelfKind(.cd, .jazz)
+          && own.shelfKind(of: cdCopy, release: Release(id: 9, artist: "A", title: "T", format: "File, MP3", genres: "Jazz")) == nil,
+          "jazz-cd'er står på jazz-cd-reolerne, digitale filer ingen steder")
+    let json = String(data: try JSONEncoder().encode(own), encoding: .utf8)!
+    check(try json.contains(#""categories":{"jazz":"own"}"#) && (try JSONDecoder().decode(SortRules.self, from: Data(json.utf8))).mode(.jazz) == .own,
+          "kategorierne gemmes og læses (samme nøgle som Windows)")
+    check(try !String(data: try JSONEncoder().encode(d), encoding: .utf8)!.contains("categories"), "uden kategorier gemmes reglerne som før")
+    let odd = try JSONDecoder().decode(SortRules.self, from: Data(#"{"categories":{"jazz":"end","polka":"own","classical":"?","entertainment":"off"}}"#.utf8))
+    check(odd.categories == [.jazz: .end], "ukendte kategorier og valg springes over")
+    check(try (try JSONDecoder().decode(SortRules.self, from: Data(#"{"numbersLast":true}"#.utf8))).categories.isEmpty,
+          "gemte regler fra før kategorierne: forbliver slået fra")
+} catch { check(false, "kategorier: \(error)") }
+
+// MARK: Kategorier i databasen: Discogs-mappe, egne reoler og synkronisering (samme checks som på Windows)
+do {
+    let (s, url) = try freshStore("kategorier")
+    defer { try? FileManager.default.removeItem(at: url) }
+    check(s.db.userVersion == 8, "skema v8")
+    func it(_ i: Int, _ artist: String, _ format: String, _ genres: String, folder: String?) -> DiscogsCollectionItem {
+        DiscogsCollectionItem(instanceID: 60_000 + i, dateAdded: nil,
+                              release: Release(id: 6_000 + i, artist: artist, title: "T\(i)", format: format, genres: genres), folderID: 1, folder: folder)
+    }
+    _ = try s.applyCollection([it(1, "Beatles", "Vinyl, LP", "Rock", folder: "Uncategorized"), it(2, "Coltrane", "Vinyl, LP", "Jazz", folder: "Uncategorized"),
+                               it(3, "Kim Larsen", "Vinyl, LP", "Pop", folder: "Underholdning"), it(4, "Monk", "CD, Album", "Jazz", folder: nil)])
+    let all = try s.loadLibrary(medium: .vinyl)
+    check(all.copies.count == 3 && all.allItems.first { $0.artist == "Kim Larsen" }?.copy.discogsFolder == "Underholdning",
+          "mappen fra Discogs gemmes pr. kopi")
+    _ = try s.applyCollection([it(1, "Beatles", "Vinyl, LP", "Rock", folder: "Underholdning"), it(2, "Coltrane", "Vinyl, LP", "Jazz", folder: nil),
+                               it(3, "Kim Larsen", "Vinyl, LP", "Pop", folder: "Underholdning"), it(4, "Monk", "CD, Album", "Jazz", folder: nil)])
+    let again = try s.loadLibrary(medium: .vinyl)
+    check(again.allItems.first { $0.artist == "Beatles" }?.copy.discogsFolder == "Underholdning"
+          && again.allItems.first { $0.artist == "Coltrane" }?.copy.discogsFolder == "Uncategorized",
+          "flyttet mappe opdateres; ukendt mappe (navnene ikke hentet) bevarer den gamle")
+    try s.createLayout([(shelf: 1, section: "A", copies: again.globalOrder.isEmpty ? again.allItems.map(\.id).sorted() : again.globalOrder)], medium: .vinyl)
+    let before = placementRows(s)
+    var rules = s.loadSortRules(); rules.categories[.jazz] = .own
+    try s.saveSortRules(rules)
+    let main = try s.loadLibrary(kind: .vinyl), jazz = try s.loadLibrary(kind: ShelfKind(.vinyl, .jazz)), jazzCD = try s.loadLibrary(kind: ShelfKind(.cd, .jazz))
+    check(try main.copies.count == 2 && jazz.copies.count == 1 && jazz.unplaced.count == 1 && jazzCD.copies.count == 1 && (try s.loadLibrary(kind: .cd)).copies.isEmpty,
+          "egne reoler: jazz-pladen og jazz-cd'en flytter til deres egne hylder og venter på en plads")
+    check(placementRows(s) == before && main.globalOrder.count == 2, "at slå egne reoler til flytter ingen placeringer i databasen")
+    let counts = try s.shelfCounts()
+    check(counts[.vinyl] == 2 && counts[ShelfKind(.vinyl, .jazz)] == 1 && counts[ShelfKind(.cd, .jazz)] == 1 && counts[.cd] == nil, "antal pr. hylde")
+    try s.createLayout([(shelf: 1, section: "A", copies: Array(jazz.copies.keys))], kind: ShelfKind(.vinyl, .jazz))
+    let jazz2 = try s.loadLibrary(kind: ShelfKind(.vinyl, .jazz)), main2 = try s.loadLibrary(kind: .vinyl)
+    check(jazz2.locations.count == 1 && jazz2.unplaced.isEmpty && jazz2.locations[0].name == "Jazz-reol 1 · Sektion A" && main2.locations.count == 1
+          && main2.locations[0].category == nil, "jazz-reolen oprettes uden at røre de almindelige reoler")
+    check(try (try s.history(limit: 1)).first?.summary.hasPrefix("Jazz-reolerne er oprettet") == true, "historikken nævner jazz-reolerne")
+    try s.addSection(shelf: 1, section: "B", kind: ShelfKind(.vinyl, .jazz))
+    check(try (try s.loadLibrary(kind: ShelfKind(.vinyl, .jazz))).locations.map(\.shortName) == ["1A", "1B"] && (try s.loadLibrary(kind: .vinyl)).locations.count == 1,
+          "ny sektion på jazz-reolen")
+    // Synkronisering: mappe og kategori følger med, og en ældre version uden felterne sletter dem ikke.
+    let docs = try s.exportSyncDocs()
+    let coltrane = jazz2.allItems[0].copy
+    let copyDoc = docs.first { $0.kind == .copy && $0.data?["instance"] == .int(Int64(coltrane.instanceID!)) }
+    let jazzLoc = docs.first { $0.kind == .location && $0.data?["category"] != nil }
+    check(copyDoc?.data?["folder"] == .string("Uncategorized") && jazzLoc?.data?["category"] == .string("jazz")
+          && docs.filter { $0.kind == .location && $0.data?["category"] == nil }.count == 1, "mappe og kategori sendes med (kun når de findes)")
+    let (b, burl) = try freshStore("kategorier-b")
+    defer { try? FileManager.default.removeItem(at: burl) }
+    _ = try b.applySyncDocs(docs)
+    try b.saveSortRules(rules)
+    let bj = try b.loadLibrary(kind: ShelfKind(.vinyl, .jazz))
+    check(bj.locations.count == 2 && bj.copies.count == 1 && bj.unplaced.isEmpty && bj.locations.allSatisfy { $0.category == .jazz },
+          "en anden enhed får jazz-reolen med pladen på")
+    let oldCopy = SyncDoc(kind: .copy, key: copyDoc!.key, data: copyDoc!.data!.filter { $0.key != "folder" })
+    let oldLoc = SyncDoc(kind: .location, key: jazzLoc!.key, data: jazzLoc!.data!.filter { $0.key != "category" })
+    _ = try b.applySyncDocs([oldCopy, oldLoc])
+    check(try (try b.loadLibrary(kind: ShelfKind(.vinyl, .jazz))).locations.count == 2
+          && (try b.db.query("SELECT discogs_folder FROM copies WHERE discogs_instance_id = ?", coltrane.instanceID!)).first?["discogs_folder"]?.text == "Uncategorized",
+          "poster fra en ældre version uden mappe/kategori sletter dem ikke")
+    s.setSortChecked(ShelfKind(.vinyl, .jazz), copyID: coltrane.id, checked: true)
+    check(try s.sortChecked(ShelfKind(.vinyl, .jazz)) == [coltrane.id] && s.sortChecked(.vinyl).isEmpty
+          && (try s.exportSyncDocs()).contains { $0.kind == .setting && $0.key == "sort_checked_vinyl.jazz" }
+          && !(try s.exportSyncDocs()).contains { $0.key == "sort_checked_cd.jazz" }, "flueben pr. kategori-hylde (og kun brugte sendes)")
+    // Plader → cd: en jazz-plade, der markeres som cd, fjernes fra jazz-pladereolen.
+    try s.setMedium(copyID: coltrane.id, .cd)
+    check(try (try s.loadLibrary(kind: ShelfKind(.cd, .jazz))).unplaced.contains(coltrane.id) && (try s.loadLibrary(kind: ShelfKind(.vinyl, .jazz))).copies.isEmpty,
+          "\"Det er en cd\" flytter jazz-pladen til jazz-cd'erne")
+    check(try try DiscogsClient.parseFolders(Data(#"{"folders":[{"id":0,"name":"All","count":3},{"id":7,"name":"Underholdning","count":1}]}"#.utf8)) == [0: "All", 7: "Underholdning"],
+          "mappernes navne fra Discogs læses")
+} catch { check(false, "kategorier i databasen: \(error)") }
 
 // MARK: Efternavn først (samme checks som på Windows)
 do {

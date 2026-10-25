@@ -37,6 +37,9 @@ public struct SortRules: Equatable, Codable {
     /// Slået fra på Mac, når den mangler i de gemte regler: en opdatering må ikke ændre sorteringen.
     /// (Windows har den slået til som standard; se PARITET.md.)
     public var numbersLast: Bool = false
+    /// Jazz, Underholdning og Klassisk: til sidst på reolerne eller på egne reoler. Mangler en kategori, er den
+    /// slået fra (på begge platforme): en opdatering må ikke ændre sorteringen.
+    public var categories: [Category: CategoryMode] = [:]
     public var various: VariousPlacement = .alphabetical
     public var withinArtist: WithinArtist = .title
     /// Kunstner (som vist) → sorteringsnavn, fx "Bob Dylan" → "Dylan, Bob".
@@ -45,7 +48,7 @@ public struct SortRules: Equatable, Codable {
     public init() {}
 
     private enum CodingKeys: String, CodingKey {
-        case useDiscogsOrder, artistArticles, titleArticles, ignorePunctuation, danishAlphabet, numbersLast, various, withinArtist
+        case useDiscogsOrder, artistArticles, titleArticles, ignorePunctuation, danishAlphabet, numbersLast, categories, various, withinArtist
     }
 
     /// Tolerant dekodning, så gemte regler fra ældre versioner ikke går tabt.
@@ -58,8 +61,52 @@ public struct SortRules: Equatable, Codable {
         ignorePunctuation = try c.decodeIfPresent(Bool.self, forKey: .ignorePunctuation) ?? d.ignorePunctuation
         danishAlphabet = try c.decodeIfPresent(Bool.self, forKey: .danishAlphabet) ?? d.danishAlphabet
         numbersLast = try c.decodeIfPresent(Bool.self, forKey: .numbersLast) ?? d.numbersLast
+        // Ukendte kategorier eller valg (fra en nyere version) springes over.
+        let raw = (try? c.decodeIfPresent([String: String].self, forKey: .categories)) ?? nil
+        for (k, v) in raw ?? [:] {
+            if let cat = Category(rawValue: k), let mode = CategoryMode(rawValue: v), mode != .off { categories[cat] = mode }
+        }
         various = try c.decodeIfPresent(VariousPlacement.self, forKey: .various) ?? d.various
         withinArtist = try c.decodeIfPresent(WithinArtist.self, forKey: .withinArtist) ?? d.withinArtist
+    }
+
+    /// Samme felter som Windows. `categories` skrives kun, når mindst én er slået til, så gemte regler ikke
+    /// ændrer sig for dem, der ikke bruger kategorier.
+    public func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(useDiscogsOrder, forKey: .useDiscogsOrder)
+        try c.encode(artistArticles, forKey: .artistArticles)
+        try c.encode(titleArticles, forKey: .titleArticles)
+        try c.encode(ignorePunctuation, forKey: .ignorePunctuation)
+        try c.encode(danishAlphabet, forKey: .danishAlphabet)
+        try c.encode(numbersLast, forKey: .numbersLast)
+        let on = categories.filter { $0.value != .off }
+        if !on.isEmpty {
+            try c.encode(Dictionary(uniqueKeysWithValues: on.map { ($0.key.rawValue, $0.value.rawValue) }), forKey: .categories)
+        }
+        try c.encode(various, forKey: .various)
+        try c.encode(withinArtist, forKey: .withinArtist)
+    }
+
+    // MARK: Kategorier
+
+    public func mode(_ category: Category) -> CategoryMode { categories[category] ?? .off }
+
+    /// Den første slåede-til kategori, pladen passer i (nil = står sammen med alt det andet).
+    public func category(genres: String?, folder: String?) -> Category? {
+        Category.allCases.first { mode($0) != .off && $0.matches(genres: genres, folder: folder) }
+    }
+
+    public func category(of item: RecordItem) -> Category? {
+        category(genres: item.release.genres, folder: item.copy.discogsFolder)
+    }
+
+    /// Hylden, en kopi står på: plader eller cd'er, eller en kategori med egne reoler.
+    /// nil = ingen hylde (digitale filer).
+    public func shelfKind(of copy: Copy, release: Release?) -> ShelfKind? {
+        guard let medium = Medium.shelfOf(override: copy.mediumOverride, format: release?.format) else { return nil }
+        let cat = category(genres: release?.genres, folder: copy.discogsFolder)
+        return ShelfKind(medium, cat.flatMap { mode($0) == .own ? $0 : nil })
     }
 
     // MARK: Sorteringsværdier
@@ -135,6 +182,7 @@ public struct SortRules: Equatable, Codable {
     // MARK: Sammenligning
 
     public struct Key {
+        public var categoryGroup: Int  // 0 = ingen kategori, ellers 1 + kategoriens plads (jazz, underholdning, klassisk)
         public var numberGroup: Int    // 1 = kunstneren starter med et tal og skal stå sidst (numbersLast), ellers 0
         public var discogsRank: Int     // Int.max hvis ukendt eller ikke i brug
         public var group: Int          // 0 = først, 1 = normal, 2 = sidst
@@ -158,6 +206,7 @@ public struct SortRules: Equatable, Codable {
         }
         let sortArtist = sortArtist(artist, override: item.copy.sortArtistOverride)
         return Key(
+            categoryGroup: category(of: item).map { c in 1 + Category.allCases.firstIndex(of: c)! } ?? 0,
             numberGroup: numbersLast && Self.startsWithDigit(sortArtist) ? 1 : 0,
             discogsRank: useDiscogsOrder ? (item.copy.discogsRank ?? Int.max) : Int.max,
             group: group,
@@ -176,6 +225,7 @@ public struct SortRules: Equatable, Codable {
     }
 
     public func areInIncreasingOrder(_ a: Key, _ b: Key) -> Bool {
+        if a.categoryGroup != b.categoryGroup { return a.categoryGroup < b.categoryGroup }
         if a.numberGroup != b.numberGroup { return a.numberGroup < b.numberGroup }
         if a.discogsRank != b.discogsRank { return a.discogsRank < b.discogsRank }
         if a.group != b.group { return a.group < b.group }

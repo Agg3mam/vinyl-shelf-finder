@@ -95,7 +95,7 @@ public sealed class DetailPane
         {
             bool away = !it.Copy.Status.IsOnShelf();
             p.Children.Add(RecordParts.LocationPanel(away ? "Plejer at stå i" : "Står i", loc, pos, n.SectionCount,
-                $"{(away ? "Plads" : Cap(loc.Medium.Singular()))} {pos} af {n.SectionCount} fra venstre", _narrow ? 22 : 28));
+                $"{(away ? "Plads" : "Nr.")} {pos} af {n.SectionCount} fra venstre", _narrow ? 21 : 26));
             p.Children.Add(Neighbors(n));
             p.Children.Add(Actions(it));
         }
@@ -120,8 +120,6 @@ public sealed class DetailPane
         return p;
     }
 
-    private static string Cap(string s) => s.Length == 0 ? s : char.ToUpper(s[0]) + s[1..];
-
     private FrameworkElement Header(RecordItem it)
     {
         var grid = new Grid { ColumnSpacing = _narrow ? 14 : 20 };
@@ -134,7 +132,7 @@ public sealed class DetailPane
         var text = new StackPanel { Spacing = 2 };
         text.Children.Add(Ui.Text(it.Artist, "SubtitleTextBlockStyle", Ui.Secondary));
         text.Children.Add(Ui.Text(it.Title, "TitleTextBlockStyle"));
-        text.Children.Add(Ui.Text(it.DetailLine, "BodyTextBlockStyle", Ui.Tertiary, maxLines: 2));
+        text.Children.Add(RecordParts.PressingLines(it));
         if (_model.Market.TryGetValue(it.Release.Id, out var m)) text.Children.Add(MarketLine(m));
         text.Children.Add(Ui.Text(RecordParts.PlayCountText(_model, it.Id), "CaptionTextBlockStyle", Ui.Secondary));
         var status = StatusButton(it);
@@ -208,7 +206,7 @@ public sealed class DetailPane
         var p = new StackPanel { Spacing = 6 };
         var section = n.Location?.Section ?? "";
         if (n.Before.Count > 0)
-            p.Children.Add(Ui.Eyebrow($"← {(n.Before.Count > 1 ? $"{n.Before.Count} før" : "Lige før")}"));
+            p.Children.Add(Ui.Eyebrow(n.Before.Count > 1 ? $"{n.Before.Count} til venstre" : "Til venstre"));
         if (n.ReachedSectionStart)
             p.Children.Add(RecordParts.SectionEdgeNote($"Starten af sektion {section}",
                 n.PreviousSection is var (pl, last)
@@ -220,6 +218,8 @@ public sealed class DetailPane
         var target = RecordParts.TargetCard(n.Target);
         target.Margin = new Thickness(0, 2, 0, 2);
         p.Children.Add(target);
+        if (n.After.Count > 0)
+            p.Children.Add(Ui.Eyebrow(n.After.Count > 1 ? $"{n.After.Count} til højre" : "Til højre"));
         foreach (var it in n.AbsentBetweenAfter) p.Children.Add(RecordParts.AbsentRow(it));
         foreach (var it in n.After) p.Children.Add(RecordParts.NeighborRow(_model, it));
         if (n.ReachedSectionEnd)
@@ -227,8 +227,6 @@ public sealed class DetailPane
                 n.NextSection is var (nl, first)
                     ? first is RecordItem f ? $"Næste sektion ({nl.Name}) starter med {f.FullName}" : $"Næste sektion ({nl.Name}) er tom"
                     : null));
-        if (n.After.Count > 0)
-            p.Children.Add(Ui.Eyebrow($"{(n.After.Count > 1 ? $"{n.After.Count} efter" : "Lige efter")} →"));
         return p;
     }
 

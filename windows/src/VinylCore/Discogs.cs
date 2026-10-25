@@ -212,6 +212,10 @@ public sealed partial class DiscogsClient
         int page = 1, pages;
         var all = new List<DiscogsCollectionItem>();
         var user = EscapePath(username);
+        // Mappernes navne (til kategorien Underholdning). Fejler det, hentes samlingen alligevel uden mapper.
+        Dictionary<int, string> folders;
+        try { folders = ParseFolders(await GetAsync($"/users/{user}/collection/folders", ct: ct).ConfigureAwait(false)); }
+        catch (Exception e) when (e is DiscogsException or FormatException) { folders = new(); }
         do
         {
             var data = await GetAsync($"/users/{user}/collection/folders/0/releases", new[]
@@ -222,7 +226,7 @@ public sealed partial class DiscogsClient
             try { decoded = ParseCollectionPage(data); }
             catch (DiscogsException) { throw DiscogsException.Decoding($"samlingen, side {page}"); }
             pages = decoded.Pages;
-            all.AddRange(decoded.Items);
+            all.AddRange(decoded.Items.Select(i => i with { Folder = i.FolderId is int f && folders.TryGetValue(f, out var n) ? n : null }));
             progress?.Invoke(all.Count, decoded.Total);
             page++;
         } while (page <= pages);
@@ -230,6 +234,20 @@ public sealed partial class DiscogsClient
     }
 
     // MARK: JSON
+
+    /// Mappe-ID → navn, fx 1 → "Uncategorized".
+    public static Dictionary<int, string> ParseFolders(byte[] data)
+    {
+        var result = new Dictionary<int, string>();
+        try
+        {
+            using var doc = JsonDocument.Parse(data);
+            foreach (var f in Json.Array(Json.Prop(doc.RootElement, "folders")))
+                if (Json.Int(Json.Prop(f, "id")) is int id && Json.Str(Json.Prop(f, "name")) is string name) result.TryAdd(id, name);
+        }
+        catch (JsonException) { throw new FormatException("folders"); }
+        return result;
+    }
 
     /// Én side af samlingen. Mangler de nødvendige felter, kastes DiscogsException (Decoding).
     public static DiscogsCollectionPage ParseCollectionPage(byte[] data)
@@ -299,7 +317,7 @@ public sealed partial class DiscogsClient
             NonEmpty(Json.Str(Json.Prop(b, "cover_image"))),
             NonEmpty(Json.Str(Json.Prop(b, "thumb"))),
             genres == null ? null : string.Join(", ", genres));
-        return new DiscogsCollectionItem(instanceId, Json.Str(Json.Prop(it, "date_added")), release);
+        return new DiscogsCollectionItem(instanceId, Json.Str(Json.Prop(it, "date_added")), release, Json.Int(Json.Prop(it, "folder_id")));
     }
 
     /// Samler kunstnernavne som Discogs viser dem: "Simon & Garfunkel", "Nirvana (2)" → "Nirvana".

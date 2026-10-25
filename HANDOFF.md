@@ -156,6 +156,16 @@ Sources/VinylCoreChecks/      selvtest (305 checks)
 - **Mac-appen og mobilsiden skal dele samme udtryk.** Mobilsidens CSS i `MobileSite.swift` er
   stadig det gamle udkast "varm pladebutik" og skal laves om til Liquid Glass-udtrykket.
 - Tidligere design-billeder ligger i `design-snapshots/` (fx `design-retning-*`, `endelig`, `lys-tilstand`).
+- **Skillekortet (25. okt, alle platforme):** placeringen vises som en pladebutiks skillekort: sektionsbogstavet
+  på en fane (`PlacementLine` i `ShelfDivider.swift` / `RecordParts.PlacementLine` / `.divider` i webappen),
+  reolen ved siden af, en streg i samme farve og pladerygge i forskellig tykkelse (fast mønster, samme formel
+  overalt). Fanen har kategoriens farve (`Category.colorHex`: jazz blå, underholdning messing, klassisk bordeaux)
+  eller pladens tone/accentfarven. Smal skrift til bogstav, reolnavn og "Nr. 7 af 15": systemets smalle skrift
+  (Mac/iPhone `.width(.condensed)`), Bahnschrift på Windows, `font-stretch: condensed` i webappen (intet hentes).
+- Uden cover: et blankt omslag i kunstnerens faste farve med navnet/forbogstaverne (`SleevePlaceholder`).
+- Ingen spærrede STORE overskrifter, ingen pile i overskrifter ("Til venstre"/"Til højre"), "Start ved"/"Så"
+  i stedet for "Find først"/"Dernæst". Detaljelinjen er "Harvest SHVL 804 (1973). Vinyl, LP"; på pladeskærmene
+  to linjer (`pressingLine` + format). Reolskiltene (PDF/HTML) er også skillekort med "Fra …"/"Til …".
 
 ---
 
@@ -590,6 +600,21 @@ projektet med egen konto (RLS adskiller data), men hver skal have sit eget Disco
 - **Næste:** push → tjek Windows-CI og billedet af Konto; så Google-login (brugeren opretter OAuth-nøgle selv, jeg guider) og
   stregkodescanneren (Discogs-nøglen følger kontoen, brugerens ønske; udgaver vælges fra en liste).
 - Skitsefiler `web/_*.html` er lokale og må ikke committes.
+
+### 23. okt: kategorier (Jazz, Underholdning, Klassisk)
+
+- `Category` (jazz, entertainment, classical) og `CategoryMode` (off/end/own) i Models; `SortRules.categories`
+  (Swift `[Category: CategoryMode]`, C# `Dictionary`, JSON `"categories":{"jazz":"own"}`, kun når mindst én er til).
+  Rækkefølgen er både prioritet (den første, der passer, vinder) og rækkefølgen til sidst på reolerne.
+- Jazz og Klassisk = Discogs-genren. Underholdning = brugerens Discogs-mappe med navnet "Underholdning":
+  `fetchCollection` henter `/collection/folders` og sætter `folder` pr. kopi; gemmes i `copies.discogs_folder`.
+- "Egne reoler": `ShelfKind` (medium + evt. kategori, rå tekst "vinyl.jazz") afløser `Medium` som hylde-identitet i
+  `loadLibrary(kind:)`, `createLayout(kind:)`, `addSection(kind:)`, `sortChecked`, `shelfCounts()`. `locations.category`
+  (skema v8). Pladerne flyttes aldrig i databasen, når en kategori slås til; de venter som "nye" på den nye hylde.
+- Synk: `folder` på kopier og `category` på sektioner sendes kun, når de findes; mangler de (ældre version),
+  beholdes enhedens egne. `sort_checked_<kind>` for kategorier sendes kun, når de er brugt.
+- Søgningen viser "Også på Jazz (plader): 3", når der er træf på en anden hylde (Mac og Windows).
+- Windows-UI kan oversættes på Mac med et hjælpeprojekt (se afsnit 7 / "Lokal oversættelse uden Windows").
 
 ### Ikke færdigt / næste skridt (spørg brugeren om rækkefølgen)
 

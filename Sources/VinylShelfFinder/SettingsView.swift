@@ -91,6 +91,20 @@ struct SortSettings: View {
                 Text("10cc, 2Pac og The 1975 står efter Z og Æ Ø Å. Gælder også med Discogs' rækkefølge, hvor tallene ellers står først.")
             }
             Section {
+                ForEach(Category.allCases) { c in
+                    Picker(selection: Binding(
+                        get: { rules.mode(c) }, set: { var r = rules; r.categories[c] = $0 == .off ? nil : $0; model.updateRules(r) })) {
+                        ForEach(CategoryMode.allCases) { Text($0.label).tag($0) }
+                    } label: {
+                        Label { Text(c.title) } icon: { SectionTab(letter: String(c.title.prefix(1)), color: c.color) }
+                    }
+                }
+            } header: {
+                Text("Kategorier")
+            } footer: {
+                Text("Jazz og Klassisk er genrerne på Discogs. Underholdning er din mappe “Underholdning” i Discogs-samlingen. Sidst på reolerne: Jazz, så Underholdning, så Klassisk. Egne reoler: kategorien får sine egne reoler (plader og cd'er hver for sig) – opret dem under Reol. Passer en plade i flere, vinder den første.")
+            }
+            Section {
                 let fresh = SurnameSheet.newCount(model)
                 Button(fresh > 0 ? "Vælg personer… (\(fresh) nye forslag)" : "Vælg personer…") { showSurname = true }
             } header: {
@@ -250,25 +264,24 @@ struct ShelfSettings: View {
         Form {
             if model.showsMediumPicker {
                 Section {
-                    Picker("Hylde", selection: $model.medium) {
-                        ForEach(Medium.allCases) { Text($0.title).tag($0) }
+                    Picker("Hylde", selection: $model.shelfKind) {
+                        ForEach(model.shelfKinds) { Text($0.title).tag($0) }
                     }
-                    .pickerStyle(.segmented)
                 } footer: {
-                    Text("Plader og cd'er har hver deres reoler. Ændringerne herunder gælder den valgte hylde.")
+                    Text("Plader, cd'er og kategorier med egne reoler har hver deres reoler. Ændringerne herunder gælder den valgte hylde.")
                 }
             }
             Section("Struktur") {
                 ForEach(model.library.shelves, id: \.self) { shelf in
                     let secs = model.library.locations.filter { $0.shelf == shelf }
                     HStack {
-                        Text("\(model.medium.shelfWord) \(shelf)")
+                        Text("\(model.shelfKind.shelfWord) \(shelf)")
                         Spacer()
                         Text(secs.map(\.section).joined(separator: ", ")).foregroundStyle(.secondary)
                         Button { model.addSection(shelf: shelf) } label: { Label("Sektion", systemImage: "plus") }
                     }
                 }
-                Button { model.addSection(shelf: (model.library.shelves.last ?? 0) + 1) } label: { Label(model.medium == .vinyl ? "Ny reol" : "Ny cd-reol", systemImage: "plus") }
+                Button { model.addSection(shelf: (model.library.shelves.last ?? 0) + 1) } label: { Label("Ny \(model.shelfKind.shelfWord.lowercased())", systemImage: "plus") }
             }
             Section {
                 Button { model.exportLabels() } label: { Label("Udskriv reolskilte med QR-kode… (⌘P)", systemImage: "qrcode") }

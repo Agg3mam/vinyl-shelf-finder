@@ -73,12 +73,11 @@ struct CoverView: View {
         let image = loaded?.id == release.id ? loaded?.image
             : CoverCache.shared.cachedImage(releaseID: release.id, large: large)
         ZStack {
-            shape.fill(.quaternary)
             if let image {
                 Image(nsImage: image).resizable().aspectRatio(contentMode: .fill)
                     .transition(.opacity)
             } else {
-                Image(systemName: "opticaldisc").font(.system(size: size * 0.45)).foregroundStyle(.tertiary)
+                SleevePlaceholder(release: release, size: size)
             }
         }
         .frame(width: size, height: size)

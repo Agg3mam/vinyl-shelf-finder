@@ -76,6 +76,118 @@ public static class MediumExtensions
     public static string ShelfWord(this Medium m) => m == Medium.Cd ? "Cd-reol" : "Reol";
 }
 
+// MARK: Kategorier (Jazz, Underholdning, Klassisk)
+
+/// Musik, der kan stå for sig: til sidst på reolerne eller på egne reoler. Rækkefølgen her er også rækkefølgen
+/// til sidst på reolerne, og passer en plade i flere kategorier, vinder den første. Gemmes som tekst (RawValue).
+public enum Category { Jazz, Entertainment, Classical }
+
+public static class CategoryExtensions
+{
+    public static readonly Category[] All = { Category.Jazz, Category.Entertainment, Category.Classical };
+
+    public static string RawValue(this Category c) => c switch
+    {
+        Category.Jazz => "jazz",
+        Category.Entertainment => "entertainment",
+        _ => "classical",
+    };
+
+    public static Category? FromRaw(string? raw) => raw switch
+    {
+        "jazz" => Category.Jazz,
+        "entertainment" => Category.Entertainment,
+        "classical" => Category.Classical,
+        _ => null,
+    };
+
+    /// "Jazz" / "Underholdning" / "Klassisk"
+    public static string Title(this Category c) => c switch
+    {
+        Category.Jazz => "Jazz",
+        Category.Entertainment => "Underholdning",
+        _ => "Klassisk",
+    };
+
+    /// Underholdning er brugerens egen mappe i Discogs-samlingen med dette navn.
+    public const string EntertainmentFolder = "Underholdning";
+
+    /// Jazz og Klassisk er Discogs-genrer ("Jazz, Rock" tæller som jazz). Underholdning er Discogs-mappen.
+    public static bool Matches(this Category c, string? genres, string? folder) => c switch
+    {
+        Category.Jazz => HasGenre(genres, "jazz"),
+        Category.Classical => HasGenre(genres, "classical"),
+        _ => string.Equals(folder?.Trim(), EntertainmentFolder, StringComparison.OrdinalIgnoreCase),
+    };
+
+    /// Skillekortets farve (lys og mørk tilstand), som RGB-hex. Hvid tekst ovenpå. Samme farver som på Mac og i webappen.
+    public static (uint Light, uint Dark) ColorHex(this Category c) => c switch
+    {
+        Category.Jazz => (0x1F4F8F, 0x3A6DB5),
+        Category.Entertainment => (0x85621A, 0xA67C24),
+        _ => (0x6E2433, 0x93394B),
+    };
+
+    private static bool HasGenre(string? genres, string name) =>
+        (genres ?? "").Split(',').Any(g => g.Trim().Equals(name, StringComparison.OrdinalIgnoreCase));
+}
+
+/// Hvor en kategori står. Off = sammen med alt det andet (som før).
+public enum CategoryMode { Off, End, Own }
+
+public static class CategoryModeExtensions
+{
+    public static readonly CategoryMode[] All = { CategoryMode.Off, CategoryMode.End, CategoryMode.Own };
+    public static string RawValue(this CategoryMode m) => m switch { CategoryMode.End => "end", CategoryMode.Own => "own", _ => "off" };
+    public static CategoryMode? FromRaw(string? raw) => raw switch
+    {
+        "off" => CategoryMode.Off,
+        "end" => CategoryMode.End,
+        "own" => CategoryMode.Own,
+        _ => null,
+    };
+    public static string Label(this CategoryMode m) => m switch
+    {
+        CategoryMode.End => "Sidst på reolerne",
+        CategoryMode.Own => "Egne reoler",
+        _ => "Fra",
+    };
+}
+
+/// En slags hylde med egne reoler, sektioner og nummerering: plader eller cd'er, og evt. en kategori med
+/// egne reoler (fx jazz-cd'er). Gemmes som tekst: "vinyl", "cd", "vinyl.jazz", "cd.classical" osv. (som på Mac).
+public readonly record struct ShelfKind(Medium Medium, Category? Category = null)
+{
+    public static readonly ShelfKind Vinyl = new(Medium.Vinyl);
+    public static readonly ShelfKind Cd = new(Medium.Cd);
+
+    public string RawValue => Category is Category c ? $"{Medium.RawValue()}.{c.RawValue()}" : Medium.RawValue();
+
+    public static ShelfKind? FromRaw(string? raw)
+    {
+        if (raw is null) return null;
+        var parts = raw.Split('.');
+        if (parts.Length > 2 || MediumExtensions.FromRaw(parts[0]) is not Medium m) return null;
+        if (parts.Length == 1) return new ShelfKind(m);
+        return CategoryExtensions.FromRaw(parts[1]) is Category c ? new ShelfKind(m, c) : null;
+    }
+
+    /// Alle slags hylder i fast rækkefølge: plader, cd'er, og så kategorierne (plader før cd'er).
+    public static IReadOnlyList<ShelfKind> All { get; } =
+        MediumExtensions.All.Select(m => new ShelfKind(m))
+            .Concat(CategoryExtensions.All.SelectMany(c => MediumExtensions.All.Select(m => new ShelfKind(m, c)))).ToArray();
+
+    /// "Plader" / "Cd'er" / "Jazz (plader)" / "Klassisk (cd'er)"
+    public string Title => Category is Category c ? $"{c.Title()} ({Medium.Plural()})" : Medium.Title();
+    /// "Reol" / "Cd-reol" / "Jazz-reol" / "Klassisk-cd-reol"
+    public string ShelfWord => Category is Category c ? (Medium == Medium.Vinyl ? $"{c.Title()}-reol" : $"{c.Title()}-cd-reol") : Medium.ShelfWord();
+    /// "Reolerne" / "Cd-reolerne" / "Jazz-reolerne" – til historikken.
+    public string ShelvesWord => ShelfWord + "erne";
+    public string Singular => Medium.Singular();
+    public string Plural => Medium.Plural();
+    public string Count(int n) => Medium.Count(n);
+}
+
 // MARK: Fysisk data ("Denne konkrete kopi står her")
 
 /// Pladens fysiske status. Gemmes som tekst (RawValue) i copies.status, som på Mac.
@@ -138,13 +250,18 @@ public sealed record Copy(
     /// Pladens plads i Discogs' egen artist-sortering ved seneste sync (0-baseret).
     int? DiscogsRank = null,
     /// Brugerens eget valg af hylde, når Discogs' format ikke passer.
-    Medium? MediumOverride = null);
+    Medium? MediumOverride = null,
+    /// Navnet på mappen i Discogs-samlingen (fx "Underholdning"). null, indtil den er hentet.
+    string? DiscogsFolder = null);
 
 /// En sektion i en reol, fx "Reol 3 · Sektion B".
-public sealed record Location(long Id, int Shelf, string Section, int SortIndex, string? ScanCode = null, Medium Medium = Medium.Vinyl)
+/// Category er en kategori med egne reoler (fx jazz); null = de almindelige reoler.
+public sealed record Location(long Id, int Shelf, string Section, int SortIndex, string? ScanCode = null, Medium Medium = Medium.Vinyl,
+    Category? Category = null)
 {
-    /// "Reol 1 · Sektion A" eller "Cd-reol 1 · Sektion A".
-    public string Name => $"{Medium.ShelfWord()} {Shelf} · Sektion {Section}";
+    public ShelfKind Kind => new(Medium, Category);
+    /// "Reol 1 · Sektion A", "Cd-reol 1 · Sektion A" eller "Jazz-reol 1 · Sektion A".
+    public string Name => $"{Kind.ShelfWord} {Shelf} · Sektion {Section}";
     public string ShortName => $"{Shelf}{Section}";
 }
 
@@ -188,21 +305,29 @@ public sealed record RecordItem(Copy Copy, Release Release)
     /// Plade eller cd: brugerens valg, ellers Discogs' format.
     public Medium Medium => Copy.MediumOverride ?? MediumExtensions.Of(Release.Format);
 
-    /// "1973 • Harvest • SHVL 804 • Vinyl, LP" – bruges til at skelne pressings.
+    /// "Harvest SHVL 804 (1973)" – pladeselskab og katalognummer, som samlere skriver dem (som på Mac).
+    public string PressingLine
+    {
+        get
+        {
+            var cat = string.IsNullOrEmpty(Release.CatalogNumber) || Release.CatalogNumber!.Equals("none", StringComparison.OrdinalIgnoreCase) ? null : Release.CatalogNumber;
+            var name = string.Join(" ", new[] { string.IsNullOrEmpty(Release.Label) ? null : Release.Label, cat }.Where(x => x is not null));
+            if (Release.Year is not int y || y <= 0) return name;
+            return name.Length == 0 ? y.ToString() : $"{name} ({y})";
+        }
+    }
+
+    /// "Harvest SHVL 804 (1973). Vinyl, LP" – bruges til at skelne pressings (som på Mac).
     public string DetailLine
     {
         get
         {
-            var parts = new List<string>();
-            if (Release.Year is int y && y > 0) parts.Add(y.ToString());
-            if (!string.IsNullOrEmpty(Release.Label)) parts.Add(Release.Label!);
-            if (!string.IsNullOrEmpty(Release.CatalogNumber) && !Release.CatalogNumber!.Equals("none", StringComparison.OrdinalIgnoreCase))
-                parts.Add(Release.CatalogNumber!);
-            if (!string.IsNullOrEmpty(Release.Format)) parts.Add(Release.Format!);
-            return string.Join(" • ", parts);
+            var parts = new[] { PressingLine.Length == 0 ? null : PressingLine, string.IsNullOrEmpty(Release.Format) ? null : Release.Format };
+            return string.Join(". ", parts.Where(x => x is not null));
         }
     }
 }
 
 /// Én post i Discogs Collection = én fysisk kopi (instance) af en release.
-public sealed record DiscogsCollectionItem(long InstanceId, string? DateAdded, Release Release);
+/// FolderId er mappen i Discogs-samlingen (fx 1 = "Uncategorized"); Folder er dens navn, når navnene er hentet.
+public sealed record DiscogsCollectionItem(long InstanceId, string? DateAdded, Release Release, int? FolderId = null, string? Folder = null);

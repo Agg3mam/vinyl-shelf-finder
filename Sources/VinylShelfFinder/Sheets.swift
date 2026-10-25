@@ -174,7 +174,7 @@ private struct FindHeader: View {
 
     var body: some View {
         HStack(alignment: .center, spacing: Spacing.m) {
-            FindCoverArt(image: image, tone: tone, size: 88)
+            FindCoverArt(release: item.release, image: image, tone: tone, size: 88)
             VStack(alignment: .leading, spacing: Spacing.xxs) {
                 Eyebrow(eyebrow)
                     .contentTransition(.opacity)
@@ -183,14 +183,27 @@ private struct FindHeader: View {
                 Text(item.title).font(Typo.display).lineLimit(2).minimumScaleFactor(0.6)
                     .fixedSize(horizontal: false, vertical: true)
                     .layoutPriority(1)
-                Text(item.detailLine).font(.callout).foregroundStyle(Ink.tertiary).lineLimit(1)
+                PressingLines(item: item)
             }
         }
     }
 }
 
+/// Selskab, katalognr. og år på én linje og formatet på den næste, i stedet for én lang linje med prikker.
+struct PressingLines: View {
+    let item: RecordItem
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            if !item.pressingLine.isEmpty { Text(item.pressingLine) }
+            if let f = item.release.format, !f.isEmpty { Text(f).foregroundStyle(Ink.tertiary) }
+        }
+        .font(.callout).foregroundStyle(Ink.secondary).lineLimit(1)
+    }
+}
+
 /// Stort cover i toppen. Uden billede: en flade i pladens tone med et pladesymbol.
 struct FindCoverArt: View {
+    let release: Release
     let image: NSImage?
     let tone: CoverTone
     let size: CGFloat
@@ -202,9 +215,7 @@ struct FindCoverArt: View {
             if let image {
                 Image(nsImage: image).resizable().aspectRatio(contentMode: .fill)
             } else {
-                Image(systemName: "opticaldisc")
-                    .font(.system(size: size * 0.42, weight: .light))
-                    .foregroundStyle(Ink.tertiary)
+                SleevePlaceholder(release: release, size: size)
             }
         }
         .frame(width: size, height: size)
@@ -235,12 +246,12 @@ private struct FindPlacement: View {
                 LocationPanel(location: loc, position: position, count: n.sectionCount,
                               title: putBack ? "Sæt den her" : (away ? "Her plejer den at stå" : "Gå til"),
                               hint: putBack ? adv.placementHint
-                                  : "\(away ? "Plads" : loc.medium.singular.capitalized) \(position) af \(n.sectionCount) fra venstre",
+                                  : "\(away ? "Plads" : "Nr.") \(position) af \(n.sectionCount) fra venstre",
                               tone: tone)
                 HStack(alignment: .top, spacing: Spacing.l) {
-                    ReferenceBlock(title: "Find først", ref: adv.primary)
+                    ReferenceBlock(title: "Start ved", ref: adv.primary)
                     if let s = adv.secondary {
-                        ReferenceBlock(title: "Dernæst", ref: s)
+                        ReferenceBlock(title: "Så", ref: s)
                     }
                 }
                 FindHints(advice: adv, neighbors: n)
@@ -270,40 +281,13 @@ private struct LocationPanel: View {
         VStack(alignment: .leading, spacing: Spacing.s) {
             Eyebrow(title)
                 .contentTransition(.opacity)
-            PlacementLine(location: location, tone: tone).font(Typo.location)
-            ShelfSpines(position: position, count: count, accent: tone.accent)
-            Text(hint)
-                .font(.callout.monospacedDigit()).foregroundStyle(Ink.secondary)
-                .contentTransition(.opacity)
+            PlacementLine(location: location, tone: tone)
+            ShelfSpines(position: position, count: count, accent: DividerColors(location: location, tone: tone).fill)
+            PlacementCount(text: hint)
         }
         .padding(Spacing.panelInset)
         .frame(maxWidth: .infinity, alignment: .leading)
         .modifier(GlassPanel(tone: tone))
-    }
-}
-
-/// "Reol 1 › Sektion A" – samme linje på alle tre pladeskærme. Ikonet er ensfarvet
-/// i accentfarven; chevronen er pynt og skjules for VoiceOver.
-struct PlacementLine: View {
-    let location: Location
-    let tone: CoverTone
-
-    var body: some View {
-        HStack(alignment: .firstTextBaseline, spacing: Spacing.s) {
-            Image(systemName: "books.vertical.fill")
-                .symbolRenderingMode(.monochrome)
-                .foregroundStyle(tone.accent)
-                .accessibilityHidden(true)
-            Text("\(location.medium.shelfWord) \(location.shelf)")
-            Image(systemName: "chevron.right")
-                .imageScale(.small)
-                .fontWeight(.semibold)
-                .foregroundStyle(Ink.tertiary)
-                .accessibilityHidden(true)
-            Text("Sektion \(location.section)")
-        }
-        .lineLimit(1)
-        .accessibilityElement(children: .combine)
     }
 }
 
@@ -320,13 +304,17 @@ struct ShelfSpines: View {
             let idx = min(max(position - 1, 0), n - 1)
             let slot = size.width / CGFloat(n)
             if slot >= 3 {
-                let w = min(max(slot * 0.45, 2), 6)
+                // Rygge i forskellig tykkelse og en anelse forskellig højde, som rigtige plader i en kasse.
+                // Fast mønster ud fra pladsen, så samme sektion altid ser ens ud.
+                let maxW = min(max(slot * 0.8, 2), 14)
                 for i in 0..<n {
-                    let x = slot * (CGFloat(i) + 0.5) - w / 2
+                    let r = Double((i &* 2654435761) % 1000) / 1000
                     let isTarget = i == idx
-                    let h: CGFloat = isTarget ? size.height : size.height * 0.55
-                    let rect = CGRect(x: x, y: size.height - h, width: isTarget ? w + 2 : w, height: h)
-                    ctx.fill(Path(roundedRect: rect, cornerRadius: 1.5),
+                    let w = isTarget ? maxW : maxW * (0.45 + 0.55 * r)
+                    let h: CGFloat = isTarget ? size.height : size.height * (0.72 + 0.16 * (1 - r))
+                    let x = slot * (CGFloat(i) + 0.5) - w / 2
+                    let rect = CGRect(x: x, y: size.height - h, width: w, height: h)
+                    ctx.fill(Path(roundedRect: rect, cornerRadius: 1),
                              with: .color(isTarget ? accent : Ink.faint))
                 }
             } else {
@@ -337,7 +325,7 @@ struct ShelfSpines: View {
                          with: .color(accent))
             }
         }
-        .frame(height: 22)
+        .frame(height: 30)
         .help("Pladens plads i sektionen, set fra venstre")
         .accessibilityLabel("Plade \(position) af \(count) i sektionen")
     }
@@ -464,16 +452,15 @@ private struct AwayBanner: View {
     }
 }
 
-/// Lille versal-overskrift ("GÅ TIL", "FIND FØRST").
+/// Lille overskrift ("Gå til", "Start ved") i almindelige bogstaver.
 struct Eyebrow: View {
     let text: String
     init(_ text: String) { self.text = text }
 
     var body: some View {
-        Text(text.uppercased())
+        Text(text)
             .font(Typo.eyebrow)
-            .tracking(Typo.eyebrowTracking)
-            .foregroundStyle(Ink.tertiary)
+            .foregroundStyle(Ink.secondary)
             .accessibilityAddTraits(.isHeader)
     }
 }

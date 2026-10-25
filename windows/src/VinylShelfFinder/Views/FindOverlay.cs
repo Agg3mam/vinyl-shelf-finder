@@ -148,7 +148,7 @@ public sealed class FindOverlay
         text.Children.Add(Ui.Eyebrow(eyebrow));
         text.Children.Add(Ui.Text(it.Artist, "SubtitleTextBlockStyle", Ui.Secondary, maxLines: 2));
         text.Children.Add(Ui.Text(it.Title, "TitleTextBlockStyle", maxLines: 2));
-        text.Children.Add(Ui.Text(it.DetailLine, "BodyTextBlockStyle", Ui.Tertiary, wrap: false, maxLines: 1));
+        text.Children.Add(RecordParts.PressingLines(it));
         Grid.SetColumn(text, 1);
         grid.Children.Add(text);
         return grid;
@@ -168,18 +168,17 @@ public sealed class FindOverlay
         bool away = !it.Copy.Status.IsOnShelf();
         int position = n.Position ?? 1;
         var p = new StackPanel { Spacing = 20, Opacity = away && !putBack ? 0.55 : 1 };
-        var word = loc.Medium.Singular();
         p.Children.Add(RecordParts.LocationPanel(
             putBack ? "Sæt den her" : away ? "Her plejer den at stå" : "Gå til", loc, position, n.SectionCount,
-            putBack ? adv.PlacementHint : $"{(away ? "Plads" : char.ToUpper(word[0]) + word[1..])} {position} af {n.SectionCount} fra venstre",
-            lineSize: 34));
+            putBack ? adv.PlacementHint : $"{(away ? "Plads" : "Nr.")} {position} af {n.SectionCount} fra venstre",
+            lineSize: 26));
         var refs = new Grid { ColumnSpacing = 20 };
         refs.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        refs.Children.Add(ReferenceBlock("Find først", adv.Primary));
+        refs.Children.Add(ReferenceBlock("Start ved", adv.Primary));
         if (adv.Secondary is Reference s)
         {
             refs.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-            var b = ReferenceBlock("Dernæst", s);
+            var b = ReferenceBlock("Så", s);
             Grid.SetColumn(b, 1);
             refs.Children.Add(b);
         }

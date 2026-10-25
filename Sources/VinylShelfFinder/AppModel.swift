@@ -32,11 +32,12 @@ final class AppModel {
     private(set) var searchIndex = SearchIndex(library: .empty)
     private(set) var rules: SortRules
 
-    /// Plader eller cd'er: hver har sine egne reoler. Skiftet øverst vises, når der er cd'er.
-    var medium: Medium = .vinyl {
+    /// Plader eller cd'er (og kategorier med egne reoler): hver har sine egne reoler.
+    /// Skiftet øverst vises, når der er mere end én slags hylde.
+    var shelfKind: ShelfKind = .vinyl {
         didSet {
-            guard medium != oldValue else { return }
-            store.setSetting("medium", medium.rawValue)
+            guard shelfKind != oldValue else { return }
+            store.setSetting("medium", shelfKind.rawValue)
             // Valg, ark og forslag hører til den anden hylde.
             selection = nil
             findModeCopy = nil
@@ -50,10 +51,23 @@ final class AppModel {
             reload()
         }
     }
-    /// Antal kopier pr. hylde i hele samlingen.
-    private(set) var mediumCounts: [Medium: Int] = [:]
-    /// Skiftet "Plader / Cd'er" giver kun mening, når der er cd'er i samlingen.
-    var showsMediumPicker: Bool { (mediumCounts[.cd] ?? 0) > 0 || medium == .cd }
+    var medium: Medium { shelfKind.medium }
+    /// Antal kopier pr. slags hylde i hele samlingen (også hylder med reoler, men uden kopier).
+    private(set) var shelfCounts: [ShelfKind: Int] = [:]
+    /// Hylderne i skiftet øverst: plader altid, de andre når de har kopier eller reoler.
+    var shelfKinds: [ShelfKind] {
+        ShelfKind.all.filter { k in
+            if k == .vinyl || k == shelfKind { return true }
+            guard let n = shelfCounts[k] else { return false }
+            // En kategori vises, når den har egne reoler.
+            return k.category.map { rules.mode($0) == .own || n > 0 } ?? true
+        }
+    }
+    /// Skiftet giver kun mening, når der er mere end én slags hylde.
+    var showsMediumPicker: Bool { shelfKinds.count > 1 }
+    /// Søgningen finder også plader på de andre hylder (fx jazz på egne reoler).
+    private var otherIndexes: [ShelfKind: SearchIndex] = [:]
+    private(set) var otherShelfHits: [(kind: ShelfKind, count: Int)] = []
 
     var sidebar: SidebarItem? = .search
     var query = "" { didSet { runSearch(autoSelect: true) } }
@@ -211,7 +225,7 @@ final class AppModel {
         market = (try? store.loadMarket()) ?? [:]
         collectionValue = store.loadCollectionValue()
         // Sættes før `reload` og uden `didSet` (det kører ikke i init).
-        medium = store.setting("medium").flatMap(Medium.init(rawValue:)) ?? .vinyl
+        shelfKind = store.setting("medium").flatMap(ShelfKind.init(rawValue:)) ?? .vinyl
         reload()
         findNew.app = self
         startBackups()
@@ -224,11 +238,17 @@ final class AppModel {
 
     func reload() {
         do {
-            library = try store.loadLibrary(medium: medium)
-            mediumCounts = try store.mediumCounts()
-            sortChecked = store.sortChecked(medium)
+            shelfCounts = try store.shelfCounts()
+            // En kategori, der ikke længere har egne reoler (eller tomme), viser den almindelige hylde.
+            if let c = shelfKind.category, rules.mode(c) != .own { shelfKind = ShelfKind(shelfKind.medium) }
+            library = try store.loadLibrary(kind: shelfKind)
+            sortChecked = store.sortChecked(shelfKind)
             stats = ListeningStats(plays: try store.loadPlays())
             searchIndex = SearchIndex(library: library)
+            otherIndexes = [:]
+            for k in shelfKinds where k != shelfKind && (shelfCounts[k] ?? 0) > 0 {
+                otherIndexes[k] = SearchIndex(library: try store.loadLibrary(kind: k))
+            }
             // Efter en handling (spillet, flyt, status …) må valget kun skifte, når man
             // står i søgningen. Ellers hopper valget i en sektion/liste til et søgeresultat.
             runSearch(autoSelect: sidebar == nil || sidebar == .search)
@@ -258,13 +278,13 @@ final class AppModel {
     private(set) var sortChecked: Set<Int64> = []
 
     func setSortChecked(_ copyID: Int64, _ checked: Bool) {
-        store.setSortChecked(medium, copyID: copyID, checked: checked)
+        store.setSortChecked(shelfKind, copyID: copyID, checked: checked)
         if checked { sortChecked.insert(copyID) } else { sortChecked.remove(copyID) }
         cloudChanged()
     }
 
     func clearSortChecked() {
-        store.clearSortChecked(medium)
+        store.clearSortChecked(shelfKind)
         sortChecked = []
         cloudChanged()
     }
@@ -278,8 +298,11 @@ final class AppModel {
         if q.isEmpty {
             if !results.isEmpty { results = [] }
             if !resultTracks.isEmpty { resultTracks = [:] }
+            if !otherShelfHits.isEmpty { otherShelfHits = [] }
             return
         }
+        let other = ShelfKind.all.compactMap { k in otherIndexes[k].map { (kind: k, count: $0.hits(q).count) } }.filter { $0.count > 0 }
+        if other.map(\.kind) != otherShelfHits.map(\.kind) || other.map(\.count) != otherShelfHits.map(\.count) { otherShelfHits = other }
         let hits = searchIndex.hits(q)
         let new = hits.map(\.id)
         let tracks = Dictionary(hits.compactMap { h in h.track.map { (h.id, $0) } }, uniquingKeysWith: { a, _ in a })
@@ -347,7 +370,7 @@ final class AppModel {
             if let s = library.suggestPlacement(for: id, rules: rules) {
                 do { try store.move(copyID: id, to: s.locationID, index: s.index) }
                 catch { errorMessage = error.localizedDescription; break }
-                library = (try? store.loadLibrary(medium: medium)) ?? library
+                library = (try? store.loadLibrary(kind: shelfKind)) ?? library
             }
         }
         reload()
@@ -492,7 +515,7 @@ final class AppModel {
 
     func addSection(shelf: Int) {
         let existing = library.locations.filter { $0.shelf == shelf }.count
-        perform { try store.addSection(shelf: shelf, section: LayoutPlanner.sectionLetter(existing), medium: medium) }
+        perform { try store.addSection(shelf: shelf, section: LayoutPlanner.sectionLetter(existing), kind: shelfKind) }
     }
 
     func deleteSection(_ id: Int64) {
@@ -507,9 +530,11 @@ final class AppModel {
     }
 
     func updateRules(_ new: SortRules) {
+        let regroup = new.categories != rules.categories
         rules = new
         do { try store.saveSortRules(new) } catch { errorMessage = error.localizedDescription }
-        cloudChanged()
+        // Kategorierne bestemmer, hvilken hylde pladerne hører til.
+        if regroup { reload() } else { cloudChanged() }
     }
 
     func undo(_ entry: HistoryEntry) {
@@ -525,7 +550,7 @@ final class AppModel {
         let sorted = rules.sorted(library.allItems.filter { $0.copy.inDiscogs }).map(\.id)
         let parts = LayoutPlanner.split(sorted, plan: plan)
         perform {
-            try store.createLayout(zip(plan, parts).map { (shelf: $0.shelf, section: $0.section, copies: $1) }, medium: medium)
+            try store.createLayout(zip(plan, parts).map { (shelf: $0.shelf, section: $0.section, copies: $1) }, kind: shelfKind)
         }
         forceOnboarding = false
         sidebar = .search

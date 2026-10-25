@@ -123,6 +123,8 @@ public sealed partial class ShelfStore
                 ["sortArtist"] = V(r, "sort_artist_override"), ["sortTitle"] = V(r, "sort_title_override"),
                 ["dateAdded"] = V(r, "date_added"), ["rank"] = V(r, "discogs_rank"), ["medium"] = V(r, "medium_override"),
             }));
+            // Mappen sendes kun, når den kendes (som på Mac).
+            if (r.Text("discogs_folder") is string folder) docs[^1].Data!["folder"] = folder;
         }
 
         var uidOfLocation = new Dictionary<long, string>();
@@ -135,6 +137,8 @@ public sealed partial class ShelfStore
                 ["shelf"] = V(r, "shelf"), ["section"] = V(r, "section"), ["sortIndex"] = V(r, "sort_index"), ["medium"] = V(r, "medium"),
                 ["code"] = V(r, "scan_code"),
             }));
+            // Kategorien sendes kun for kategori-reoler (som på Mac).
+            if (r.Text("category") is string cat) docs[^1].Data!["category"] = cat;
         }
 
         var sections = new Dictionary<long, List<string>>();
@@ -163,10 +167,11 @@ public sealed partial class ShelfStore
         foreach (var r in Db.Query("SELECT artist, sort_name FROM artist_sort_overrides"))
             if (r.Text("artist") is string a && r.Text("sort_name") is string n) overrides[a] = n;
         docs.Add(new SyncDoc(SyncKind.Setting, "artist_overrides", new JsonObject { ["value"] = overrides }));
-        foreach (var m in MediumExtensions.All)
+        // Plader og cd'er altid; kategorierne kun, når de har været brugt (så ældre versioner ikke ser nye poster).
+        foreach (var k in ShelfKind.All.Where(k => k.Category is null || Setting(SortCheckedKey(k)) is not null))
         {
-            var uids = SortChecked(m).Where(uidOfCopy.ContainsKey).Select(id => uidOfCopy[id]).OrderBy(x => x, StringComparer.Ordinal);
-            docs.Add(new SyncDoc(SyncKind.Setting, $"sort_checked_{m.RawValue()}",
+            var uids = SortChecked(k).Where(uidOfCopy.ContainsKey).Select(id => uidOfCopy[id]).OrderBy(x => x, StringComparer.Ordinal);
+            docs.Add(new SyncDoc(SyncKind.Setting, SortCheckedKey(k),
                 new JsonObject { ["value"] = new JsonArray(uids.Select(u => (JsonNode?)JsonValue.Create(u)).ToArray()) }));
         }
         return docs;
@@ -315,6 +320,8 @@ public sealed partial class ShelfStore
                             sort_artist_override, sort_title_override, date_added, discogs_rank, medium_override, uid, created_at)
                         VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)
                         """, fields.Concat(new object?[] { d.Key, Unix(DateTimeOffset.Now) }).ToArray());
+                // Mangler mappen (fra en ældre version), beholdes den, enheden allerede kender.
+                if (Text(v, "folder") is string folder) Db.Run("UPDATE copies SET discogs_folder = ? WHERE uid = ?", folder, d.Key);
                 break;
             }
 
@@ -324,12 +331,17 @@ public sealed partial class ShelfStore
                 // QR-koden på det trykte skilt følger sektionen, så skiltet virker på alle enheder.
                 var code = Text(v, "code");
                 if (code is not null) Db.Run("UPDATE locations SET scan_code = NULL WHERE scan_code = ? AND (uid IS NULL OR uid != ?)", code, d.Key);
+                // Kategorien sendes kun for kategori-reoler. Mangler den fra en ældre version, beholdes enhedens egen.
+                var category = CategoryExtensions.FromRaw(Text(v, "category"))?.RawValue();
                 if (LocalId("locations", d.Key) is long lid)
+                {
                     Db.Run("UPDATE locations SET shelf = ?, section = ?, sort_index = ?, medium = ?, scan_code = ? WHERE id = ?",
                            Long(v, "shelf") ?? 1, Text(v, "section") ?? "A", Long(v, "sortIndex") ?? 0, Text(v, "medium") ?? "vinyl", code, lid);
+                    if (category is not null) Db.Run("UPDATE locations SET category = ? WHERE id = ?", category, lid);
+                }
                 else
-                    Db.Run("INSERT INTO locations(shelf, section, sort_index, medium, scan_code, uid) VALUES(?, ?, ?, ?, ?, ?)",
-                           Long(v, "shelf") ?? 1, Text(v, "section") ?? "A", Long(v, "sortIndex") ?? 0, Text(v, "medium") ?? "vinyl", code, d.Key);
+                    Db.Run("INSERT INTO locations(shelf, section, sort_index, medium, category, scan_code, uid) VALUES(?, ?, ?, ?, ?, ?, ?)",
+                           Long(v, "shelf") ?? 1, Text(v, "section") ?? "A", Long(v, "sortIndex") ?? 0, Text(v, "medium") ?? "vinyl", category, code, d.Key);
                 break;
             }
 
@@ -367,10 +379,10 @@ public sealed partial class ShelfStore
                             if (n is JsonValue j && j.TryGetValue<string>(out var name))
                                 Db.Run("INSERT INTO artist_sort_overrides(artist, sort_name) VALUES(?, ?)", a, name);
                 }
-                else if (d.Key.StartsWith("sort_checked_", StringComparison.Ordinal) && MediumExtensions.FromRaw(d.Key["sort_checked_".Length..]) is Medium m)
+                else if (d.Key.StartsWith("sort_checked_", StringComparison.Ordinal) && ShelfKind.FromRaw(d.Key["sort_checked_".Length..]) is ShelfKind k)
                 {
                     var ids = Strings(v["value"]).Select(CopyIdOf).OfType<long>().OrderBy(x => x);
-                    SetSetting($"sort_checked_{m.RawValue()}", string.Join(",", ids.Select(x => x.ToString(CultureInfo.InvariantCulture))));
+                    SetSetting(SortCheckedKey(k), string.Join(",", ids.Select(x => x.ToString(CultureInfo.InvariantCulture))));
                 }
                 else if (SyncedSettings.Contains(d.Key))
                     SetSetting(d.Key, Text(v, "value"));

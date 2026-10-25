@@ -116,6 +116,7 @@ public sealed partial class MainWindow : Window
     private void UpdateLookBackground()
     {
         bool dark = Root.ActualTheme == ElementTheme.Dark;
+        Ui.IsDark = dark;
         Body.Background = Model.LookStyle.Palette() is { } p ? new SolidColorBrush(Rgb(dark ? p.Dark.Background : p.Light.Background)) : null;
     }
 
@@ -169,6 +170,9 @@ public sealed partial class MainWindow : Window
                 UpdateToolbar();
                 ShowContent();
                 break;
+            case nameof(AppModel.ShowsMediumPicker):
+                UpdateToolbar();
+                break;
             case nameof(AppModel.ErrorMessage):
                 _errorBar.Title = "Noget gik galt";
                 _errorBar.Message = Model.ErrorMessage ?? "";
@@ -205,12 +209,10 @@ public sealed partial class MainWindow : Window
         var bar = new Grid { Padding = new Thickness(12, 6, 12, 6), ColumnSpacing = 8 };
         bar.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         bar.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        foreach (var m in new[] { Medium.Vinyl, Medium.Cd })
-            _mediumBar.Items.Add(new SelectorBarItem { Text = m.Title(), Tag = m });
-        ToolTipService.SetToolTip(_mediumBar, "Skift mellem pladereolerne og cd-reolerne");
+        ToolTipService.SetToolTip(_mediumBar, "Skift mellem reolerne");
         _mediumBar.SelectionChanged += (_, _) =>
         {
-            if (_mediumBar.SelectedItem?.Tag is Medium m && Model.Medium != m) Model.Medium = m;
+            if (_mediumBar.SelectedItem?.Tag is ShelfKind k && Model.Kind != k) Model.Kind = k;
         };
         bar.Children.Add(_mediumBar);
         _syncButton.Click += async (_, _) => await Model.SyncAsync();
@@ -223,7 +225,14 @@ public sealed partial class MainWindow : Window
     private void UpdateToolbar()
     {
         _mediumBar.Visibility = Model.ShowsMediumPicker ? Visibility.Visible : Visibility.Collapsed;
-        var want = _mediumBar.Items.FirstOrDefault(i => i.Tag is Medium m && m == Model.Medium);
+        // Plader, cd'er og kategorier med egne reoler (som skiftet på Mac).
+        var kinds = Model.ShelfKinds;
+        if (!_mediumBar.Items.Select(i => i.Tag).OfType<ShelfKind>().SequenceEqual(kinds))
+        {
+            _mediumBar.Items.Clear();
+            foreach (var k in kinds) _mediumBar.Items.Add(new SelectorBarItem { Text = k.Title, Tag = k });
+        }
+        var want = _mediumBar.Items.FirstOrDefault(i => i.Tag is ShelfKind k && k == Model.Kind);
         if (want is not null && _mediumBar.SelectedItem != want) _mediumBar.SelectedItem = want;
 
         var s = Model.SyncState;
@@ -279,12 +288,15 @@ public sealed partial class MainWindow : Window
         foreach (var shelf in lib.Locations.Select(l => l.Shelf).Distinct())
         {
             var first = lib.Locations.First(l => l.Shelf == shelf);
-            items.Add(new NavigationViewItemHeader { Content = $"{first.Medium.ShelfWord()} {shelf}" });
+            items.Add(new NavigationViewItemHeader { Content = $"{first.Kind.ShelfWord} {shelf}" });
             foreach (var loc in lib.Locations.Where(l => l.Shelf == shelf))
             {
                 int onShelf = lib.Sections.TryGetValue(loc.Id, out var ids)
                     ? ids.Count(id => lib.Copies.TryGetValue(id, out var c) && c.Status.IsOnShelf()) : 0;
                 var secItem = Item($"Sektion {loc.Section}", Ui.Glyph.Library, SidebarItem.ForSection(loc.Id), onShelf);
+                // Sektionsbogstavet i kategoriens farve (som fanen på Mac) i stedet for et reol-ikon.
+                secItem.Icon = new FontIcon { Glyph = loc.Section, FontFamily = Ui.Condensed, FontWeight = Microsoft.UI.Text.FontWeights.Bold,
+                    Foreground = loc.Category is Category cat ? Ui.CategoryBrush(cat) : Ui.Accent };
                 secItem.ContextFlyout = SectionMenu(loc, shelf, onShelf == 0 && (!lib.Sections.TryGetValue(loc.Id, out var all) || all.Count == 0));
                 items.Add(secItem);
             }
@@ -305,7 +317,7 @@ public sealed partial class MainWindow : Window
         var check = new MenuFlyoutItem { Text = "Kontrollér sektion…" };
         check.Click += (_, _) => Model.CheckSection = loc.Id;
         menu.Items.Add(check);
-        var add = new MenuFlyoutItem { Text = $"Tilføj sektion i {loc.Medium.ShelfWord()} {shelf}" };
+        var add = new MenuFlyoutItem { Text = $"Tilføj sektion i {loc.Kind.ShelfWord} {shelf}" };
         add.Click += (_, _) => Model.AddSection(shelf);
         menu.Items.Add(add);
         if (empty)

@@ -102,7 +102,7 @@ svg.i { width: 1em; height: 1em; flex: none; stroke: currentColor; fill: none; s
 .back { appearance: none; border: 0; background: var(--material); -webkit-backdrop-filter: blur(20px); backdrop-filter: blur(20px); color: var(--label); height: 44px; padding: 0 14px 0 10px; border-radius: 22px; display: inline-flex; align-items: center; gap: 4px; font-size: 17px; cursor: pointer; }
 
 /* Grupperede lister (som iOS) */
-.group-title { font-size: 13px; text-transform: uppercase; letter-spacing: 0.02em; color: var(--secondary); margin: 22px 16px 6px; }
+.group-title { font-size: 15px; font-weight: 600; color: var(--secondary); margin: 22px 16px 6px; }
 .group-title.big { font-size: 20px; text-transform: none; letter-spacing: 0; font-weight: 700; color: var(--label); margin: 22px 4px 8px; }
 .list { background: var(--cell); border-radius: var(--radius); overflow: hidden; }
 .row {
@@ -160,16 +160,28 @@ svg.i { width: 1em; height: 1em; flex: none; stroke: currentColor; fill: none; s
 .record-head .cover { width: 130px; height: 130px; border-radius: 10px; box-shadow: var(--shadow); }
 .record-head .cover svg { font-size: 40px; }
 .record-head .artist { font-size: 20px; font-weight: 600; }
+.record-head .detail.faint { color: var(--tertiary); }
 .record-head .title { font-size: 22px; font-weight: 700; line-height: 1.2; margin-top: 2px; }
 .record-head .detail { font-size: 13px; color: var(--secondary); margin-top: 6px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .card { background: var(--material); -webkit-backdrop-filter: blur(30px) saturate(1.6); backdrop-filter: blur(30px) saturate(1.6); border-radius: 22px; padding: 18px; margin-bottom: 14px; }
 .card.thin { background: var(--material-thin); border-radius: 18px; padding: 14px; }
-.eyebrow { font-size: 12px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: var(--secondary); }
+.eyebrow { font-size: 15px; font-weight: 600; color: var(--secondary); }
+/* Skillekortet: sektionsbogstavet på en fane i kategoriens farve og reolen ved siden af (som på Mac).
+   Den smalle skrift er systemets egen (SF på iPhone, Bahnschrift på Windows) – intet hentes udefra. */
+.condensed, .divider .tab, .divider .shelf, .hint { font-family: Bahnschrift, system-ui, -apple-system, sans-serif; font-stretch: condensed; }
+.divider { display: inline-flex; align-items: flex-end; gap: 10px; margin: 10px 0 12px; border-bottom: 3px solid var(--divider, var(--accent)); white-space: nowrap; }
+.divider .tab { background: var(--divider, var(--accent)); color: #fff; font-size: 42px; font-weight: 700; line-height: 1; padding: 3px 13px 0; min-width: 48px; text-align: center; border-radius: 8px 8px 0 0; }
+.divider .names { display: grid; padding-bottom: 4px; }
+.divider .shelf { font-size: 23px; font-weight: 650; }
+.divider .sec { font-size: 15px; color: var(--secondary); }
+.cover.sleeve { color: #fff; }
+.cover.sleeve::before { content: attr(data-initials); font-family: Bahnschrift, system-ui, -apple-system, sans-serif; font-stretch: condensed; font-weight: 700; font-size: 19px; opacity: 0.92; }
+.record-head .cover.sleeve::before { font-size: 48px; }
 .placement { display: flex; align-items: baseline; gap: 8px; font-size: 28px; font-weight: 700; margin: 8px 0 10px; white-space: nowrap; }
 .placement .ic { color: var(--accent); font-size: 24px; }
 .placement .sep { color: var(--tertiary); font-size: 16px; }
 .spines { display: block; width: 100%; height: 24px; margin-bottom: 10px; }
-.hint { font-size: 16px; color: var(--secondary); font-variant-numeric: tabular-nums; }
+.hint { font-size: 19px; font-weight: 500; color: var(--secondary); font-variant-numeric: tabular-nums; }
 .away-line { display: flex; gap: 8px; align-items: center; color: var(--orange); font-weight: 600; font-size: 16px; margin: -2px 4px 14px; }
 .ref { display: flex; gap: 12px; align-items: flex-start; }
 .ref .cover { width: 56px; height: 56px; }
@@ -398,3 +410,7 @@ body:has(.cf-page) { background: var(--cf-bg); }
 .mfa-dots { display: flex; gap: 6px; justify-content: center; margin-top: 22px; }
 .mfa-dots span { width: 6px; height: 6px; border-radius: 3px; background: var(--tertiary); }
 .mfa-dots span.on { width: 16px; background: var(--accent); }
+.record-head .detail + .detail { margin-top: 0; }
+/* Sektionens bogstav på en lille fane i reolens farve (som sidepanelet på Mac). */
+.section-tab { flex: none; width: 30px; height: 28px; display: grid; place-items: center; background: var(--divider, var(--accent)); color: #fff;
+  border-radius: 6px 6px 0 0; font-family: Bahnschrift, system-ui, -apple-system, sans-serif; font-stretch: condensed; font-weight: 700; font-size: 19px; }

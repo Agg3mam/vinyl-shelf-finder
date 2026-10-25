@@ -25,7 +25,7 @@ struct SortListView: View {
                 list(entries)
             }
         }
-        .navigationTitle("Sorteringsliste · \(m.title)")
+        .navigationTitle("Sorteringsliste · \(model.shelfKind.title)")
         .confirmationDialog("Fjern fluebenene ved alle \(m.plural) på denne hylde?", isPresented: $confirmRestart) {
             Button("Fjern alle flueben", role: .destructive) { model.clearSortChecked() }
         }
@@ -60,7 +60,9 @@ struct SortListView: View {
         let total = countable.count
         let done = countable.filter { model.sortChecked.contains($0.id) }.count
         return VStack(alignment: .leading, spacing: Spacing.s) {
-            Text(m == .vinyl
+            Text(model.shelfKind.category != nil
+                 ? "Rækkefølgen for \(model.shelfKind.title.lowercased()), fra første til sidste \(m.singular). De andre hylder har deres egne lister."
+                 : m == .vinyl
                  ? "Rækkefølgen for pladehylden, fra første til sidste plade. Cd'erne har deres egen liste."
                  : "Rækkefølgen for cd-hylden, fra første til sidste cd. Pladerne har deres egen liste.")
                 .font(.callout).foregroundStyle(.secondary)
@@ -68,10 +70,10 @@ struct SortListView: View {
 
             if model.library.locations.isEmpty {
                 VStack(alignment: .leading, spacing: Spacing.xs) {
-                    Text("Der er ingen \(m.shelfWord.lowercased())er endnu, så listen viser bare hele rækkefølgen. Når reolerne er lavet, deles listen op i sektioner.")
+                    Text("Der er ingen \(model.shelfKind.shelfWord.lowercased())er endnu, så listen viser bare hele rækkefølgen. Når reolerne er lavet, deles listen op i sektioner.")
                         .font(.callout).foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
-                    Button(m == .vinyl ? "Lav reoler" : "Lav cd-reoler") { model.sidebar = .search }
+                    Button("Lav \(model.shelfKind.shelfWord.lowercased())er") { model.sidebar = .search }
                 }
                 .padding(Spacing.s)
                 .background(.quaternary.opacity(0.5), in: RoundedRectangle(cornerRadius: 10))

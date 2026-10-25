@@ -45,7 +45,7 @@ struct SearchView: View {
         .navigationTitle("Søg")
     }
 
-    private func rows(_ items: [(medium: Medium, item: RecordItem)]) -> some View {
+    private func rows(_ items: [(medium: ShelfKind, item: RecordItem)]) -> some View {
         ForEach(items, id: \.item.id) { hit in
             NavigationLink(value: RecordRoute(medium: hit.medium, copyID: hit.item.id)) {
                 RecordRow(item: hit.item, location: model.library(hit.medium).location(of: hit.item.id))
@@ -54,11 +54,11 @@ struct SearchView: View {
     }
 
     /// Op til 10 forskellige plader, nyeste først.
-    private var recentlyPlayed: [(medium: Medium, item: RecordItem)] {
-        var seen = Set<Int64>(), out: [(medium: Medium, item: RecordItem)] = []
+    private var recentlyPlayed: [(medium: ShelfKind, item: RecordItem)] {
+        var seen = Set<Int64>(), out: [(medium: ShelfKind, item: RecordItem)] = []
         for p in model.stats.plays where !seen.contains(p.copyID) {
             seen.insert(p.copyID)
-            for m in Medium.allCases {
+            for m in ShelfKind.all {
                 if let it = model.library(m).item(p.copyID) { out.append((m, it)); break }
             }
             if out.count == 10 { break }

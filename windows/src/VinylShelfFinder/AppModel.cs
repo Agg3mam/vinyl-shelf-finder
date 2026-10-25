@@ -52,7 +52,7 @@ public sealed partial class AppModel : INotifyPropertyChanged
         _rules = Store.LoadSortRules();
         _neighborCount = int.TryParse(Store.Setting("neighbor_count"), out var n) && n > 0 ? n : 1;
         _username = Store.Setting("discogs_username");
-        _medium = MediumExtensions.FromRaw(Store.Setting("medium")) ?? Medium.Vinyl;
+        _kind = ShelfKind.FromRaw(Store.Setting("medium")) ?? ShelfKind.Vinyl;
         _currency = Store.Setting("market_currency") ?? "DKK";
         _showCoverFlow = Store.Setting("cover_flow") == "1";
         _lookTheme = Look.ThemeFrom(Store.Setting("look_theme"));
@@ -70,15 +70,16 @@ public sealed partial class AppModel : INotifyPropertyChanged
 
     // MARK: Egenskaber
 
-    private Medium _medium = Medium.Vinyl;
-    /// <summary>Den viste hylde: plader eller cd'er. Hver har sine egne reoler og sektioner.</summary>
-    public Medium Medium
+    private ShelfKind _kind = ShelfKind.Vinyl;
+    /// <summary>Den viste hylde: plader eller cd'er (og kategorier med egne reoler). Hver har sine egne reoler og sektioner.</summary>
+    public ShelfKind Kind
     {
-        get => _medium;
+        get => _kind;
         set
         {
-            if (!Set(ref _medium, value)) return;
-            Store.SetSetting("medium", value.RawValue());
+            if (!Set(ref _kind, value)) return;
+            OnChanged(nameof(Medium));
+            Store.SetSetting("medium", value.RawValue);
             Selection = null;
             FindModeCopy = null;
             ReturnCopy = null;
@@ -87,9 +88,21 @@ public sealed partial class AppModel : INotifyPropertyChanged
         }
     }
 
-    private IReadOnlyDictionary<Medium, int> _mediumCounts = new Dictionary<Medium, int>();
-    /// <summary>Skiftet "Plader / Cd'er" vises kun, når der er cd'er (eller cd-hylden er valgt).</summary>
-    public bool ShowsMediumPicker => _mediumCounts.GetValueOrDefault(Medium.Cd) > 0 || Medium == Medium.Cd;
+    /// <summary>Plader eller cd'er på den viste hylde.</summary>
+    public Medium Medium { get => _kind.Medium; set => Kind = new ShelfKind(value); }
+
+    private IReadOnlyDictionary<ShelfKind, int> _shelfCounts = new Dictionary<ShelfKind, int>();
+    /// <summary>Hylderne i skiftet øverst: plader altid, de andre når de har kopier eller reoler (kategorier: egne reoler).</summary>
+    public IReadOnlyList<ShelfKind> ShelfKinds => ShelfKind.All.Where(k =>
+        k == ShelfKind.Vinyl || k == Kind
+        || _shelfCounts.TryGetValue(k, out var n) && (k.Category is not Category c || Rules.Mode(c) == CategoryMode.Own || n > 0)).ToList();
+    /// <summary>Skiftet vises kun, når der er mere end én slags hylde.</summary>
+    public bool ShowsMediumPicker => ShelfKinds.Count > 1;
+
+    /// <summary>Søgningen finder også plader på de andre hylder (fx jazz på egne reoler).</summary>
+    private Dictionary<ShelfKind, SearchIndex> _otherIndexes = new();
+    private IReadOnlyList<(ShelfKind Kind, int Count)> _otherShelfHits = Array.Empty<(ShelfKind, int)>();
+    public IReadOnlyList<(ShelfKind Kind, int Count)> OtherShelfHits { get => _otherShelfHits; private set => Set(ref _otherShelfHits, value); }
 
     private Library _library = Library.Empty;
     public Library Library { get => _library; private set => Set(ref _library, value); }
@@ -193,10 +206,16 @@ public sealed partial class AppModel : INotifyPropertyChanged
     {
         try
         {
-            var lib = Store.LoadLibrary(Medium);
-            _mediumCounts = Store.MediumCounts();
+            _shelfCounts = Store.ShelfCounts();
+            // En kategori, der ikke længere har egne reoler, viser den almindelige hylde.
+            if (Kind.Category is Category c && Rules.Mode(c) != CategoryMode.Own) Kind = new ShelfKind(Kind.Medium);
+            var lib = Store.LoadLibrary(Kind);
             LoadSortChecked();
             _searchIndex = new SearchIndex(lib);
+            _otherIndexes = new();
+            foreach (var k in ShelfKinds.Where(k => k != Kind && _shelfCounts.GetValueOrDefault(k) > 0))
+                _otherIndexes[k] = new SearchIndex(Store.LoadLibrary(k));
+            OnChanged(nameof(ShowsMediumPicker));
             Stats = new ListeningStats(Store.LoadPlays());
             Library = lib;
             OnChanged(nameof(NeedsOnboarding));
@@ -217,8 +236,11 @@ public sealed partial class AppModel : INotifyPropertyChanged
         {
             ResultTracks = new Dictionary<long, Track>();
             if (Results.Count > 0) Results = Array.Empty<long>();
+            if (OtherShelfHits.Count > 0) OtherShelfHits = Array.Empty<(ShelfKind, int)>();
             return;
         }
+        var other = ShelfKind.All.Where(_otherIndexes.ContainsKey).Select(k => (Kind: k, Count: _otherIndexes[k].Hits(q).Count)).Where(h => h.Count > 0).ToList();
+        if (!other.SequenceEqual(OtherShelfHits)) OtherShelfHits = other;
         var hits = _searchIndex.Hits(q);
         var found = hits.Select(h => h.Id).ToList();
         // Sættes før Results, så listen tegner sanglinjerne med det samme.
@@ -293,7 +315,7 @@ public sealed partial class AppModel : INotifyPropertyChanged
             if (Library.SuggestPlacement(id, Rules) is not PlacementSuggestion s) continue;
             try { Store.Move(id, s.LocationId, s.Index); }
             catch (Exception ex) { ErrorMessage = Describe(ex); break; }
-            try { Library = Store.LoadLibrary(Medium); } catch { }
+            try { Library = Store.LoadLibrary(Kind); } catch { }
         }
         Reload();
     }
@@ -416,7 +438,7 @@ public sealed partial class AppModel : INotifyPropertyChanged
     public void AddSection(int shelf)
     {
         int existing = Library.Locations.Count(l => l.Shelf == shelf);
-        Perform(() => Store.AddSection(shelf, LayoutPlanner.SectionLetter(existing), Medium));
+        Perform(() => Store.AddSection(shelf, LayoutPlanner.SectionLetter(existing), Kind));
     }
 
     public void DeleteSection(long id)
@@ -543,14 +565,14 @@ public sealed partial class AppModel : INotifyPropertyChanged
 
     public void LoadSortChecked()
     {
-        try { _sortChecked = Store.SortChecked(Medium); } catch { _sortChecked = new(); }
+        try { _sortChecked = Store.SortChecked(Kind); } catch { _sortChecked = new(); }
     }
 
     public void SetSortChecked(long copyId, bool isChecked)
     {
         try
         {
-            Store.SetSortChecked(Medium, copyId, isChecked);
+            Store.SetSortChecked(Kind, copyId, isChecked);
             if (isChecked) _sortChecked.Add(copyId); else _sortChecked.Remove(copyId);
             OnChanged(nameof(SortChecked));
             CloudChanged();
@@ -560,7 +582,7 @@ public sealed partial class AppModel : INotifyPropertyChanged
 
     public void ClearSortChecked()
     {
-        try { Store.ClearSortChecked(Medium); _sortChecked = new(); OnChanged(nameof(SortChecked)); CloudChanged(); }
+        try { Store.ClearSortChecked(Kind); _sortChecked = new(); OnChanged(nameof(SortChecked)); CloudChanged(); }
         catch (Exception ex) { ErrorMessage = Describe(ex); }
     }
 
@@ -705,9 +727,11 @@ public sealed partial class AppModel : INotifyPropertyChanged
 
     public void UpdateRules(SortRules rules)
     {
+        bool regroup = CategoryExtensions.All.Any(c => rules.Mode(c) != Rules.Mode(c));
         Rules = rules;
         try { Store.SaveSortRules(rules); } catch (Exception ex) { ErrorMessage = Describe(ex); }
-        CloudChanged();
+        // Kategorierne bestemmer, hvilken hylde pladerne hører til.
+        if (regroup) Reload(); else CloudChanged();
     }
 
     /// Efter en synkronisering: regler og indstillinger kan være ændret på en anden enhed.
@@ -721,7 +745,7 @@ public sealed partial class AppModel : INotifyPropertyChanged
     {
         var sorted = Rules.Sorted(Library.AllItems.Where(i => i.Copy.InDiscogs)).Select(i => i.Id).ToList();
         var parts = LayoutPlanner.Split(sorted, plan);
-        Perform(() => Store.CreateLayout(plan.Zip(parts, (p, ids) => (p.Shelf, p.Section, (IReadOnlyList<long>)ids)).ToList(), Medium));
+        Perform(() => Store.CreateLayout(plan.Zip(parts, (p, ids) => (p.Shelf, p.Section, (IReadOnlyList<long>)ids)).ToList(), Kind));
         ForceOnboarding = false;
         Sidebar = SidebarItem.Search;
         RequestSearchFocus();

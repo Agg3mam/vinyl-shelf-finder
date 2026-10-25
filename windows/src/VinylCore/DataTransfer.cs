@@ -75,7 +75,7 @@ public static class DataTransfer
                 try
                 {
                     var counts = store.MediumCounts();
-                    var sections = MediumExtensions.All.Sum(m => store.LoadLibrary(m).Locations.Count);
+                    var sections = ShelfKind.All.Sum(k => store.LoadLibrary(k).Locations.Count);
                     summary = new ImportSummary(counts.GetValueOrDefault(Medium.Vinyl), counts.GetValueOrDefault(Medium.Cd), sections);
                 }
                 catch (Exception e)

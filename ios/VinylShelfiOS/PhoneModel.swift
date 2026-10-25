@@ -17,30 +17,30 @@ final class PhoneModel {
 
     let store: ShelfStore
     /// Plader og cd'er har hver deres reoler (som på Mac).
-    private(set) var libraries: [Medium: Library] = [:]
-    private var indexes: [Medium: SearchIndex] = [:]
+    private(set) var libraries: [ShelfKind: Library] = [:]
+    private var indexes: [ShelfKind: SearchIndex] = [:]
     private(set) var stats: ListeningStats = .empty
     /// Hylden, der vises under Reol.
-    var medium: Medium = .vinyl
+    var medium: ShelfKind = .vinyl
 
     var library: Library { libraries[medium] ?? .empty }
-    func library(_ m: Medium) -> Library { libraries[m] ?? .empty }
+    func library(_ m: ShelfKind) -> Library { libraries[m] ?? .empty }
     /// Medier med reoler (Plader først).
-    var media: [Medium] { Medium.allCases.filter { !(libraries[$0]?.locations.isEmpty ?? true) } }
+    var media: [ShelfKind] { ShelfKind.all.filter { !(libraries[$0]?.locations.isEmpty ?? true) } }
     var errorMessage: String?
 
     /// Sorteringsreglerne fra computeren (følger med via kontoen) og fluebenene i sorteringslisten pr. hylde.
     private(set) var rules = SortRules()
-    private(set) var sortChecked: [Medium: Set<Int64>] = [:]
+    private(set) var sortChecked: [ShelfKind: Set<Int64>] = [:]
 
     /// Flueben i sorteringslisten (som på Mac); følger med til de andre enheder via kontoen.
-    func setSortChecked(_ m: Medium, _ copyID: Int64, _ checked: Bool) {
+    func setSortChecked(_ m: ShelfKind, _ copyID: Int64, _ checked: Bool) {
         store.setSortChecked(m, copyID: copyID, checked: checked)
         sortChecked[m] = store.sortChecked(m)
         cloudChanged()
     }
 
-    func clearSortChecked(_ m: Medium) {
+    func clearSortChecked(_ m: ShelfKind) {
         store.clearSortChecked(m)
         sortChecked[m] = []
         cloudChanged()
@@ -58,7 +58,7 @@ final class PhoneModel {
 
     /// Åbnes fra en QR-kode eller et link (vinylshelf://section/…).
     var openedSection: OpenedSection?
-    struct OpenedSection: Identifiable, Equatable { let medium: Medium; let locationID: Int64; var id: Int64 { locationID } }
+    struct OpenedSection: Identifiable, Equatable { let medium: ShelfKind; let locationID: Int64; var id: Int64 { locationID } }
 
     let cloud = CloudClient()
     var cloudLoggedIn = false
@@ -92,14 +92,17 @@ final class PhoneModel {
 
     func reload() {
         do {
-            for m in Medium.allCases {
-                let lib = try store.loadLibrary(medium: m)
+            // Plader og cd'er altid; kategorierne, når de har egne reoler eller kopier.
+            let counts = try store.shelfCounts()
+            libraries = [:]; indexes = [:]
+            for m in ShelfKind.all where m.category == nil || counts[m] != nil {
+                let lib = try store.loadLibrary(kind: m)
                 libraries[m] = lib
                 indexes[m] = SearchIndex(library: lib)
             }
             stats = ListeningStats(plays: try store.loadPlays())
             rules = store.loadSortRules()
-            for m in Medium.allCases { sortChecked[m] = store.sortChecked(m) }
+            for m in ShelfKind.all { sortChecked[m] = store.sortChecked(m) }
             if !media.contains(medium), let first = media.first { medium = first }
         } catch {
             errorMessage = error.localizedDescription
@@ -110,15 +113,15 @@ final class PhoneModel {
 
     /// Søgning i plader og cd'er (også på sange). Plader først ved samme relevans.
     /// `track` er sangen, der passede, når resultatet er fundet på en sang.
-    func search(_ query: String) -> [(medium: Medium, item: RecordItem, track: Track?)] {
-        Medium.allCases.flatMap { m in
+    func search(_ query: String) -> [(medium: ShelfKind, item: RecordItem, track: Track?)] {
+        ShelfKind.all.flatMap { m in
             (indexes[m]?.hits(query) ?? []).compactMap { h in library(m).item(h.id).map { (m, $0, h.track) } }
         }
     }
 
     /// Den sektion (og hylde), en QR-kode peger på.
-    func section(forScanCode code: String) -> (medium: Medium, location: Location)? {
-        for m in Medium.allCases { if let l = library(m).location(forScanCode: code) { return (m, l) } }
+    func section(forScanCode code: String) -> (medium: ShelfKind, location: Location)? {
+        for m in ShelfKind.all { if let l = library(m).location(forScanCode: code) { return (m, l) } }
         return nil
     }
 

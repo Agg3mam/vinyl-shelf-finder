@@ -255,7 +255,7 @@ struct CoverFlowCaption: View {
             return item.awayMessage ?? "Ude af reolen"
         }
         let base = "Nr. \(nr) af \(library.onShelfCount(in: loc.id))"
-        return showsSection ? "\(base) · \(loc.medium.shelfWord) \(loc.shelf) · Sektion \(loc.section)" : base
+        return showsSection ? "\(base) · \(loc.kind.shelfWord) \(loc.shelf) · Sektion \(loc.section)" : base
     }
 }
 

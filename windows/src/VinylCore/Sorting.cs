@@ -33,6 +33,7 @@ public static class SortRuleLabels
 
 /// Maskin-nøgle til sammenligning (se SortRules.KeyFor).
 public readonly record struct SortKey(
+    int CategoryGroup, // 0 = ingen kategori, ellers 1 + kategoriens plads (jazz, underholdning, klassisk)
     int NumberGroup,   // 1 = kunstneren starter med et tal og skal stå sidst (NumbersLast), ellers 0
     int DiscogsRank,   // int.MaxValue hvis ukendt eller ikke i brug
     int Group,         // 0 = først, 1 = normal, 2 = sidst
@@ -61,6 +62,9 @@ public sealed class SortRules : IEquatable<SortRules>
     /// Kunstnere, der starter med et tal (10cc, 2Pac, The 1975), står sidst – efter Z og Æ Ø Å.
     /// Gælder også med Discogs' rækkefølge, hvor tallene ellers står først; indbyrdes beholder de rækkefølgen.
     public bool NumbersLast { get; set; } = true;
+    /// Jazz, Underholdning og Klassisk: til sidst på reolerne eller på egne reoler. Mangler en kategori, er den
+    /// slået fra (på begge platforme): en opdatering må ikke ændre sorteringen.
+    public Dictionary<Category, CategoryMode> Categories { get; set; } = new();
     public VariousPlacement Various { get; set; } = VariousPlacement.Alphabetical;
     public WithinArtist WithinArtist { get; set; } = WithinArtist.Title;
     /// Kunstner (som vist) → sorteringsnavn, fx "Bob Dylan" → "Dylan, Bob".
@@ -75,6 +79,7 @@ public sealed class SortRules : IEquatable<SortRules>
         IgnorePunctuation = IgnorePunctuation,
         DanishAlphabet = DanishAlphabet,
         NumbersLast = NumbersLast,
+        Categories = new(Categories),
         Various = Various,
         WithinArtist = WithinArtist,
         ArtistOverrides = new(ArtistOverrides),
@@ -83,10 +88,11 @@ public sealed class SortRules : IEquatable<SortRules>
     public bool Equals(SortRules? o) => o is not null && UseDiscogsOrder == o.UseDiscogsOrder
         && ArtistArticles.SequenceEqual(o.ArtistArticles) && TitleArticles.SequenceEqual(o.TitleArticles)
         && IgnorePunctuation == o.IgnorePunctuation && DanishAlphabet == o.DanishAlphabet
-        && NumbersLast == o.NumbersLast && Various == o.Various && WithinArtist == o.WithinArtist
+        && NumbersLast == o.NumbersLast && SameCategories(o) && Various == o.Various && WithinArtist == o.WithinArtist
         && ArtistOverrides.Count == o.ArtistOverrides.Count
         && ArtistOverrides.All(kv => o.ArtistOverrides.TryGetValue(kv.Key, out var v) && v == kv.Value);
     public override bool Equals(object? obj) => Equals(obj as SortRules);
+    private bool SameCategories(SortRules o) => CategoryExtensions.All.All(c => Mode(c) == o.Mode(c));
     public override int GetHashCode() => HashCode.Combine(UseDiscogsOrder, IgnorePunctuation, DanishAlphabet, Various, WithinArtist, ArtistArticles.Count);
 
     // MARK: JSON (samme format som Mac-appens Codable, så "sort_rules" kan deles)
@@ -102,9 +108,12 @@ public sealed class SortRules : IEquatable<SortRules>
             ["ignorePunctuation"] = IgnorePunctuation,
             ["danishAlphabet"] = DanishAlphabet,
             ["numbersLast"] = NumbersLast,
-            ["various"] = Various.RawValue(),
-            ["withinArtist"] = WithinArtist.RawValue(),
         };
+        // Kun når mindst én er slået til, så gemte regler ikke ændrer sig for dem, der ikke bruger kategorier.
+        var on = CategoryExtensions.All.Where(c => Mode(c) != CategoryMode.Off).ToList();
+        if (on.Count > 0) o["categories"] = new JsonObject(on.Select(c => KeyValuePair.Create(c.RawValue(), (JsonNode?)Mode(c).RawValue())));
+        o["various"] = Various.RawValue();
+        o["withinArtist"] = WithinArtist.RawValue();
         return o.ToJsonString();
     }
 
@@ -122,6 +131,12 @@ public sealed class SortRules : IEquatable<SortRules>
             if (o["ignorePunctuation"] is JsonValue ip && ip.TryGetValue<bool>(out var b2)) r.IgnorePunctuation = b2;
             if (o["danishAlphabet"] is JsonValue da && da.TryGetValue<bool>(out var b3)) r.DanishAlphabet = b3;
             if (o["numbersLast"] is JsonValue nl && nl.TryGetValue<bool>(out var b4)) r.NumbersLast = b4;
+            // Ukendte kategorier eller valg (fra en nyere version) springes over.
+            if (o["categories"] is JsonObject cats)
+                foreach (var (ck, cv) in cats)
+                    if (CategoryExtensions.FromRaw(ck) is Category cat && cv is JsonValue jv && jv.TryGetValue<string>(out var ms)
+                        && CategoryModeExtensions.FromRaw(ms) is CategoryMode mode && mode != CategoryMode.Off)
+                        r.Categories[cat] = mode;
             if (o["various"] is JsonValue v && v.TryGetValue<string>(out var vs))
             {
                 r.Various = vs switch
@@ -233,6 +248,7 @@ public sealed class SortRules : IEquatable<SortRules>
             group = Various switch { VariousPlacement.First => 0, VariousPlacement.Last => 2, _ => 1 };
         var sortArtist = SortArtist(artist, item.Copy.SortArtistOverride);
         return new SortKey(
+            CategoryGroup: CategoryOf(item) is Category cat ? 1 + Array.IndexOf(CategoryExtensions.All, cat) : 0,
             NumberGroup: NumbersLast && StartsWithDigit(sortArtist) ? 1 : 0,
             DiscogsRank: UseDiscogsOrder ? (item.Copy.DiscogsRank ?? int.MaxValue) : int.MaxValue,
             Group: group,
@@ -244,12 +260,35 @@ public sealed class SortRules : IEquatable<SortRules>
             CopyId: item.Copy.Id);
     }
 
+    // MARK: Kategorier
+
+    public CategoryMode Mode(Category c) => Categories.TryGetValue(c, out var m) ? m : CategoryMode.Off;
+
+    /// Den første slåede-til kategori, pladen passer i (null = står sammen med alt det andet).
+    public Category? CategoryOf(string? genres, string? folder)
+    {
+        foreach (var c in CategoryExtensions.All)
+            if (Mode(c) != CategoryMode.Off && c.Matches(genres, folder)) return c;
+        return null;
+    }
+
+    public Category? CategoryOf(RecordItem item) => CategoryOf(item.Release.Genres, item.Copy.DiscogsFolder);
+
+    /// Hylden, en kopi står på: plader eller cd'er, eller en kategori med egne reoler. null = ingen hylde (digitale filer).
+    public ShelfKind? ShelfKindOf(Copy copy, Release? release)
+    {
+        if (MediumExtensions.ShelfOf(copy.MediumOverride, release?.Format) is not Medium m) return null;
+        var cat = CategoryOf(release?.Genres, copy.DiscogsFolder);
+        return new ShelfKind(m, cat is Category c && Mode(c) == CategoryMode.Own ? c : null);
+    }
+
     /// "10cc", "2Pac", "1975" (efter "The" er fjernet).
     public static bool StartsWithDigit(string sortArtist) =>
         sortArtist.EnumerateRunes().FirstOrDefault() is var r && Rune.IsDigit(r);
 
     public bool AreInIncreasingOrder(SortKey a, SortKey b)
     {
+        if (a.CategoryGroup != b.CategoryGroup) return a.CategoryGroup < b.CategoryGroup;
         if (a.NumberGroup != b.NumberGroup) return a.NumberGroup < b.NumberGroup;
         if (a.DiscogsRank != b.DiscogsRank) return a.DiscogsRank < b.DiscogsRank;
         if (a.Group != b.Group) return a.Group < b.Group;

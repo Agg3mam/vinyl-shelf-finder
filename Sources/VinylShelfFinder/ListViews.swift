@@ -109,6 +109,21 @@ struct SearchResultsView: View {
             .background(.quaternary.opacity(0.5), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
             .padding(Spacing.s)
 
+            // Plader på de andre hylder (fx jazz på egne reoler) findes også.
+            if !model.otherShelfHits.isEmpty {
+                HStack(spacing: Spacing.xs) {
+                    ForEach(model.otherShelfHits, id: \.kind) { hit in
+                        Button("Også på \(hit.kind.title): \(hit.count)") { model.shelfKind = hit.kind }
+                            .buttonStyle(.link)
+                            .help("Skift til \(hit.kind.title) og se resultaterne der")
+                    }
+                    Spacer()
+                }
+                .font(.callout)
+                .padding(.horizontal, Spacing.m)
+                .padding(.bottom, Spacing.xs)
+            }
+
             resultsArea
                 // Kun skift mellem tom tilstand / ingen resultater / liste toner. Rækkerne
                 // animeres i selve listen (se `resultsList`).

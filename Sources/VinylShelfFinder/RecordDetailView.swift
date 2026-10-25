@@ -99,7 +99,7 @@ struct RecordDetailView: View {
                     .font(Typo.display)
                     .fixedSize(horizontal: false, vertical: true)
                     .layoutPriority(1)
-                Text(it.detailLine).font(.callout).foregroundStyle(Ink.tertiary).lineLimit(2)
+                PressingLines(item: it)
                 if let m = model.market[it.release.id] {
                     MarketLine(market: m)
                 }
@@ -155,12 +155,11 @@ private struct DetailLocationPanel: View {
         VStack(alignment: .leading, spacing: Spacing.s) {
             Eyebrow(away ? "Plejer at stå i" : "Står i")
             ViewThatFits(in: .horizontal) {
-                PlacementLine(location: location, tone: tone).font(Typo.location)
-                PlacementLine(location: location, tone: tone).font(Typo.locationCompact)
+                PlacementLine(location: location, tone: tone)
+                PlacementLine(location: location, tone: tone, compact: true)
             }
-            ShelfSpines(position: position, count: count, accent: tone.accent)
-            Text("\(away ? "Plads" : location.medium.singular.capitalized) \(position) af \(count) fra venstre")
-                .font(.callout.monospacedDigit()).foregroundStyle(Ink.secondary)
+            ShelfSpines(position: position, count: count, accent: DividerColors(location: location, tone: tone).fill)
+            PlacementCount(text: "\(away ? "Plads" : "Nr.") \(position) af \(count) fra venstre")
         }
         .padding(Spacing.panelInset)
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -371,7 +370,7 @@ struct NeighborStack: View {
         return VStack(alignment: .leading, spacing: Spacing.xs) {
             // Overskriften vises kun, når der faktisk står plader før (ikke først i sektionen).
             if !n.before.isEmpty {
-                Eyebrow("← \(n.before.count > 1 ? "\(n.before.count) før" : "Lige før")")
+                Eyebrow(n.before.count > 1 ? "\(n.before.count) til venstre" : "Til venstre")
             }
 
             if n.reachedSectionStart {
@@ -388,6 +387,9 @@ struct NeighborStack: View {
             TargetCard(item: n.target)
                 .padding(.vertical, Spacing.xxs)
 
+            if !n.after.isEmpty {
+                Eyebrow(n.after.count > 1 ? "\(n.after.count) til højre" : "Til højre")
+            }
             ForEach(n.absentBetweenAfter) { it in AbsentRow(item: it) }
             ForEach(n.after) { it in NeighborRow(item: it) }
             if n.reachedSectionEnd {
@@ -398,9 +400,6 @@ struct NeighborStack: View {
                                 })
             }
 
-            if !n.after.isEmpty {
-                Eyebrow("\(n.after.count > 1 ? "\(n.after.count) efter" : "Lige efter") →")
-            }
         }
     }
 }
@@ -454,7 +453,7 @@ struct TargetCard: View {
             Image(systemName: "arrowtriangle.right.fill").foregroundStyle(tone.accent).accessibilityHidden(true)
             VStack(alignment: .leading, spacing: Spacing.xxs / 2) {
                 Text(item.artist).font(.callout.weight(.semibold)).foregroundStyle(Ink.secondary)
-                Text(item.title.uppercased()).font(.title3.weight(.heavy)).foregroundStyle(Ink.primary)
+                Text(item.title).font(.title3.weight(.heavy)).foregroundStyle(Ink.primary)
             }
             Spacer()
         }
@@ -471,7 +470,7 @@ struct SectionEdgeNote: View {
         VStack(alignment: .leading, spacing: Spacing.xxs / 2) {
             HStack {
                 Rectangle().fill(Ink.tertiary).frame(height: 1)
-                Text(text.uppercased()).font(.caption2.weight(.bold)).foregroundStyle(Ink.secondary).fixedSize()
+                Text(text).font(.caption.weight(.semibold)).foregroundStyle(Ink.secondary).fixedSize()
                 Rectangle().fill(Ink.tertiary).frame(height: 1)
             }
             if let detail {

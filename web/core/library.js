@@ -6,12 +6,40 @@ import { SearchIndex } from "./search.js";
 
 // MARK: Plader og cd'er
 
-export const MEDIA = ["vinyl", "cd"];
+/** Kategorier (som Category på Mac). Rækkefølgen er også rækkefølgen til sidst på reolerne; den første, der passer, vinder. */
+export const CATEGORIES = [
+  { id: "jazz", title: "Jazz" },
+  { id: "entertainment", title: "Underholdning" },
+  { id: "classical", title: "Klassisk" },
+];
 
-export const MEDIUM = {
+const BASE = {
   vinyl: { title: "Plader", singular: "plade", plural: "plader", shelfWord: "Reol" },
   cd: { title: "Cd'er", singular: "cd", plural: "cd'er", shelfWord: "Cd-reol" },
 };
+
+/** Hylderne (som ShelfKind på Mac): plader, cd'er og kategorier med egne reoler, fx "vinyl.jazz". */
+export const MEDIA = ["vinyl", "cd", ...CATEGORIES.flatMap((c) => ["vinyl", "cd"].map((m) => `${m}.${c.id}`))];
+
+export const MEDIUM = Object.fromEntries(MEDIA.map((k) => {
+  const [m, cat] = k.split(".");
+  const c = CATEGORIES.find((x) => x.id === cat);
+  if (!c) return [k, BASE[m]];
+  return [k, { ...BASE[m], title: `${c.title} (${BASE[m].plural})`, shelfWord: m === "vinyl" ? `${c.title}-reol` : `${c.title}-cd-reol` }];
+}));
+
+/** Den første slåede-til kategori, kopien passer i (som SortRules.category på Mac). Jazz/Klassisk er genrer, Underholdning er Discogs-mappen. */
+export function categoryOf(rules, release, copy) {
+  const gs = genreList(release).map((g) => g.toLowerCase());
+  for (const c of CATEGORIES) {
+    const mode = rules.categories?.[c.id];
+    if (mode !== "end" && mode !== "own") continue;
+    if (c.id === "jazz" && gs.includes("jazz")) return c.id;
+    if (c.id === "classical" && gs.includes("classical")) return c.id;
+    if (c.id === "entertainment" && (copy.folder ?? "").trim().toLowerCase() === "underholdning") return c.id;
+  }
+  return null;
+}
 
 /** Første format uden antal: "2×CD, Album" → "CD", "8×File, MP3" → "FILE". */
 function firstFormat(format) {
@@ -59,14 +87,17 @@ export const locationName = (l) => `${MEDIUM[l.medium].shelfWord} ${l.shelf} · 
 export const shortName = (l) => `${l.shelf}${l.section}`;
 export const fullName = (it) => `${it.release.artist} – ${it.release.title}`;
 
-/** "1973 • Harvest • SHVL 804 • Vinyl, LP" */
+/** "Harvest SHVL 804 (1973)" – pladeselskab og katalognummer, som samlere skriver dem (som på Mac). */
+export function pressingLine(r) {
+  const cat = r.catalogNumber && r.catalogNumber.toLowerCase() !== "none" ? r.catalogNumber : null;
+  const name = [r.label || null, cat].filter(Boolean).join(" ");
+  if (!(r.year > 0)) return name;
+  return name ? `${name} (${r.year})` : String(r.year);
+}
+
+/** "Harvest SHVL 804 (1973). Vinyl, LP" */
 export function detailLine(r) {
-  const parts = [];
-  if (r.year && r.year > 0) parts.push(String(r.year));
-  if (r.label) parts.push(r.label);
-  if (r.catalogNumber && r.catalogNumber.toLowerCase() !== "none") parts.push(r.catalogNumber);
-  if (r.format) parts.push(r.format);
-  return parts.join(" • ");
+  return [pressingLine(r) || null, r.format || null].filter(Boolean).join(". ");
 }
 
 /** Afslutter en sætning, der ender med et navn: "Low" → "Low.", men "Morning Glory?" forbliver uændret. */
@@ -339,13 +370,14 @@ export function buildLibraries(records) {
       const inst = /^i(\d+)$/.exec(r.key);
       copies.set(r.key, {
         id: inst ? Number(inst[1]) : -(nextCopyID++), uid: r.key, releaseID: d.release,
-        status: statusOf(d.status), statusNote: d.note ?? null, medium: d.medium ?? null,
+        status: statusOf(d.status), statusNote: d.note ?? null, medium: d.medium ?? null, folder: typeof d.folder === "string" ? d.folder : null,
         rank: Number.isFinite(d.rank) ? d.rank : null,
       });
     } else if (r.kind === "location") {
       locs.push({
         id: locs.length + 1, uid: r.key, shelf: Number.isFinite(d.shelf) ? d.shelf : 1, section: d.section ?? "A",
-        sortIndex: Number.isFinite(d.sortIndex) ? d.sortIndex : 0, medium: d.medium === "cd" ? "cd" : "vinyl",
+        sortIndex: Number.isFinite(d.sortIndex) ? d.sortIndex : 0,
+        medium: (d.medium === "cd" ? "cd" : "vinyl") + (CATEGORIES.some((c) => c.id === d.category) ? `.${d.category}` : ""),
         scanCode: typeof d.code === "string" ? d.code : null,
       });
     } else if (r.kind === "section") {
@@ -374,12 +406,20 @@ export function buildLibraries(records) {
     });
   }
 
+  const rules = parseRules(settings.get("sort_rules"));
+  // Hylden pr. kopi: plader/cd'er, eller en kategori med egne reoler (som SortRules.shelfKind på Mac).
+  const kindOf = (c, r) => {
+    const m = shelfOf(c.medium, r.format);
+    if (!m) return null;
+    const cat = categoryOf(rules, r, c);
+    return cat && rules.categories[cat] === "own" ? `${m}.${cat}` : m;
+  };
   const libraries = {};
   for (const m of MEDIA) {
     const cs = new Map();
     for (const c of copies.values()) {
       const r = releases.get(c.releaseID);
-      if (r && shelfOf(c.medium, r.format) === m) cs.set(c.id, c);
+      if (r && kindOf(c, r) === m) cs.set(c.id, c);
     }
     const ls = locs.filter((l) => l.medium === m);
     const ids = new Set(ls.map((l) => l.id));
@@ -395,7 +435,7 @@ export function buildLibraries(records) {
     const uids = settings.get(`sort_checked_${m}`);
     checked[m] = new Set((Array.isArray(uids) ? uids : []).map((u) => copyByUID.get(u)?.id).filter((id) => id !== undefined));
   }
-  return { libraries, plays: playList, copyByID: new Map([...copies.values()].map((c) => [c.id, c])), settings, checked, rules: parseRules(settings.get("sort_rules")) };
+  return { libraries, plays: playList, copyByID: new Map([...copies.values()].map((c) => [c.id, c])), settings, checked, rules };
 }
 
 // MARK: "Hvad skal jeg høre?" (port af ListenPicker i Listening.swift)
@@ -491,7 +531,7 @@ export const CF = {
 
 /** Sorteringsreglerne fra computeren (setting "sort_rules"). Manglende valg er slået fra, som på Mac. */
 export function parseRules(json) {
-  const r = { useDiscogsOrder: true, artistArticles: ["The"], ignorePunctuation: true, numbersLast: false, various: "alphabetical" };
+  const r = { useDiscogsOrder: true, artistArticles: ["The"], ignorePunctuation: true, numbersLast: false, categories: {}, various: "alphabetical" };
   try {
     const o = typeof json === "string" ? JSON.parse(json) : null;
     if (o && typeof o === "object") {
@@ -499,6 +539,10 @@ export function parseRules(json) {
       if (Array.isArray(o.artistArticles)) r.artistArticles = o.artistArticles.filter((a) => typeof a === "string");
       if (typeof o.ignorePunctuation === "boolean") r.ignorePunctuation = o.ignorePunctuation;
       if (typeof o.numbersLast === "boolean") r.numbersLast = o.numbersLast;
+      // Ukendte kategorier eller valg springes over (som på Mac).
+      if (o.categories && typeof o.categories === "object") {
+        for (const c of CATEGORIES) if (o.categories[c.id] === "end" || o.categories[c.id] === "own") r.categories[c.id] = o.categories[c.id];
+      }
       if (typeof o.various === "string") r.various = o.various;
     }
   } catch { /* standardreglerne */ }
@@ -520,13 +564,14 @@ function sortUnplaced(items, rules) {
     const a = sortArtist(it.release.artist);
     const group = isVarious(it.release.artist) ? (rules.various === "first" ? 0 : rules.various === "last" ? 2 : 1) : 1;
     return {
+      cat: (() => { const c = categoryOf(rules, it.release, it.copy); return c ? 1 + CATEGORIES.findIndex((x) => x.id === c) : 0; })(),
       num: rules.numbersLast && /^\p{Nd}/u.test(a) ? 1 : 0,
       rank: rules.useDiscogsOrder && it.copy.rank != null ? it.copy.rank : Number.MAX_SAFE_INTEGER,
       group, artist: a, title: it.release.title, year: it.release.year > 0 ? it.release.year : 9999,
     };
   };
   const coll = new Intl.Collator("da", { numeric: true, sensitivity: "base" });
-  return items.map((it) => ({ it, k: key(it) })).sort((x, y) => x.k.num - y.k.num || x.k.rank - y.k.rank || x.k.group - y.k.group
+  return items.map((it) => ({ it, k: key(it) })).sort((x, y) => x.k.cat - y.k.cat || x.k.num - y.k.num || x.k.rank - y.k.rank || x.k.group - y.k.group
     || coll.compare(x.k.artist, y.k.artist) || coll.compare(x.k.title, y.k.title) || x.k.year - y.k.year || x.it.id - y.it.id).map((x) => x.it);
 }
 

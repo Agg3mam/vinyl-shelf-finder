@@ -43,23 +43,24 @@ public enum SortList {
 }
 
 extension ShelfStore {
-    private static func sortCheckedKey(_ m: Medium) -> String { "sort_checked_\(m.rawValue)" }
+    /// "sort_checked_vinyl", "sort_checked_cd", "sort_checked_vinyl.jazz" …
+    static func sortCheckedKey(_ k: ShelfKind) -> String { "sort_checked_\(k.rawValue)" }
 
     /// Kopierne, der er sat flueben ved i sorteringslisten for én hylde.
-    public func sortChecked(_ medium: Medium) -> Set<Int64> {
-        let raw = setting(Self.sortCheckedKey(medium)) ?? ""
+    public func sortChecked(_ kind: ShelfKind) -> Set<Int64> {
+        let raw = setting(Self.sortCheckedKey(kind)) ?? ""
         return Set(raw.split(separator: ",").compactMap { Int64($0.trimmingCharacters(in: .whitespaces)) })
     }
 
-    public func setSortChecked(_ medium: Medium, copyID: Int64, checked: Bool) {
-        var set = sortChecked(medium)
+    public func setSortChecked(_ kind: ShelfKind, copyID: Int64, checked: Bool) {
+        var set = sortChecked(kind)
         let changed = checked ? set.insert(copyID).inserted : set.remove(copyID) != nil
-        if changed { saveSortChecked(medium, set) }
+        if changed { saveSortChecked(kind, set) }
     }
 
-    public func clearSortChecked(_ medium: Medium) { saveSortChecked(medium, []) }
+    public func clearSortChecked(_ kind: ShelfKind) { saveSortChecked(kind, []) }
 
-    private func saveSortChecked(_ medium: Medium, _ set: Set<Int64>) {
-        setSetting(Self.sortCheckedKey(medium), set.sorted().map(String.init).joined(separator: ","))
+    private func saveSortChecked(_ kind: ShelfKind, _ set: Set<Int64>) {
+        setSetting(Self.sortCheckedKey(kind), set.sorted().map(String.init).joined(separator: ","))
     }
 }

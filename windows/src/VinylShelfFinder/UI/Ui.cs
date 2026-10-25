@@ -161,14 +161,72 @@ public static class Ui
         return t;
     }
 
-    /// <summary>Lille versal-overskrift ("GÅ TIL", "FIND FØRST").</summary>
+    /// <summary>Lille overskrift ("Gå til", "Start ved") i almindelige bogstaver (som på Mac).</summary>
     public static TextBlock Eyebrow(string text) => new()
     {
-        Text = text.ToUpper(System.Globalization.CultureInfo.GetCultureInfo("da-DK")),
-        Style = Res<Style>("CaptionTextBlockStyle"),
-        FontWeight = FontWeights.SemiBold,
-        CharacterSpacing = 60,
-        Foreground = Tertiary,
+        Text = text,
+        Style = Res<Style>("BodyStrongTextBlockStyle"),
+        Foreground = Secondary,
+    };
+
+    /// <summary>Den smalle, kraftige skrift til skillekortet og tal (som den smalle systemskrift på Mac).</summary>
+    public static readonly FontFamily Condensed = new("Bahnschrift");
+
+    /// <summary>Tekst i den smalle skrift.</summary>
+    public static TextBlock CondensedText(string text, double size, bool bold = true, Brush? color = null)
+    {
+        var t = new TextBlock { Text = text, FontFamily = Condensed, FontSize = size, FontStretch = Windows.UI.Text.FontStretch.Condensed,
+            FontWeight = bold ? FontWeights.Bold : FontWeights.Medium };
+        if (color is not null) t.Foreground = color;
+        return t;
+    }
+
+    public static Windows.UI.Color Hex(uint rgb) => Windows.UI.Color.FromArgb(255, (byte)(rgb >> 16), (byte)(rgb >> 8), (byte)rgb);
+
+    /// <summary>Kategoriens farve i det aktuelle tema (lys/mørk).</summary>
+    public static SolidColorBrush CategoryBrush(Category c)
+    {
+        var (light, dark) = c.ColorHex();
+        return new SolidColorBrush(Hex(IsDark ? dark : light));
+    }
+
+    /// <summary>Vinduet vises mørkt (sættes af hovedvinduet, når temaet skifter).</summary>
+    public static bool IsDark { get; set; }
+
+    /// <summary>Kunstnerens faste farve til blanke omslag (samme mønster som CoverTone.fallback på Mac).</summary>
+    public static SolidColorBrush SleeveBrush(string artist)
+    {
+        ulong h = 0xcbf29ce484222325;
+        foreach (var b in System.Text.Encoding.UTF8.GetBytes(artist.ToLowerInvariant())) h = (h ^ b) * 0x100000001b3;
+        double hue = (h % 24) / 24.0;
+        double sat = new[] { 0.30, 0.42 }[(int)((h / 24) % 2)];
+        sat = Math.Min(Math.Max(sat, 0.5), 0.75);
+        return new SolidColorBrush(FromHsb(hue, sat, 0.34));
+    }
+
+    private static Windows.UI.Color FromHsb(double h, double s, double v)
+    {
+        double i = Math.Floor(h * 6), f = h * 6 - i, p = v * (1 - s), q = v * (1 - f * s), t = v * (1 - (1 - f) * s);
+        var (r, g, b) = ((int)i % 6) switch { 0 => (v, t, p), 1 => (q, v, p), 2 => (p, v, t), 3 => (p, q, v), 4 => (t, p, v), _ => (v, p, q) };
+        return Windows.UI.Color.FromArgb(255, (byte)Math.Round(r * 255), (byte)Math.Round(g * 255), (byte)Math.Round(b * 255));
+    }
+
+    /// <summary>"Pink Floyd" → "PF", "Madonna" → "MA", "The Beatles" → "B" (som på Mac).</summary>
+    public static string Initials(string artist)
+    {
+        var words = artist.Split(' ', StringSplitOptions.RemoveEmptyEntries).Where(w => !w.Equals("the", StringComparison.OrdinalIgnoreCase)).ToList();
+        if (words.Count >= 2) return (words[0][..1] + words[1][..1]).ToUpperInvariant();
+        return (words.FirstOrDefault() is string w ? w[..Math.Min(2, w.Length)] : "").ToUpperInvariant();
+    }
+
+    /// <summary>Lille fane med et bogstav til lister og sidepanelet (sektioner og kategorier).</summary>
+    public static Border SectionTab(string letter, Brush fill) => new()
+    {
+        Width = 16, Height = 15,
+        CornerRadius = new CornerRadius(4, 4, 0, 0),
+        Background = fill,
+        Child = new TextBlock { Text = letter, FontFamily = Condensed, FontStretch = Windows.UI.Text.FontStretch.Condensed, FontWeight = FontWeights.Bold,
+            FontSize = 11, Foreground = new SolidColorBrush(Microsoft.UI.Colors.White), HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center },
     };
 
     public static FontIcon Icon(string glyph, double size = 16, Brush? color = null)
@@ -250,7 +308,8 @@ public static class Ui
     /// <summary>Henter covers fra nettet? Slået fra i demo- og smoke-tilstand (ingen net).</summary>
     public static bool AllowNetworkCovers { get; set; } = true;
 
-    /// <summary>Cover i fast størrelse. Uden billede (eller uden net): en neutral flade med et pladesymbol.</summary>
+    /// <summary>Cover i fast størrelse. Uden billede (eller uden net): et blankt omslag i kunstnerens farve med navnet
+    /// trykt på (forbogstaverne i små størrelser), som på Mac.</summary>
     public static FrameworkElement Cover(Release release, double size)
     {
         bool large = size > 80;
@@ -259,16 +318,23 @@ public static class Ui
             Width = size,
             Height = size,
             CornerRadius = new CornerRadius(large ? 8 : 4),
-            Background = ControlFill,
+            Background = SleeveBrush(release.Artist),
         };
-        grid.Children.Add(new FontIcon
+        var white = new SolidColorBrush(Microsoft.UI.Colors.White);
+        if (large)
         {
-            Glyph = Glyph.Disc,
-            FontSize = Math.Round(size * 0.42),
-            Foreground = Tertiary,
-            HorizontalAlignment = HorizontalAlignment.Center,
-            VerticalAlignment = VerticalAlignment.Center,
-        });
+            var names = new StackPanel { Spacing = 2, VerticalAlignment = VerticalAlignment.Bottom, Margin = new Thickness(size * 0.08) };
+            var a = CondensedText(release.Artist, Math.Round(size * 0.11), color: white); a.TextTrimming = TextTrimming.CharacterEllipsis; a.MaxLines = 2; a.TextWrapping = TextWrapping.Wrap;
+            var t = CondensedText(release.Title, Math.Round(size * 0.08), bold: false, color: white); t.Opacity = 0.85; t.TextTrimming = TextTrimming.CharacterEllipsis; t.MaxLines = 2; t.TextWrapping = TextWrapping.Wrap;
+            names.Children.Add(a); names.Children.Add(t);
+            grid.Children.Add(names);
+        }
+        else
+        {
+            var i = CondensedText(Initials(release.Artist), Math.Round(size * 0.4), color: white);
+            i.Opacity = 0.92; i.HorizontalAlignment = HorizontalAlignment.Center; i.VerticalAlignment = VerticalAlignment.Center;
+            grid.Children.Add(i);
+        }
         var url = large ? release.CoverUrl ?? release.ThumbUrl : release.ThumbUrl ?? release.CoverUrl;
         if (AllowNetworkCovers && !string.IsNullOrEmpty(url) && Uri.TryCreate(url, UriKind.Absolute, out var uri)
             && uri.Scheme == Uri.UriSchemeHttps)

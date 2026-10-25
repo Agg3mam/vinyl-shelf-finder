@@ -50,38 +50,49 @@ private struct LabelPage: View {
     }
 }
 
+/// Skiltet er et skillekort: sektionsbogstavet på en fane i kategoriens farve (sort for de almindelige reoler),
+/// reolens navn og QR-kode ved siden af, og fra–til-kunstnerne nederst.
 struct ShelfLabelView: View {
     let label: ShelfLabel
 
     var body: some View {
+        let loc = label.location
+        let ink = loc.category.map { Color(nsColor: NSColor(hex: $0.colorHex.light)) } ?? .black
         VStack(alignment: .leading, spacing: 0) {
-            HStack(alignment: .top) {
-                VStack(alignment: .leading, spacing: 1) {
-                    Text("REOL \(label.location.shelf)")
-                        .font(.system(size: 11, weight: .bold)).tracking(2).foregroundColor(.gray)
-                    Text("SEKTION \(label.location.section)")
-                        .font(.system(size: 24, weight: .heavy)).foregroundColor(.black)
+            HStack(alignment: .bottom, spacing: 10) {
+                Text(loc.section)
+                    .font(.system(size: 40, weight: .bold).width(.condensed))
+                    .foregroundColor(.white)
+                    .padding(.horizontal, 12).padding(.top, 2)
+                    .frame(minWidth: 46)
+                    .background(ink, in: UnevenRoundedRectangle(topLeadingRadius: 6, topTrailingRadius: 6))
+                VStack(alignment: .leading, spacing: 0) {
+                    Text("\(loc.kind.shelfWord) \(loc.shelf)").font(.system(size: 17, weight: .semibold).width(.condensed))
+                    Text("Sektion \(loc.section)").font(.system(size: 11)).foregroundColor(.gray)
                 }
+                .foregroundColor(.black)
+                .padding(.bottom, 3)
                 Spacer()
                 if let qr = LabelsPDF.qrCode(label.scanCode) {
                     Image(decorative: qr, scale: 1)
                         .interpolation(.none)
                         .resizable()
-                        .frame(width: 62, height: 62)
+                        .frame(width: 58, height: 58)
                 }
             }
+            Rectangle().fill(ink).frame(height: 3)
             Spacer(minLength: 6)
             if let first = label.firstArtist, let last = label.lastArtist {
                 // Lange navne skaleres lidt ned, før de afkortes med "…".
-                Text(first).font(.system(size: 15, weight: .semibold)).foregroundColor(.black)
+                Text("Fra \(first)").font(.system(size: 14, weight: .semibold)).foregroundColor(.black)
                     .lineLimit(1).minimumScaleFactor(0.7)
-                Text("→ \(last)").font(.system(size: 15)).foregroundColor(.black)
+                Text("Til \(last)").font(.system(size: 14)).foregroundColor(.black)
                     .lineLimit(1).minimumScaleFactor(0.7)
             } else {
-                Text("(tom sektion)").font(.system(size: 15)).foregroundColor(.gray)
+                Text("Tom sektion").font(.system(size: 14)).foregroundColor(.gray)
             }
             // Kernens tal: plader, der står i reolen nu (`Library.onShelfCount`).
-            Text(pladerText(label.count)).font(.system(size: 9)).foregroundColor(.gray).padding(.top, 3)
+            Text(label.count == 1 ? "1 \(loc.kind.singular)" : "\(label.count) \(loc.kind.plural)").font(.system(size: 9)).foregroundColor(.gray).padding(.top, 3)
         }
         .padding(14)
         .frame(width: 252, height: 170, alignment: .topLeading)

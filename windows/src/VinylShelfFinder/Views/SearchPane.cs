@@ -23,6 +23,8 @@ public sealed class SearchPane : IPane
     private readonly Button _clear;
     private readonly ListView _list;
     private readonly Grid _emptyHost = new();
+    /// <summary>"Også på Jazz (plader): 3" – plader på de andre hylder (fx jazz på egne reoler).</summary>
+    private readonly StackPanel _other = new() { Orientation = Orientation.Horizontal, Spacing = 12, Margin = new Thickness(16, 0, 16, 6) };
     private bool _syncingSelection;
     private IReadOnlyList<long> _shown = Array.Empty<long>();
 
@@ -31,6 +33,7 @@ public sealed class SearchPane : IPane
     public SearchPane(AppModel model)
     {
         _model = model;
+        _root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         _root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         _root.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
 
@@ -91,6 +94,8 @@ public sealed class SearchPane : IPane
             Margin = new Thickness(12, 12, 12, 8),
         };
         _root.Children.Add(barBorder);
+        Grid.SetRow(_other, 1);
+        _root.Children.Add(_other);
 
         // Resultater
         _list = new ListView { SelectionMode = ListViewSelectionMode.Single, Padding = new Thickness(0, 0, 0, 12) };
@@ -107,13 +112,28 @@ public sealed class SearchPane : IPane
         {
             if (e.Key == VirtualKey.Enter && _model.Selection is long s) { _model.FindModeCopy = s; e.Handled = true; }
         };
-        Grid.SetRow(_list, 1);
+        Grid.SetRow(_list, 2);
         _root.Children.Add(_list);
-        Grid.SetRow(_emptyHost, 1);
+        Grid.SetRow(_emptyHost, 2);
         _root.Children.Add(_emptyHost);
 
         RebuildList();
+        RebuildOther();
         _root.Loaded += (_, _) => Box.Focus(FocusState.Programmatic);
+    }
+
+    private void RebuildOther()
+    {
+        _other.Children.Clear();
+        foreach (var (kind, count) in _model.OtherShelfHits)
+        {
+            var k = kind;
+            var link = new HyperlinkButton { Content = $"Også på {kind.Title}: {count}", Padding = new Thickness(0) };
+            ToolTipService.SetToolTip(link, $"Skift til {kind.Title} og se resultaterne der");
+            link.Click += (_, _) => _model.Kind = k;
+            _other.Children.Add(link);
+        }
+        _other.Visibility = _other.Children.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
     }
 
     private void OnSearchKey(object sender, KeyRoutedEventArgs e)
@@ -142,6 +162,9 @@ public sealed class SearchPane : IPane
                 break;
             case nameof(AppModel.Selection):
                 SyncSelection();
+                break;
+            case nameof(AppModel.OtherShelfHits):
+                RebuildOther();
                 break;
             case nameof(AppModel.Query):
                 if (Box.Text != _model.Query) Box.Text = _model.Query;

@@ -146,7 +146,7 @@ extension ShelfStore {
                 "inDiscogs": .bool((r["in_discogs"]?.int ?? 1) != 0), "removedAt": .from(r["removed_from_discogs_at"]),
                 "sortArtist": .from(r["sort_artist_override"]), "sortTitle": .from(r["sort_title_override"]),
                 "dateAdded": .from(r["date_added"]), "rank": .from(r["discogs_rank"]), "medium": .from(r["medium_override"]),
-            ]))
+            ].merging(r["discogs_folder"]?.text.map { ["folder": .string($0)] } ?? [:]) { a, _ in a }))
         }
 
         var uidOfLocation: [Int64: String] = [:]
@@ -156,7 +156,7 @@ extension ShelfStore {
             docs.append(SyncDoc(kind: .location, key: uid, data: [
                 "shelf": .from(r["shelf"]), "section": .from(r["section"]), "sortIndex": .from(r["sort_index"]),
                 "medium": .from(r["medium"]), "code": .from(r["scan_code"]),
-            ]))
+            ].merging(r["category"]?.text.map { ["category": .string($0)] } ?? [:]) { a, _ in a }))
         }
 
         var sections: [Int64: [String]] = [:]
@@ -181,9 +181,10 @@ extension ShelfStore {
             if let a = r["artist"]?.text, let n = r["sort_name"]?.text { overrides[a] = .string(n) }
         }
         docs.append(SyncDoc(kind: .setting, key: "artist_overrides", data: ["value": .object(overrides)]))
-        for m in Medium.allCases {
-            let uids = sortChecked(m).compactMap { uidOfCopy[$0] }.sorted()
-            docs.append(SyncDoc(kind: .setting, key: "sort_checked_\(m.rawValue)", data: ["value": .array(uids.map { .string($0) })]))
+        // Plader og cd'er altid; kategorierne kun, når de har været brugt (så ældre versioner ikke ser nye poster).
+        for k in ShelfKind.all where k.category == nil || setting(Self.sortCheckedKey(k)) != nil {
+            let uids = sortChecked(k).compactMap { uidOfCopy[$0] }.sorted()
+            docs.append(SyncDoc(kind: .setting, key: Self.sortCheckedKey(k), data: ["value": .array(uids.map { .string($0) })]))
         }
         return docs
     }
@@ -329,18 +330,25 @@ extension ShelfStore {
                     VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)
                     """, params: fields + [d.key, Date().timeIntervalSince1970])
             }
+            // Mangler mappen (fra en ældre version), beholdes den, enheden allerede kender.
+            if let folder = text("folder") {
+                try db.run("UPDATE copies SET discogs_folder = ? WHERE uid = ?", folder, d.key)
+            }
 
         case .location:
             guard d.data != nil else { return true } // slettes til sidst (se applySyncDocs)
             // QR-koden på det trykte skilt følger sektionen, så skiltet virker på alle enheder.
             let code = text("code")
             if let code { try db.run("UPDATE locations SET scan_code = NULL WHERE scan_code = ? AND (uid IS NULL OR uid != ?)", code, d.key) }
+            // Kategorien sendes kun for kategori-reoler. Mangler den fra en ældre version, beholdes enhedens egen.
+            let category = text("category").flatMap(Category.init(rawValue:))?.rawValue
             if let id = try localID("locations", uid: d.key) {
                 try db.run("UPDATE locations SET shelf = ?, section = ?, sort_index = ?, medium = ?, scan_code = ? WHERE id = ?",
                            int("shelf") ?? 1, text("section") ?? "A", int("sortIndex") ?? 0, text("medium") ?? "vinyl", code, id)
+                if let category { try db.run("UPDATE locations SET category = ? WHERE id = ?", category, id) }
             } else {
-                try db.run("INSERT INTO locations(shelf, section, sort_index, medium, scan_code, uid) VALUES(?, ?, ?, ?, ?, ?)",
-                           int("shelf") ?? 1, text("section") ?? "A", int("sortIndex") ?? 0, text("medium") ?? "vinyl", code, d.key)
+                try db.run("INSERT INTO locations(shelf, section, sort_index, medium, category, scan_code, uid) VALUES(?, ?, ?, ?, ?, ?, ?)",
+                           int("shelf") ?? 1, text("section") ?? "A", int("sortIndex") ?? 0, text("medium") ?? "vinyl", category, code, d.key)
             }
 
         case .section:
@@ -368,9 +376,9 @@ extension ShelfStore {
                 if case .object(let o)? = v["value"] {
                     for (a, n) in o { if let n = n.string { try db.run("INSERT INTO artist_sort_overrides(artist, sort_name) VALUES(?, ?)", a, n) } }
                 }
-            } else if d.key.hasPrefix("sort_checked_"), let m = Medium(rawValue: String(d.key.dropFirst("sort_checked_".count))) {
+            } else if d.key.hasPrefix("sort_checked_"), let k = ShelfKind(rawValue: String(d.key.dropFirst("sort_checked_".count))) {
                 let ids = try (v["value"]?.array ?? []).compactMap { $0.string }.compactMap { try copyID(uid: $0) }
-                setSetting("sort_checked_\(m.rawValue)", ids.sorted().map(String.init).joined(separator: ","))
+                setSetting(Self.sortCheckedKey(k), ids.sorted().map(String.init).joined(separator: ","))
             } else if Self.syncedSettings.contains(d.key) {
                 setSetting(d.key, text("value"))
             }

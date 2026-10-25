@@ -50,8 +50,10 @@ public sealed class SortListPane : IPane
         _header.Children.Clear();
 
         var title = new StackPanel { Spacing = 2 };
-        title.Children.Add(Ui.Text($"Sorteringsliste · {m.Title()}", "SubtitleTextBlockStyle", wrap: false));
-        title.Children.Add(Ui.Text(m == Medium.Vinyl
+        title.Children.Add(Ui.Text($"Sorteringsliste · {_model.Kind.Title}", "SubtitleTextBlockStyle", wrap: false));
+        title.Children.Add(Ui.Text(_model.Kind.Category is not null
+            ? $"Rækkefølgen for {_model.Kind.Title.ToLowerInvariant()}, fra første til sidste {m.Singular()}. De andre hylder har deres egne lister."
+            : m == Medium.Vinyl
             ? "Rækkefølgen for pladehylden, fra første til sidste plade. Cd'erne har deres egen liste."
             : "Rækkefølgen for cd-hylden, fra første til sidste cd. Pladerne har deres egen liste.",
             "CaptionTextBlockStyle", Ui.Secondary));
@@ -67,9 +69,9 @@ public sealed class SortListPane : IPane
 
         if (lib.Locations.Count == 0)
         {
-            var make = Ui.Btn(m == Medium.Vinyl ? "Lav reoler" : "Lav cd-reoler", (_, _) => _model.Sidebar = SidebarItem.Search);
+            var make = Ui.Btn($"Lav {_model.Kind.ShelfWord.ToLowerInvariant()}er", (_, _) => _model.Sidebar = SidebarItem.Search);
             _header.Children.Add(Ui.Card(Ui.VStack(8,
-                Ui.Text($"Der er ingen {m.ShelfWord().ToLowerInvariant()}er endnu, så listen viser bare hele rækkefølgen. Når reolerne er lavet, deles listen op i sektioner.", color: Ui.Secondary),
+                Ui.Text($"Der er ingen {_model.Kind.ShelfWord.ToLowerInvariant()}er endnu, så listen viser bare hele rækkefølgen. Når reolerne er lavet, deles listen op i sektioner.", color: Ui.Secondary),
                 make), 12));
         }
 

@@ -158,21 +158,23 @@ struct StatusNoteAlert: ViewModifier {
     }
 }
 
-/// "Plader / Cd'er" øverst i vinduet. Hver hylde har sine egne reoler og sektioner.
+/// "Plader / Cd'er" øverst i vinduet (og kategorier med egne reoler). Hver hylde har sine egne reoler og sektioner.
+/// Op til tre hylder vises som knapper side om side, flere som en menu.
 struct MediumPicker: View {
     @Environment(AppModel.self) private var model
 
     var body: some View {
         @Bindable var model = model
-        Picker("Hylde", selection: $model.medium) {
-            ForEach(Medium.allCases) { m in
-                Text(m.title).tag(m)
+        let kinds = model.shelfKinds
+        let picker = Picker("Hylde", selection: $model.shelfKind) {
+            ForEach(kinds) { k in
+                Text(k.title).tag(k)
             }
         }
-        .pickerStyle(.segmented)
         .labelsHidden()
         .fixedSize()
-        .help("Skift mellem pladereolerne og cd-reolerne")
+        .help("Skift mellem reolerne")
+        if kinds.count <= 3 { picker.pickerStyle(.segmented) } else { picker.pickerStyle(.menu) }
     }
 }
 
@@ -377,15 +379,17 @@ struct SidebarView: View {
             }
 
             ForEach(model.library.shelves, id: \.self) { shelf in
-                Section("\(model.medium.shelfWord) \(shelf)") {
+                Section("\(model.shelfKind.shelfWord) \(shelf)") {
                     ForEach(model.library.locations.filter { $0.shelf == shelf }) { loc in
-                        sidebarLabel("Sektion \(loc.section)", "books.vertical")
+                        Label { Text("Sektion \(loc.section)") } icon: {
+                            SectionTab(letter: loc.section, color: loc.category?.color ?? AppAccent.color)
+                        }
                             // Kun plader, der faktisk står i reolen (ikke dem på væggen, udlånte osv.).
                             .badge(model.library.onShelfCount(in: loc.id))
                             .tag(SidebarItem.section(loc.id))
                             .contextMenu {
                                 Button("Kontrollér sektion…") { model.checkSection = loc.id }
-                                Button("Tilføj sektion i \(model.medium.shelfWord) \(shelf)") { model.addSection(shelf: shelf) }
+                                Button("Tilføj sektion i \(model.shelfKind.shelfWord) \(shelf)") { model.addSection(shelf: shelf) }
                                 if (model.library.sections[loc.id] ?? []).isEmpty {
                                     Button("Slet tom sektion", role: .destructive) { model.deleteSection(loc.id) }
                                 }

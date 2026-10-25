@@ -200,6 +200,19 @@ public final class ShelfStore {
             try db.execute("PRAGMA user_version = 7")
             }
         }
+        if db.userVersion < 8 {
+            // Kategorier: mappen i Discogs-samlingen (Underholdning) og reoler, der kun er til én kategori.
+            // Samme skema på Windows. Kan køres igen uden fejl.
+            try db.transaction {
+            if !(try hasColumn("copies", "discogs_folder")) {
+                try db.execute("ALTER TABLE copies ADD COLUMN discogs_folder TEXT")
+            }
+            if !(try hasColumn("locations", "category")) {
+                try db.execute("ALTER TABLE locations ADD COLUMN category TEXT")
+            }
+            try db.execute("PRAGMA user_version = 8")
+            }
+        }
     }
 
     private func hasColumn(_ table: String, _ column: String) throws -> Bool {
@@ -209,7 +222,11 @@ public final class ShelfStore {
     // MARK: - Indlæsning
 
     /// Samlingen for én slags hylde: kun plader (standard) eller kun cd'er, med deres egne reoler.
-    public func loadLibrary(medium: Medium = .vinyl) throws -> Library {
+    public func loadLibrary(medium: Medium = .vinyl) throws -> Library { try loadLibrary(kind: ShelfKind(medium)) }
+
+    /// Samlingen for én slags hylde, også en kategori med egne reoler (fx jazz-plader).
+    public func loadLibrary(kind: ShelfKind) throws -> Library {
+        let rules = loadSortRules()
         var releases: [Int: Release] = [:]
         for r in try db.query("SELECT * FROM releases") {
             let id = Int(r["discogs_release_id"]!.int!)
@@ -223,24 +240,21 @@ public final class ShelfStore {
         var copies: [Int64: Copy] = [:]
         for r in try db.query("SELECT * FROM copies") {
             let c = copy(from: r)
-            guard Self.medium(of: c, releases) == medium else { continue }
+            guard rules.shelfKind(of: c, release: releases[c.releaseID]) == kind else { continue }
             copies[c.id] = c
         }
-        let locations = try db.query("SELECT * FROM locations WHERE medium = ?", medium.rawValue).map {
+        let locations = try db.query("SELECT * FROM locations WHERE medium = ? AND category IS ?",
+                                     kind.medium.rawValue, kind.category?.rawValue).map {
             Location(id: $0["id"]!.int!, shelf: Int($0["shelf"]!.int!), section: $0["section"]?.text ?? "",
-                     sortIndex: Int($0["sort_index"]!.int!), scanCode: $0["scan_code"]?.text, medium: medium)
+                     sortIndex: Int($0["sort_index"]!.int!), scanCode: $0["scan_code"]?.text, medium: kind.medium,
+                     category: kind.category)
         }
         let locationIDs = Set(locations.map(\.id))
         // En kopi, der står på en reol af den anden slags (fx efter "Det er en cd"), regnes som uplaceret.
         let placements = try db.query("SELECT * FROM placements").map {
             (copyID: $0["copy_id"]!.int!, locationID: $0["location_id"]!.int!, position: Int($0["position"]!.int!))
         }.filter { copies[$0.copyID] != nil && locationIDs.contains($0.locationID) }
-        return Library(releases: releases, copies: copies, locations: locations, placements: placements, medium: medium)
-    }
-
-    /// nil = ingen hylde (digitale filer kommer hverken på plade- eller cd-hylden).
-    private static func medium(of c: Copy, _ releases: [Int: Release]) -> Medium? {
-        Medium.shelfOf(override: c.mediumOverride, format: releases[c.releaseID]?.format)
+        return Library(releases: releases, copies: copies, locations: locations, placements: placements, kind: kind)
     }
 
     /// Antal kopier pr. slags hylde (bruges til at vise skiftet "Plader / Cd'er", når der er cd'er).
@@ -250,6 +264,29 @@ public final class ShelfStore {
             // Digitale filer tælles ikke med på nogen hylde.
             if let m = Medium.shelfOf(override: r["medium_override"]?.text.flatMap(Medium.init(rawValue:)), format: r["format"]?.text) {
                 counts[m, default: 0] += 1
+            }
+        }
+        return counts
+    }
+
+    /// Antal kopier pr. slags hylde med de nuværende kategorier, og hylder, der har reoler (også tomme).
+    /// Bruges til skiftet øverst: en hylde vises, når den har kopier eller reoler.
+    public func shelfCounts() throws -> [ShelfKind: Int] {
+        let rules = loadSortRules()
+        var counts: [ShelfKind: Int] = [:]
+        for r in try db.query("""
+            SELECT c.medium_override, c.discogs_folder, r.format, r.genres FROM copies c
+            JOIN releases r ON r.discogs_release_id = c.release_id
+            """) {
+            let copy = Copy(id: 0, instanceID: nil, releaseID: 0,
+                            mediumOverride: r["medium_override"]?.text.flatMap(Medium.init(rawValue:)), discogsFolder: r["discogs_folder"]?.text)
+            let release = Release(id: 0, artist: "", title: "", format: r["format"]?.text, genres: r["genres"]?.text)
+            if let k = rules.shelfKind(of: copy, release: release) { counts[k, default: 0] += 1 }
+        }
+        for r in try db.query("SELECT DISTINCT medium, category FROM locations") {
+            if let m = Medium(rawValue: r["medium"]?.text ?? "") {
+                let k = ShelfKind(m, r["category"]?.text.flatMap(Category.init(rawValue:)))
+                counts[k] = counts[k] ?? 0
             }
         }
         return counts
@@ -266,7 +303,8 @@ public final class ShelfStore {
              sortTitleOverride: r["sort_title_override"]?.text,
              dateAdded: r["date_added"]?.text,
              discogsRank: r["discogs_rank"]?.int.map(Int.init),
-             mediumOverride: r["medium_override"]?.text.flatMap(Medium.init(rawValue:)))
+             mediumOverride: r["medium_override"]?.text.flatMap(Medium.init(rawValue:)),
+             discogsFolder: r["discogs_folder"]?.text)
     }
 
     // MARK: - Indstillinger
@@ -348,9 +386,9 @@ public final class ShelfStore {
     }
 
     private func locationName(_ id: Int64?) -> String {
-        guard let id, let r = try? db.query("SELECT shelf, section, medium FROM locations WHERE id = ?", id).first else { return "ukendt sektion" }
-        let medium = r["medium"]?.text.flatMap(Medium.init(rawValue:)) ?? .vinyl
-        return "\(medium.shelfWord) \(r["shelf"]?.int ?? 0) · Sektion \(r["section"]?.text ?? "")"
+        guard let id, let r = try? db.query("SELECT shelf, section, medium, category FROM locations WHERE id = ?", id).first else { return "ukendt sektion" }
+        let kind = ShelfKind(r["medium"]?.text.flatMap(Medium.init(rawValue:)) ?? .vinyl, r["category"]?.text.flatMap(Category.init(rawValue:)))
+        return "\(kind.shelfWord) \(r["shelf"]?.int ?? 0) · Sektion \(r["section"]?.text ?? "")"
     }
 
     /// Placering til historikken: "Reol 1 · Sektion A, plads 16".
@@ -437,17 +475,23 @@ public final class ShelfStore {
     /// kopier i fysisk rækkefølge. Erstatter eksisterende struktur for samme slags hylde
     /// (kun efter bekræftelse) – pladernes reoler røres ikke, når cd-reolerne oprettes, og omvendt.
     public func createLayout(_ layout: [(shelf: Int, section: String, copies: [Int64])], medium: Medium = .vinyl) throws {
+        try createLayout(layout, kind: ShelfKind(medium))
+    }
+
+    /// Som ovenfor for én slags hylde, også en kategori med egne reoler. De andre hylders reoler røres ikke.
+    public func createLayout(_ layout: [(shelf: Int, section: String, copies: [Int64])], kind: ShelfKind) throws {
+        let medium = kind.medium, cat = kind.category?.rawValue
         try db.transaction {
-            try db.run("DELETE FROM placements WHERE location_id IN (SELECT id FROM locations WHERE medium = ?)", medium.rawValue)
-            try db.run("DELETE FROM locations WHERE medium = ?", medium.rawValue)
+            try db.run("DELETE FROM placements WHERE location_id IN (SELECT id FROM locations WHERE medium = ? AND category IS ?)", medium.rawValue, cat)
+            try db.run("DELETE FROM locations WHERE medium = ? AND category IS ?", medium.rawValue, cat)
             let offset = Int(try db.query("SELECT COALESCE(MAX(sort_index) + 1, 0) AS n FROM locations").first?["n"]?.int ?? 0)
             for (i, s) in layout.enumerated() {
-                let locID = try db.run("INSERT INTO locations(shelf, section, sort_index, medium) VALUES(?, ?, ?, ?)", s.shelf, s.section, offset + i, medium.rawValue)
+                let locID = try db.run("INSERT INTO locations(shelf, section, sort_index, medium, category) VALUES(?, ?, ?, ?, ?)",
+                                       s.shelf, s.section, offset + i, medium.rawValue, cat)
                 try writeSection(locID, s.copies)
             }
             let total = layout.reduce(0) { $0 + $1.copies.count }
-            let what = medium == .vinyl ? "Reolerne" : "Cd-reolerne"
-            try log(.layoutCreated, copyID: nil, "\(what) er oprettet: \(layout.count == 1 ? "1 sektion" : "\(layout.count) sektioner"), \(total == 1 ? "1 \(medium.singular)" : "\(total) \(medium.plural)")")
+            try log(.layoutCreated, copyID: nil, "\(kind.shelvesWord) er oprettet: \(layout.count == 1 ? "1 sektion" : "\(layout.count) sektioner"), \(total == 1 ? "1 \(medium.singular)" : "\(total) \(medium.plural)")")
         }
     }
 
@@ -457,11 +501,13 @@ public final class ShelfStore {
     public func setMedium(copyID: Int64, _ medium: Medium?) throws {
         // `unplace` kører sin egen transaktion (og skriver i historikken), derfor ingen ydre transaktion her.
         if let p = try currentPlacement(copyID),
-           let r = try db.query("SELECT medium FROM locations WHERE id = ?", p.0).first {
-            let fmt = try db.query("SELECT r.format FROM copies c JOIN releases r ON r.discogs_release_id = c.release_id WHERE c.id = ?", copyID).first?["format"]?.text
+           let r = try db.query("SELECT medium, category FROM locations WHERE id = ?", p.0).first,
+           let c = try db.query("SELECT c.discogs_folder, r.format, r.genres FROM copies c JOIN releases r ON r.discogs_release_id = c.release_id WHERE c.id = ?", copyID).first {
             // nil = ingen hylde (en digital fil tilbage til "Følg Discogs"): pladsen fjernes også.
-            let new = Medium.shelfOf(override: medium, format: fmt)
-            if new == nil || r["medium"]?.text != new?.rawValue { try unplace(copyID: copyID) }
+            let copy = Copy(id: copyID, instanceID: nil, releaseID: 0, mediumOverride: medium, discogsFolder: c["discogs_folder"]?.text)
+            let new = loadSortRules().shelfKind(of: copy, release: Release(id: 0, artist: "", title: "", format: c["format"]?.text, genres: c["genres"]?.text))
+            let old = ShelfKind(Medium(rawValue: r["medium"]?.text ?? "") ?? .vinyl, r["category"]?.text.flatMap(Category.init(rawValue:)))
+            if new != old { try unplace(copyID: copyID) }
         }
         try db.run("UPDATE copies SET medium_override = ? WHERE id = ?", medium?.rawValue, copyID)
     }
@@ -469,13 +515,19 @@ public final class ShelfStore {
     /// Tilføjer en ny tom sektion sidst i en reol (eller i en ny reol).
     @discardableResult
     public func addSection(shelf: Int, section: String, medium: Medium = .vinyl) throws -> Int64 {
-        try db.transaction {
-            let existing = try db.query("SELECT id, shelf, sort_index FROM locations WHERE medium = ? ORDER BY sort_index", medium.rawValue)
+        try addSection(shelf: shelf, section: section, kind: ShelfKind(medium))
+    }
+
+    @discardableResult
+    public func addSection(shelf: Int, section: String, kind: ShelfKind) throws -> Int64 {
+        let medium = kind.medium, cat = kind.category?.rawValue
+        return try db.transaction {
+            let existing = try db.query("SELECT id, shelf, sort_index FROM locations WHERE medium = ? AND category IS ? ORDER BY sort_index", medium.rawValue, cat)
             // Indsæt efter den sidste sektion i samme (eller lavere) reol.
             let insertAfter = existing.last { Int($0["shelf"]!.int!) <= shelf }
             let newIndex = insertAfter.map { Int($0["sort_index"]!.int!) + 1 } ?? 0
             try db.run("UPDATE locations SET sort_index = sort_index + 1 WHERE sort_index >= ?", newIndex)
-            return try db.run("INSERT INTO locations(shelf, section, sort_index, medium) VALUES(?, ?, ?, ?)", shelf, section, newIndex, medium.rawValue)
+            return try db.run("INSERT INTO locations(shelf, section, sort_index, medium, category) VALUES(?, ?, ?, ?, ?)", shelf, section, newIndex, medium.rawValue, cat)
         }
     }
 
@@ -543,7 +595,7 @@ public final class ShelfStore {
             }
 
             var copyByInstance: [Int: SQLRow] = [:]
-            for c in try db.query("SELECT id, discogs_instance_id, in_discogs, release_id FROM copies WHERE discogs_instance_id IS NOT NULL") {
+            for c in try db.query("SELECT id, discogs_instance_id, in_discogs, release_id, discogs_folder FROM copies WHERE discogs_instance_id IS NOT NULL") {
                 copyByInstance[Int(c["discogs_instance_id"]!.int!)] = c
             }
 
@@ -558,15 +610,19 @@ public final class ShelfStore {
                     if Int(c["release_id"]!.int!) != it.release.id {
                         try db.run("UPDATE copies SET release_id = ? WHERE id = ?", it.release.id, id)
                     }
+                    // Mappen kendes kun, når Discogs har sendt mappernes navne.
+                    if let folder = it.folder, c["discogs_folder"]?.text != folder {
+                        try db.run("UPDATE copies SET discogs_folder = ? WHERE id = ?", folder, id)
+                    }
                     if c["in_discogs"]?.int == 0 {
                         try db.run("UPDATE copies SET in_discogs = 1, removed_from_discogs_at = NULL WHERE id = ?", id)
                         report.returnedCopies.append(id)
                     }
                 } else {
                     let id = try db.run("""
-                        INSERT INTO copies(discogs_instance_id, release_id, status, in_discogs, date_added, created_at, discogs_rank)
-                        VALUES(?, ?, 'home', 1, ?, ?, ?)
-                        """, it.instanceID, it.release.id, it.dateAdded, now, rank)
+                        INSERT INTO copies(discogs_instance_id, release_id, status, in_discogs, date_added, created_at, discogs_rank, discogs_folder)
+                        VALUES(?, ?, 'home', 1, ?, ?, ?, ?)
+                        """, it.instanceID, it.release.id, it.dateAdded, now, rank, it.folder)
                     // Digitale filer gemmes (så de ikke ser "fjernet" ud), men meldes ikke som nye plader.
                     if !Medium.isDigital(format: it.release.format) { report.newCopies.append(id) }
                     try log(.addedFromDiscogs, copyID: id, "Ny i Discogs: \(it.release.artist) – \(it.release.title)")

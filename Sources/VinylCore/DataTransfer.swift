@@ -80,7 +80,7 @@ public enum DataTransfer {
             do { store = try ShelfStore(path: check) } catch { throw notExport }
             do {
                 let counts = try store.mediumCounts()
-                let sections = try Medium.allCases.reduce(0) { $0 + (try store.loadLibrary(medium: $1).locations.count) }
+                let sections = try ShelfKind.all.reduce(0) { $0 + (try store.loadLibrary(kind: $1).locations.count) }
                 summary = ImportSummary(vinyl: counts[.vinyl] ?? 0, cds: counts[.cd] ?? 0, sections: sections)
             } catch { throw notExport }
             // En tom fil (eller en anden SQLite-fil) får skemaet ved åbning og ligner en tom samling.

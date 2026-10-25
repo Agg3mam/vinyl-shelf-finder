@@ -11,26 +11,45 @@ namespace VinylShelfFinder.Views;
 /// <summary>Dele, som plade-detaljen og "Find i reolen" har til fælles (som på Mac).</summary>
 public static class RecordParts
 {
-    /// <summary>"Reol 1 › Sektion A" – samme linje på pladeskærmene.</summary>
+    /// <summary>Skillekortets farve: kategoriens farve med hvid tekst, ellers accentfarven (som DividerColors på Mac).</summary>
+    public static (Brush Fill, Brush Ink) DividerColors(Location loc) =>
+        loc.Category is Category c ? (Ui.CategoryBrush(c), new SolidColorBrush(Microsoft.UI.Colors.White))
+                                   : (Ui.AccentFill, Ui.ThemeBrush("TextOnAccentFillColorPrimaryBrush"));
+
+    /// <summary>Skillekortet: sektionsbogstavet på en fane og "Reol 1 / Sektion A" ved siden af (som på Mac).
+    /// <paramref name="size"/> er reolnavnets størrelse; fanen er knap dobbelt så høj.</summary>
     public static FrameworkElement PlacementLine(Location loc, double size = 28)
     {
-        var p = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 10 };
-        var icon = Ui.Icon(Ui.Glyph.Library, size * 0.8, Ui.Accent);
-        icon.VerticalAlignment = VerticalAlignment.Center;
-        p.Children.Add(icon);
-        p.Children.Add(new TextBlock { Text = $"{loc.Medium.ShelfWord()} {loc.Shelf}", FontSize = size, FontWeight = FontWeights.SemiBold, VerticalAlignment = VerticalAlignment.Center });
-        var chev = Ui.Icon(Ui.Glyph.ChevronRight, size * 0.45, Ui.Tertiary);
-        chev.VerticalAlignment = VerticalAlignment.Center;
-        p.Children.Add(chev);
-        p.Children.Add(new TextBlock { Text = $"Sektion {loc.Section}", FontSize = size, FontWeight = FontWeights.SemiBold, VerticalAlignment = VerticalAlignment.Center });
-        Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(p, loc.Name);
-        return p;
+        var (fill, ink) = DividerColors(loc);
+        var row = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 12 };
+        var letter = Ui.CondensedText(loc.Section, Math.Round(size * 1.65), color: ink);
+        letter.HorizontalAlignment = HorizontalAlignment.Center;
+        row.Children.Add(new Border
+        {
+            Child = letter,
+            Background = fill,
+            CornerRadius = new CornerRadius(8, 8, 0, 0),
+            Padding = new Thickness(14, 2, 14, 0),
+            MinWidth = Math.Round(size * 1.9),
+            VerticalAlignment = VerticalAlignment.Bottom,
+        });
+        var names = new StackPanel { VerticalAlignment = VerticalAlignment.Bottom, Margin = new Thickness(0, 0, 0, 4) };
+        names.Children.Add(Ui.CondensedText($"{loc.Kind.ShelfWord} {loc.Shelf}", size, bold: true));
+        names.Children.Add(Ui.Text($"Sektion {loc.Section}", "BodyTextBlockStyle", Ui.Secondary, wrap: false));
+        row.Children.Add(names);
+        var card = new StackPanel { HorizontalAlignment = HorizontalAlignment.Left };
+        card.Children.Add(row);
+        // Kortets overkant: fanen sidder på en streg i samme farve.
+        card.Children.Add(new Rectangle { Height = 3, Fill = fill, HorizontalAlignment = HorizontalAlignment.Stretch });
+        Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(card, $"{loc.Kind.ShelfWord} {loc.Shelf}, sektion {loc.Section}");
+        return card;
     }
 
-    /// <summary>Sektionen tegnet som pladerygge set forfra: én streg pr. plade, målet fremhævet.</summary>
-    public static FrameworkElement ShelfSpines(int position, int count)
+    /// <summary>Sektionen tegnet som pladerygge set forfra: rygge i forskellig tykkelse, målet fremhævet (som på Mac).</summary>
+    public static FrameworkElement ShelfSpines(int position, int count, Brush? accent = null)
     {
-        const double height = 22;
+        const double height = 30;
+        accent ??= Ui.AccentFill;
         var canvas = new Canvas { Height = height, HorizontalAlignment = HorizontalAlignment.Stretch };
         ToolTipService.SetToolTip(canvas, "Pladens plads i sektionen, set fra venstre");
         Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(canvas, $"Plade {position} af {count} i sektionen");
@@ -44,22 +63,18 @@ public static class RecordParts
             double slot = width / n;
             if (slot >= 3)
             {
-                double w = Math.Min(Math.Max(slot * 0.45, 2), 6);
+                // Fast mønster ud fra pladsen, så samme sektion altid ser ens ud (samme formel som på Mac).
+                double maxW = Math.Min(Math.Max(slot * 0.8, 2), 14);
                 for (int i = 0; i < n; i++)
                 {
+                    double r = (double)((long)i * 2654435761L % 1000) / 1000;
                     bool target = i == idx;
-                    double h = target ? height : height * 0.55;
-                    var r = new Rectangle
-                    {
-                        Width = target ? w + 2 : w,
-                        Height = h,
-                        RadiusX = 1.5,
-                        RadiusY = 1.5,
-                        Fill = target ? Ui.AccentFill : faint,
-                    };
-                    Canvas.SetLeft(r, slot * (i + 0.5) - w / 2);
-                    Canvas.SetTop(r, height - h);
-                    canvas.Children.Add(r);
+                    double w = target ? maxW : maxW * (0.45 + 0.55 * r);
+                    double h = target ? height : height * (0.72 + 0.16 * (1 - r));
+                    var rect = new Rectangle { Width = w, Height = h, RadiusX = 1, RadiusY = 1, Fill = target ? accent : faint };
+                    Canvas.SetLeft(rect, slot * (i + 0.5) - w / 2);
+                    Canvas.SetTop(rect, height - h);
+                    canvas.Children.Add(rect);
                 }
             }
             else
@@ -68,7 +83,7 @@ public static class RecordParts
                 Canvas.SetTop(track, height - 6);
                 canvas.Children.Add(track);
                 double x = n > 1 ? (double)idx / (n - 1) * (width - 6) : 0;
-                var mark = new Rectangle { Width = 6, Height = height, RadiusX = 2, RadiusY = 2, Fill = Ui.AccentFill };
+                var mark = new Rectangle { Width = 6, Height = height, RadiusX = 2, RadiusY = 2, Fill = accent };
                 Canvas.SetLeft(mark, x);
                 canvas.Children.Add(mark);
             }
@@ -77,18 +92,27 @@ public static class RecordParts
         return canvas;
     }
 
-    /// <summary>Den fremhævede blok: reol, sektion og plads i sektionen.</summary>
+    /// <summary>Den fremhævede blok: skillekortet, ryggene og pladsen i sektionen.</summary>
     public static Border LocationPanel(string eyebrow, Location loc, int position, int count, string hint, double lineSize = 28)
     {
         var p = new StackPanel { Spacing = 10 };
         p.Children.Add(Ui.Eyebrow(eyebrow));
         p.Children.Add(PlacementLine(loc, lineSize));
-        p.Children.Add(ShelfSpines(position, count));
-        p.Children.Add(Ui.Text(hint, "BodyTextBlockStyle", Ui.Secondary));
+        p.Children.Add(ShelfSpines(position, count, DividerColors(loc).Fill));
+        p.Children.Add(Ui.CondensedText(hint, 20, bold: false, color: Ui.Secondary));
         var card = Ui.Card(p, 20);
         card.BorderBrush = Ui.AccentTint(0.55);
         card.Background = Ui.AccentTint(0.07);
         return card;
+    }
+
+    /// <summary>Selskab, katalognr. og år på én linje og formatet på den næste (som PressingLines på Mac).</summary>
+    public static FrameworkElement PressingLines(RecordItem it)
+    {
+        var p = new StackPanel();
+        if (it.PressingLine.Length > 0) p.Children.Add(Ui.Text(it.PressingLine, "BodyTextBlockStyle", Ui.Secondary, wrap: false, maxLines: 1));
+        if (!string.IsNullOrEmpty(it.Release.Format)) p.Children.Add(Ui.Text(it.Release.Format!, "BodyTextBlockStyle", Ui.Tertiary, wrap: false, maxLines: 1));
+        return p;
     }
 
     /// <summary>Besked med ikon og knapper (fx "Denne plade er ikke længere i din Discogs Collection.").</summary>
@@ -173,7 +197,7 @@ public static class RecordParts
         grid.Children.Add(arrow);
         var text = new StackPanel();
         text.Children.Add(Ui.Text(item.Artist, "BodyStrongTextBlockStyle", Ui.Secondary));
-        text.Children.Add(Ui.Text(item.Title.ToUpper(System.Globalization.CultureInfo.GetCultureInfo("da-DK")), "SubtitleTextBlockStyle", weight: FontWeights.Bold));
+        text.Children.Add(Ui.Text(item.Title, "SubtitleTextBlockStyle", weight: FontWeights.Bold));
         Grid.SetColumn(text, 1);
         grid.Children.Add(text);
         return new Border
@@ -187,7 +211,7 @@ public static class RecordParts
         };
     }
 
-    /// <summary>"STARTEN AF SEKTION A" med streg på hver side og en forklaring under.</summary>
+    /// <summary>"Starten af sektion A" med streg på hver side og en forklaring under.</summary>
     public static FrameworkElement SectionEdgeNote(string text, string? detail)
     {
         var p = new StackPanel { Spacing = 2, Padding = new Thickness(0, 2, 0, 2) };
@@ -197,7 +221,7 @@ public static class RecordParts
         row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         Rectangle Line() => new() { Height = 1, Fill = Ui.Tertiary, VerticalAlignment = VerticalAlignment.Center, Opacity = 0.6 };
         var l1 = Line(); row.Children.Add(l1);
-        var t = Ui.Text(text.ToUpper(System.Globalization.CultureInfo.GetCultureInfo("da-DK")), "CaptionTextBlockStyle", Ui.Secondary, wrap: false, weight: FontWeights.Bold);
+        var t = Ui.Text(text, "CaptionTextBlockStyle", Ui.Secondary, wrap: false, weight: FontWeights.SemiBold);
         Grid.SetColumn(t, 1); row.Children.Add(t);
         var l2 = Line(); Grid.SetColumn(l2, 2); row.Children.Add(l2);
         p.Children.Add(row);
