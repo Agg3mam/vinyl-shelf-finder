@@ -241,8 +241,10 @@ async function submitNeededCode() {
 }
 
 async function mfaStart() {
-  Object.assign(mfa, { step: 1, error: null, enrollment: null, copied: false });
+  // En påbegyndt kode genbruges: en ny sletter den, der måske allerede er gemt i kode-appen.
+  Object.assign(mfa, { step: 1, error: null, copied: false });
   render();
+  if (mfa.enrollment) return;
   if (DEMO) {
     mfa.enrollment = { factorID: "demo", secret: "JBSWY3DPEHPK3PXP", uri: "otpauth://totp/Vinyl%20Shelf:demo?secret=JBSWY3DPEHPK3PXP&issuer=Vinyl%20Shelf", qr: null };
   } else {
@@ -256,7 +258,7 @@ async function mfaConfirm() {
   mfa.busy = true; mfa.error = null; render();
   try {
     if (!DEMO) await saveSession(await cloud.verifySecondFactor(mfa.enrollment.factorID, mfa.code, await validSession()));
-    Object.assign(mfa, { on: true, step: 3, code: "" });
+    Object.assign(mfa, { on: true, step: 3, code: "", enrollment: null });
     haptic("success");
   } catch (e) {
     mfa.error = e.message;
@@ -270,7 +272,7 @@ async function mfaDisable() {
   try {
     const s = await validSession();
     for (const f of await cloud.factors(s)) await cloud.removeSecondFactor(f.id, s);
-    mfa.on = false;
+    Object.assign(mfa, { on: false, step: 0, enrollment: null, code: "" });
   } catch (e) {
     toast(e.message);
   }

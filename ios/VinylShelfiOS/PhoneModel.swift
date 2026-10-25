@@ -70,8 +70,13 @@ final class PhoneModel {
     var cloudNeedsCode: CloudFactor?
     /// Totrinslogin er slået til på kontoen (nil = ikke hentet endnu).
     var cloudSecondFactorOn: Bool?
-    /// Tilbuddet om totrinslogin (én gang efter login).
+    /// Guiden til totrinslogin: tilbuddet én gang efter login og knappen under Konto. Vises fra RootView (uden for
+    /// listerne), så en synkronisering ikke lukker den, når man kommer tilbage fra Adgangskoder.
     var showSecondFactorGuide = false
+    /// Guidens trin og den påbegyndte kode. Bevares, hvis guiden tegnes forfra, så koden, der allerede er gemt i
+    /// kode-appen, stadig passer (en ny `beginSecondFactor` sletter den halvfærdige).
+    var secondFactorStep = 0
+    var secondFactorEnrollment: TOTPEnrollment?
     @ObservationIgnored private var cloudSession: CloudSession?
     @ObservationIgnored private var cloudDebounce: Task<Void, Never>?
     @ObservationIgnored private var cloudChoicePostponed = false
@@ -333,10 +338,17 @@ final class PhoneModel {
             let s = try await cloud.verifySecondFactor(factorID: e.factorID, code: code, session: try await validCloudSession())
             try saveCloudSession(s)
             cloudSecondFactorOn = true
+            secondFactorEnrollment = nil
             return nil
         } catch {
             return error.localizedDescription
         }
+    }
+
+    /// Åbner guiden forfra (en påbegyndt kode genbruges).
+    func openSecondFactorGuide() {
+        secondFactorStep = 0
+        showSecondFactorGuide = true
     }
 
     func disableSecondFactor() async -> String? {
@@ -344,6 +356,7 @@ final class PhoneModel {
             let s = try await validCloudSession()
             for f in try await cloud.factors(session: s) { try await cloud.removeSecondFactor(factorID: f.id, session: s) }
             cloudSecondFactorOn = false
+            secondFactorEnrollment = nil
             return nil
         } catch {
             return error.localizedDescription
@@ -355,7 +368,7 @@ final class PhoneModel {
         guard !UserDefaults.standard.bool(forKey: "mfa_offer_shown"), let factors = try? await cloud.factors(session: s) else { return }
         UserDefaults.standard.set(true, forKey: "mfa_offer_shown")
         cloudSecondFactorOn = factors.contains(where: \.verified)
-        if cloudSecondFactorOn == false { showSecondFactorGuide = true }
+        if cloudSecondFactorOn == false { openSecondFactorGuide() }
     }
 
     func resolveCloudChoice(_ choice: CloudSync.FirstSync) {

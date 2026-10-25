@@ -587,6 +587,12 @@ projektet med egen konto (RLS adskiller data), men hver skal have sit eget Disco
 - **25. okt: mobilsiden på lokalnettet er droppet.** iPhone-appen og webappen dækker behovet, og QR-koderne åbner
   allerede iPhone-appen (`vinylshelf://`). `MobileSite.swift`/`MobileSite.cs` og deres checks er slettet (Mac nu
   592 checks, Windows 667). Ligger i git-historikken, hvis den skal genoplives.
+- **25. okt: totrinsguiden på iPhone startede forfra** efter "Åbn i kode-appen": guiden lå som sheet inde i Konto-listen,
+  og synkroniseringen, når appen kom frem igen, tegnede listen forfra. Næste tryk lavede en ny kode og slettede den, der
+  lige var gemt i Adgangskoder. Nu vises guiden fra `RootView` (`model.openSecondFactorGuide()`), og trin og påbegyndt
+  kode ligger i `PhoneModel` (`secondFactorStep`, `secondFactorEnrollment`). Webappen genbruger også en påbegyndt kode
+  (`mfaStart`) og nulstiller guiden, når totrinslogin slås fra. `sw.js` er `v10`. Mac og Windows skifter ikke app under
+  guiden (QR-koden scannes med telefonen), så de har ikke fejlen.
 - **Mac, Windows og iPhone (20. okt, senere):** samme indstilling. Fælles `LookStyle`/`LookTheme` i `VinylCore` (`Look.swift`,
   `Look.cs`); Swift-checken sammenligner farverne med `web/app.css`. Mac: `AppAccent.style` (læses af de dynamiske farver),
   `LookBackground`, `AppModel.lookTheme/lookStyle` (UserDefaults `look_theme`/`look_style`), fanen Udseende, snapshots

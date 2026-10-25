@@ -12,13 +12,21 @@ struct SecondFactorGuide: View {
     @Environment(PhoneModel.self) private var model
     @Environment(\.dismiss) private var dismiss
     @Environment(\.openURL) private var openURL
-    @State private var step = 0
-    @State private var enrollment: TOTPEnrollment?
     @State private var code = ""
     @State private var error: String?
     @State private var busy = false
     @State private var copied = false
     @FocusState private var codeFocused: Bool
+
+    /// Trin og påbegyndt kode ligger i modellen (se `PhoneModel.secondFactorStep`).
+    private var step: Int {
+        get { model.secondFactorStep }
+        nonmutating set { model.secondFactorStep = newValue }
+    }
+    private var enrollment: TOTPEnrollment? {
+        get { model.secondFactorEnrollment }
+        nonmutating set { model.secondFactorEnrollment = newValue }
+    }
 
     var body: some View {
         NavigationStack {
@@ -206,7 +214,6 @@ struct SecondFactorSection: View {
     @State private var code = ""
     @State private var note: String?
     @State private var busy = false
-    @State private var guide = false
     @State private var confirmOff = false
 
     var body: some View {
@@ -232,13 +239,12 @@ struct SecondFactorSection: View {
                 Button("Slå totrinslogin fra", role: .destructive) { confirmOff = true }
                     .disabled(busy || model.cloudNeedsCode != nil)
             } else if model.cloudSecondFactorOn == false {
-                Button("Slå totrinslogin til", systemImage: "checkmark.shield") { guide = true }
+                Button("Slå totrinslogin til", systemImage: "checkmark.shield") { model.openSecondFactorGuide() }
             }
         } footer: {
             Text("Med totrinslogin skal du også skrive en kode fra telefonen, når du logger ind på en ny enhed.")
         }
         .task { await model.refreshSecondFactorStatus() }
-        .sheet(isPresented: $guide) { SecondFactorGuide() }
         .confirmationDialog("Slå totrinslogin fra?", isPresented: $confirmOff, titleVisibility: .visible) {
             Button("Slå fra", role: .destructive) {
                 busy = true
