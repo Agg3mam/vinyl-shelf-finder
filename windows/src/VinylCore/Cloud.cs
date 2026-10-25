@@ -332,6 +332,7 @@ public sealed class CloudClient
 
     public const string WrongSecondFactorCode = "Koden passer ikke. Skriv de 6 tal, kode-appen viser lige nu, ud for Vinyl Shelf.";
     public const string SecondFactorRequired = "Skriv koden fra din kode-app for at synkronisere.";
+    public const string DatabaseDenied = "Kontoen afviste synkroniseringen (ingen adgang til databasen). Kør den nyeste supabase/mfa.sql i Supabase › SQL Editor.";
 
     // MARK: HTTP
 
@@ -358,11 +359,14 @@ public sealed class CloudClient
 
     internal static CloudException ErrorFrom(int status, byte[] data)
     {
-        string code = "";
+        string code = "", message = "";
         try
         {
             if (JsonNode.Parse(data) is JsonObject o)
+            {
                 code = (o["error_code"] ?? o["code"] ?? o["error"]) is JsonValue v ? v.ToString() : "";
+                message = o["message"] is JsonValue m ? m.ToString() : "";
+            }
         }
         catch (JsonException) { }
         switch (code)
@@ -378,6 +382,9 @@ public sealed class CloudClient
             case "mfa_verification_failed":
             case "mfa_challenge_expired": return new CloudException(WrongSecondFactorCode);
             case "insufficient_aal":
+            // "permission denied" er en regel i databasen, der ikke må det, den prøver (fx den første supabase/mfa.sql,
+            // der læste auth.mfa_factors direkte). Kun en afvist række er den manglende kode.
+            case "42501" when message.Contains("permission denied"): return new CloudException(DatabaseDenied);
             case "42501": return new CloudException(SecondFactorRequired, needsSecondFactor: true); // afvist af supabase/mfa.sql
             case "invalid_grant":
             case "refresh_token_not_found":

@@ -2571,6 +2571,9 @@ do { try MainActor.assumeIsolated {
           "totrinslogin: kan slås fra med koden")
     check(CloudClient.error(status: 403, data: Data(#"{"code":"42501","message":"new row violates row-level security policy"}"#.utf8)).needsSecondFactor,
           "totrinslogin: en afvist post betyder, at koden mangler")
+    let denied = CloudClient.error(status: 403, data: Data(#"{"code":"42501","message":"permission denied for table mfa_factors"}"#.utf8))
+    check(!denied.needsSecondFactor && denied.message == CloudClient.databaseDenied.message,
+          "totrinslogin: \"permission denied\" er en regel i databasen, ikke den manglende kode")
 
     // Udløbet login.
     let bad = CloudSession(accessToken: "forkert", refreshToken: "x", expiresAt: 0, userID: session.userID, email: session.email)

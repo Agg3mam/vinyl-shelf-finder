@@ -255,6 +255,7 @@ public final class CloudClient: @unchecked Sendable {
 
     public static let wrongSecondFactorCode = CloudError("Koden passer ikke. Skriv de 6 tal, kode-appen viser lige nu, ud for Vinyl Shelf.")
     public static let secondFactorRequired = CloudError("Skriv koden fra din kode-app for at synkronisere.", needsSecondFactor: true)
+    public static let databaseDenied = CloudError("Kontoen afviste synkroniseringen (ingen adgang til databasen). Kør den nyeste supabase/mfa.sql i Supabase › SQL Editor.")
 
     // MARK: Poster
 
@@ -339,7 +340,11 @@ public final class CloudClient: @unchecked Sendable {
         case "email_address_invalid", "validation_failed": return CloudError("E-mailadressen ser forkert ud.")
         case "mfa_verification_failed", "mfa_challenge_expired": return wrongSecondFactorCode
         case "insufficient_aal": return secondFactorRequired
-        case "42501": return secondFactorRequired // rækken blev afvist (supabase/mfa.sql): koden mangler
+        case "42501":
+            // "permission denied" er ikke den manglende kode, men en regel i databasen, der ikke må det, den prøver
+            // (fx den første supabase/mfa.sql, der læste auth.mfa_factors direkte). Kun en afvist række er koden.
+            if ((o["message"] as? String) ?? "").contains("permission denied") { return databaseDenied }
+            return secondFactorRequired // rækken blev afvist (supabase/mfa.sql): koden mangler
         case "invalid_grant", "refresh_token_not_found", "refresh_token_already_used", "session_not_found", "bad_jwt":
             return CloudError("Du skal logge ind igen.", needsLogin: true)
         default: break

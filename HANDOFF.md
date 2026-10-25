@@ -593,6 +593,11 @@ projektet med egen konto (RLS adskiller data), men hver skal have sit eget Disco
   kode ligger i `PhoneModel` (`secondFactorStep`, `secondFactorEnrollment`). Webappen genbruger også en påbegyndt kode
   (`mfaStart`) og nulstiller guiden, når totrinslogin slås fra. `sw.js` er `v10`. Mac og Windows skifter ikke app under
   guiden (QR-koden scannes med telefonen), så de har ikke fejlen.
+- **25. okt: al synkronisering stod stille siden 20. okt.** Den første `supabase/mfa.sql` læste `auth.mfa_factors` direkte i
+  reglen, hvilket rollen `authenticated` ikke må, så hver forespørgsel fik 42501 "permission denied", og apps viste
+  "Skriv koden …". Ny `mfa.sql` slår op via `public.har_totrinslogin()` (security definer, kun den spørgende bruger).
+  Brugeren har kørt den, og synkroniseringen virker igen. 42501 med "permission denied" giver nu
+  `databaseDenied`/`DatabaseDenied` i stedet for "Skriv koden" (Swift, C#, `web/core/cloud.js`, checks på begge).
 - **Mac, Windows og iPhone (20. okt, senere):** samme indstilling. Fælles `LookStyle`/`LookTheme` i `VinylCore` (`Look.swift`,
   `Look.cs`); Swift-checken sammenligner farverne med `web/app.css`. Mac: `AppAccent.style` (læses af de dynamiske farver),
   `LookBackground`, `AppModel.lookTheme/lookStyle` (UserDefaults `look_theme`/`look_style`), fanen Udseende, snapshots

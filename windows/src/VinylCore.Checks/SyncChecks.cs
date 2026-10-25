@@ -369,6 +369,9 @@ static class SyncChecks
         Check.That(CloudClient.ErrorFrom(403, Encoding.UTF8.GetBytes("{\"code\":\"42501\"}")).NeedsSecondFactor
                    && CloudClient.ErrorFrom(422, Encoding.UTF8.GetBytes("{\"error_code\":\"mfa_verification_failed\"}")).Message == CloudClient.WrongSecondFactorCode,
                    "totrinslogin: en afvist post betyder, at koden mangler; en forkert kode siger det på dansk");
+        var denied = CloudClient.ErrorFrom(403, Encoding.UTF8.GetBytes("{\"code\":\"42501\",\"message\":\"permission denied for table mfa_factors\"}"));
+        Check.That(!denied.NeedsSecondFactor && denied.Message == CloudClient.DatabaseDenied,
+                   "totrinslogin: \"permission denied\" er en regel i databasen, ikke den manglende kode");
         static string Jwt(string json) => "x." + Convert.ToBase64String(Encoding.UTF8.GetBytes(json)).TrimEnd('=').Replace('+', '-').Replace('/', '_') + ".y";
         Check.That(CloudClient.Assurance(session with { AccessToken = Jwt("{\"sub\":\"u\",\"aal\":\"aal2\"}") }) == "aal2" && CloudClient.Assurance(session) == "aal1",
                    "totrinslogin: et login med koden er aal2");

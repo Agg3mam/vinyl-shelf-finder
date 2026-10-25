@@ -19,6 +19,8 @@ export const WRONG_PASSWORD = "Forkert e-mail eller adgangskode. Har du valgt en
 const EXPIRED_CODE = "Koden er forkert eller udløbet. Bed om en ny kode.";
 const USED_LINK = "Linket er allerede brugt eller er ikke fra den nyeste mail. Hvert link virker kun én gang – også hvis du har klikket på det. Bed om en ny mail, og klik ikke på linket.";
 
+const DATABASE_DENIED = "Kontoen afviste synkroniseringen (ingen adgang til databasen). Kør den nyeste supabase/mfa.sql i Supabase › SQL Editor.";
+
 function errorFor(status, body) {
   const code = body?.error_code ?? body?.code ?? body?.error ?? "";
   switch (code) {
@@ -29,7 +31,12 @@ function errorFor(status, body) {
       return new CloudError("Der er sendt for mange koder for nylig. Vent lidt, og prøv igen.");
     case "email_address_invalid": case "validation_failed": return new CloudError("E-mailadressen ser forkert ud.");
     case "mfa_verification_failed": case "mfa_challenge_expired": return new CloudError(WRONG_SECOND_FACTOR);
-    case "insufficient_aal": case "42501": return new CloudError(SECOND_FACTOR_REQUIRED, false, true);
+    case "insufficient_aal": return new CloudError(SECOND_FACTOR_REQUIRED, false, true);
+    // "permission denied" er en regel i databasen, der ikke må det, den prøver (fx den første supabase/mfa.sql, der
+    // læste auth.mfa_factors direkte). Kun en afvist række er den manglende kode.
+    case "42501":
+      if (String(body?.message ?? "").includes("permission denied")) return new CloudError(DATABASE_DENIED);
+      return new CloudError(SECOND_FACTOR_REQUIRED, false, true);
     case "invalid_grant": case "refresh_token_not_found": case "refresh_token_already_used": case "session_not_found": case "bad_jwt":
       return new CloudError("Du skal logge ind igen.", true);
   }
