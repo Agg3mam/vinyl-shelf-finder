@@ -64,7 +64,6 @@ static class DataChecks
         Migration();
         SearchUnicode();
         SearchOrder();
-        Mobile();
         OutOfShelf();
         DemoIdempotent();
         Backup();
@@ -1146,47 +1145,6 @@ static class DataChecks
         Check.That(ix.Search("pink floyd", limit: 2).Count == 2, "grænse for antal hits");
     });
 
-    // Mobilside: parsing, routing og escaping
-    private static void Mobile() => Check.Section("mobilside", () =>
-    {
-        static MobileSite.Request? Req(string raw) => MobileSite.Request.Parse(Encoding.UTF8.GetBytes(raw));
-        Check.That(Req("GET /?q=AC%2BDC+live HTTP/1.1\r\nHost: x\r\n\r\n")?.Query.GetValueOrDefault("q") == "AC+DC live", "query: + er mellemrum, %2B er plus");
-        Check.That(Req("GET /?q=%C3%A6%C3%B8%C3%A5 HTTP/1.1\r\n\r\n")?.Query.GetValueOrDefault("q") == "æøå", "query: procent-dekodet UTF-8");
-        Check.That(Req("GET /?q=%zz HTTP/1.1\r\n\r\n")?.Query.GetValueOrDefault("q") == "%zz", "query: ugyldig procent-kode crasher ikke");
-        Check.That(Req("") is null && Req("GARBAGE") is null && Req("\r\n\r\n") is null, "ugyldig request = nil");
-        var bad = Encoding.UTF8.GetBytes("GET /section/3 HTTP/1.1\r\nX: ").Concat(new byte[] { 0xFF, 0xFE }).Concat(Encoding.UTF8.GetBytes("\r\n\r\n")).ToArray();
-        Check.That(MobileSite.Request.Parse(bad)?.Path == "/section/3", "ugyldig UTF-8 i header afviser ikke requesten");
-        Check.That(Req("POST /record/5/play HTTP/1.1\n\n")?.Method == "POST", "linjeskift uden \\r");
-
-        using var s = new ShelfStore(TempDb("mobile"));
-        s.ApplyCollection(new[] { Item(1, 77, "<script>alert(1)</script>", "\"><img src=x onerror=alert(1)>"), Item(2, 78, "Bob", "Plain") });
-        var l = s.LoadLibrary();
-        var ids = l.Copies.Keys.OrderBy(k => k).ToList();
-        s.CreateLayout(Layout((1, "<b>X", ids)));
-        l = s.LoadLibrary();
-        var loc = l.Locations[0].Id;
-        MobileSite.Reply Route(string m, string path, Dictionary<string, string>? q = null) =>
-            MobileSite.Route(new MobileSite.Request(m, path, q ?? new()), l, ListeningStats.Empty);
-        static string Html(MobileSite.Reply r) => r is MobileSite.Reply.Html h ? h.Content : "";
-        var pages = new[] { Html(Route("GET", "/")), Html(Route("GET", "/", new() { ["q"] = "bob" })), Html(Route("GET", "/", new() { ["q"] = "script" })),
-                            Html(Route("GET", $"/section/{loc}", new() { ["mark"] = $"{ids[0]}" })), Html(Route("GET", $"/record/{ids[0]}")),
-                            Html(Route("GET", $"/record/{ids[1]}")) };
-        Check.That(pages.All(p => p.Length > 0), "mobilside: alle sider renderes");
-        Check.That(pages.All(p => !p.Contains("<script>alert") && !p.Contains("<img src=x") && !p.Contains("<b>X")), "mobilside: titler, kunstnere og sektionsnavne escapes");
-        var nf = new MobileSite.Reply.NotFound();
-        Check.That(Route("GET", "/section/999") == nf && Route("GET", "/section/abc") == nf && Route("GET", "/record/999") == nf, "mobilside: ukendte id'er = 404");
-        Check.That(Route("POST", $"/record/{ids[0]}/play") == new MobileSite.Reply.LogPlay(ids[0], $"/record/{ids[0]}?played=1"), "mobilside: Spillet-knap");
-        Check.That(Route("GET", $"/record/{ids[0]}/play") == nf && Route("POST", "/") == nf, "mobilside: forkert metode = 404");
-        Check.That(Route("GET", "/cover/77", new() { ["s"] = "l" }) == new MobileSite.Reply.Cover(77, true) && Route("GET", "/cover/1") == nf, "mobilside: cover-route");
-        Check.That(Html(Route("GET", $"/record/{ids[0]}", new() { ["played"] = "1" })).Contains("Registreret"), "mobilside: bekræftelse efter Spillet");
-        var resp = MobileSite.Response(200, "text/html; charset=utf-8", Encoding.UTF8.GetBytes("æ"));
-        Check.That(Encoding.UTF8.GetString(resp).Contains("Content-Length: 2\r\n"), "Content-Length tæller bytes");
-        // Afspilninger vises på pladens side
-        var stats = new ListeningStats(new[] { new Play(1, ids[1], DateTimeOffset.Now.AddDays(-3)), new Play(2, ids[1], DateTimeOffset.Now.AddDays(-40)) });
-        var rec = Html(MobileSite.Route(new MobileSite.Request("GET", $"/record/{ids[1]}"), l, stats));
-        Check.That(rec.Contains("Spillet 2 gange · senest for 3 dage siden"), "mobil plade: lyttelog");
-    });
-
     // MARK: Ude af reolen (fx På væggen): fysisk nummerering og "sæt tilbage"
 
     /// Kontrollerer reglerne for fysisk nummerering og ReturnAdviceFor for alle plader,
@@ -1397,10 +1355,6 @@ static class DataChecks
         Check.That(lbl.Count == 0 && lbl.FirstArtist is null && lbl.LastArtist is null, "skilt: sektion hvor alle er ude");
         Check.That(l.NeighborsOf(dylan)!.NextSection?.First is null && l.ReturnAdviceFor(dylan)!.SectionEdgeHint is null,
                    "næste sektion uden plader i reolen nævnes ikke med en ude-plade");
-        {
-            var home = MobileSite.Route(new MobileSite.Request("GET", "/"), l, ListeningStats.Empty) is MobileSite.Reply.Html h ? h.Content : "";
-            Check.That(home.Contains("(alle plader er ude)") && home.Contains("ABBA → Bob Dylan"), "mobil forside: sektion hvor alle er ude");
-        }
         Set(foxtrot, CopyStatus.Home);
         var rb2 = l.ReturnAdviceFor(selling)!;
         Check.That(Pos(foxtrot) == "1/1" && l.ReferenceAdviceFor(foxtrot)?.PlacementHint == "Plade 1 af 1 fra venstre"
@@ -1423,36 +1377,6 @@ static class DataChecks
         foreach (var st in CopyStatusExtensions.All.Append(CopyStatus.Home)) { Set(help, st); if (!Unmoved()) moved.Add(st.RawValue()); }
         Check.That(moved.Count == 0 && Unmoved(), $"statusskift (alle statusser) ændrer aldrig placements: {string.Join(",", moved)}");
         Check.That(l.Unplaced.Count == 0 && l.ShelfNumbers(a).Count == 6, "alt er tilbage");
-
-        // Mobilside: kun plader i reolen nummereres; ude-plader nedtonet uden nummer og med status.
-        Set(aurora, CopyStatus.Wall);
-        string Html(string path, Dictionary<string, string>? q = null) =>
-            MobileSite.Route(new MobileSite.Request("GET", path, q ?? new()), l, ListeningStats.Empty) is MobileSite.Reply.Html h ? h.Content : "";
-        static Dictionary<long, string> RowNumbers(string h)
-        {
-            var re = new Regex("<li id=\"c(\\d+)\" class=\"[^\"]*\"><a class=\"row\" href=\"/record/\\d+\"><span class=\"num\">([^<]*)</span>");
-            return re.Matches(h).ToDictionary(m => long.Parse(m.Groups[1].Value, CultureInfo.InvariantCulture), m => m.Groups[2].Value);
-        }
-        var sec = Html($"/section/{a}");
-        var expectedRows = new Dictionary<long, string> { [abba] = "1", [aurora] = "", [abbey] = "2", [help] = "3", [revolver] = "4", [dylan] = "5" };
-        Check.That(DictEq(RowNumbers(sec), expectedRows), "mobil sektion: fysiske numre, intet nummer på væggen");
-        Check.That(sec.Contains($"<li id=\"c{aurora}\" class=\"away\">") && sec.Contains("<span class=\"sub\">På væggen</span>") && sec.Contains("5 plader (+1 ude)"),
-                   "mobil sektion: pladen på væggen er nedtonet med status, og antallet tæller kun plader i reolen");
-        var marked = Html($"/section/{a}", new() { ["mark"] = $"{aurora}" });
-        Check.That(RowNumbers(marked).GetValueOrDefault(aurora) == "" && marked.Contains("class=\"away mark\""), "mobil sektion: markeret ude-plade");
-        var recRev = Html($"/record/{revolver}");
-        Check.That(recRev.Contains("Plade 4 af 5 fra venstre") && recRev.Contains("Gå til") && !recRev.Contains("Aurora"), "mobil plade: fysiske tal for plade i reolen");
-        var recAur = Html($"/record/{aurora}");
-        Check.That(recAur.Contains("Plads 2 af 6 fra venstre") && recAur.Contains("Hører til") && recAur.Contains("Sæt tilbage")
-                   && recAur.Contains("Sæt den lige til højre for ABBA – Arrival.") && recAur.Contains("“På væggen”"),
-                   "mobil plade: ude-plade viser, hvor den skal sættes tilbage");
-        var homePage = Html("/");
-        Check.That(homePage.Contains("ABBA → Bob Dylan") && homePage.Contains("5 plader") && !homePage.Contains("6 plader"), "mobil forside: antal tæller kun plader i reolen");
-        Check.That(Html("/", new() { ["q"] = "revolver" }).Contains("1A · plads 4") && Html("/", new() { ["q"] = "aurora" }).Contains("1A · på væggen")
-                   && !Html("/", new() { ["q"] = "aurora" }).Contains("plads 2"), "mobil søgning: fysisk plads, intet nummer for ude-plade");
-        Set(aurora, CopyStatus.Home);
-        Check.That(RowNumbers(Html($"/section/{a}")).GetValueOrDefault(aurora) == "2" && RowNumbers(Html($"/section/{a}")).GetValueOrDefault(revolver) == "5",
-                   "mobil sektion: numrene rykker igen efter tilbagesætning");
 
         // Uplaceret plade har intet "sæt tilbage"-råd.
         s.ApplyCollection(coll.Append(Item(99, 999, "Ny", "Plade")));

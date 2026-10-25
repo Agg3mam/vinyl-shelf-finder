@@ -39,7 +39,6 @@ Hvad hver app kan. Målet er ✅ i begge kolonner. Opdatér tabellen i samme com
 | QR-koden på et trykt skilt følger sektionen til andre enheder | ✅ | ✅ | Feltet `code` i sektionens post (`locations.scan_code`). Begge gemmer koden, når skiltene laves (Windows fra 19. okt; allerede trykte skilte virker, når skiltene er åbnet én gang efter opdateringen) |
 | Udseende: tema (automatisk/lys/mørk) og stil (Standard, Hi-fi, Farve fra coveret, Covers i fokus) | ✅ | ✅ | Indstillinger › Udseende. Fælles navne og farver i `Look.swift` / `Look.cs` (check mod `web/app.css`). Kun på enheden. Hi-fi har stadig id'et `kasse` (hed Pladekasse før 25. okt), så valget bevares. Mac: `NSApp.appearance`, accent og baggrund under listerne, smalle titler (`condensedTitles`), større covers. Windows: `RequestedTheme`, accentfarven i ressourcerne, Bahnschrift i titler. "Farve fra coveret": Mac'ens pladeskærm er allerede farvet af coveret |
 | Totrinslogin (kode fra en kode-app, TOTP), guide én gang efter login | ✅ | ✅ | Indstillinger › Konto. `CloudClient` (`enrollSecondFactor`, `verifySecondFactor`, `pendingSecondFactor`) i Swift og C#. Kræves af Supabase, når `supabase/mfa.sql` er kørt. Windows: guiden er en dialog |
-| Mobilside på lokalnettet | ❌ | ❌ | Halvt lavet (kun ruter), ingen server endnu |
 
 ## iPhone-appen (`ios/`)
 

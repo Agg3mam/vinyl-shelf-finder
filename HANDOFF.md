@@ -117,7 +117,6 @@ Sources/VinylCore/            al logik, ingen UI
   Discogs, Keychain           API-klient (rate limit reaktivt), token
   DiscogsCatalog              katalogsøgning, udgaver (+ udbredelse), ønskeliste, URL'er
   Market                      priser: /marketplace/stats (valuta i svaret), Værdi-data, DKK⇄EUR
-  MobileSite                  HTML + routing til mobilsiden (INGEN server endnu)
   Demo                        43 eksempelplader
 Sources/VinylShelfFinder/     SwiftUI
   AppModel                    app-tilstand, sync, værdi-opdatering
@@ -153,8 +152,6 @@ Sources/VinylCoreChecks/      selvtest (305 checks)
   - Systemskærmene bruger accentfarven `AppAccent` (blågrøn).
 - Al tekst er på dansk. Der bruges SF Symbols, ikke emoji.
   - `CopyStatus` har stadig en gammel emoji-egenskab i `Models.swift`, men UI'et bruger `symbol`.
-- **Mac-appen og mobilsiden skal dele samme udtryk.** Mobilsidens CSS i `MobileSite.swift` er
-  stadig det gamle udkast "varm pladebutik" og skal laves om til Liquid Glass-udtrykket.
 - Tidligere design-billeder ligger i `design-snapshots/` (fx `design-retning-*`, `endelig`, `lys-tilstand`).
 - **Skillekortet (25. okt, alle platforme):** placeringen vises som en pladebutiks skillekort: sektionsbogstavet
   på en fane (`PlacementLine` i `ShelfDivider.swift` / `RecordParts.PlacementLine` / `.divider` i webappen),
@@ -306,8 +303,7 @@ pakken QRCoder 1.6.0) og daglig sikkerhedskopi.
   og WebView2's `lib_manual/.../Microsoft.Web.WebView2.Core.Projection.dll`, med `EnableWindowsTargeting`,
   `AllowUnsafeBlocks` og en stub-fil med de felter, XAML ellers genererer (Root, Nav, ListHost …).
   Det fanger næsten alle fejl før CI.
-- Ikke lavet på Windows: `vinylshelf://`-adresser (QR-koder åbner ikke appen), mobilsiden (heller ikke
-  færdig på Mac). Ikke afprøvet på en rigtig Windows-pc: Discogs-login/køb i WebView2, iMusic-feed,
+- Ikke lavet på Windows: `vinylshelf://`-adresser (QR-koder åbner ikke appen), mobilsiden (droppet 25. okt). Ikke afprøvet på en rigtig Windows-pc: Discogs-login/køb i WebView2, iMusic-feed,
   opdatering via "Opdatér nu".
 - Ingen af grenene er merget. Første udgivelse (v1.0.0) venter på, at brugeren laver den på GitHub
   (sessionen må ikke skubbe tags).
@@ -588,6 +584,9 @@ projektet med egen konto (RLS adskiller data), men hver skal have sit eget Disco
 - **25. okt: iPhones reolliste** har nu fanen med sektionsbogstavet i kategoriens farve ved hver sektion (`SectionRow` i
   `ShelvesView.swift`, samme mål som `.section-tab` i webappen). Windows' sidepanel beholder det farvede bogstav som ikon,
   fordi et sammenklappet `NavigationView` kun viser ikonet.
+- **25. okt: mobilsiden på lokalnettet er droppet.** iPhone-appen og webappen dækker behovet, og QR-koderne åbner
+  allerede iPhone-appen (`vinylshelf://`). `MobileSite.swift`/`MobileSite.cs` og deres checks er slettet (Mac nu
+  592 checks, Windows 667). Ligger i git-historikken, hvis den skal genoplives.
 - **Mac, Windows og iPhone (20. okt, senere):** samme indstilling. Fælles `LookStyle`/`LookTheme` i `VinylCore` (`Look.swift`,
   `Look.cs`); Swift-checken sammenligner farverne med `web/app.css`. Mac: `AppAccent.style` (læses af de dynamiske farver),
   `LookBackground`, `AppModel.lookTheme/lookStyle` (UserDefaults `look_theme`/`look_style`), fanen Udseende, snapshots
@@ -628,27 +627,13 @@ projektet med egen konto (RLS adskiller data), men hver skal have sit eget Disco
 
 ### Ikke færdigt / næste skridt (spørg brugeren om rækkefølgen)
 
-1. **Mobilside på det lokale netværk (opgave 1)**, så QR-koderne virker. Det er det største åbne punkt.
-   - Netværket, mobilsiden skal virke på, er beskrevet i `HANDOFF-privat.md`.
-   - Beslutninger, der er taget:
-     - Serveren skal altid køre, når appen er åben, med en kontakt i Indstillinger til at slå den fra.
-     - Mobilsiden har **én "Spillet"-knap**. Ellers er den kun til at læse.
-     - Forsiden har et søgefelt og en liste over sektioner.
-     - Sektionssiden er en nummereret liste med små covers, hvor plader ude af reolen er nedtonede.
-     - Plade-siden har et stort cover øverst.
-   - Lavet: `MobileSite.swift` med ruter (`/`, `/section/<id>`, `/record/<id>`, `POST /record/<id>/play`,
-     `/cover/<id>`) og checks for routing og parsing.
-   - Mangler:
-     - en `NWListener`-server (kun Network.framework, ingen afhængigheder), fast port (forslag 8765) og levering af covers,
-     - nye QR-koder (`http://…:port/section/<id>`). Den gamle `vinylshelf://` skal stadig kunne læses,
-     - en indikator i appen med adresse og QR-kode,
-     - restyling til Liquid Glass.
-   - Skal testes sammen med brugeren på telefonen: virker `.local` eller kun IP-adressen? Firewall-dialogen
-     kan dukke op efter hver build ved ad-hoc-signering. Fortæl det på forhånd. Skiltene skal printes igen.
+1. ~~Mobilside på det lokale netværk~~ **droppet 25. okt** (se "25. okt: mobilsiden" ovenfor).
 2. **Find nye plader, resten:**
    - kø, cache og ét kald pr. søgning er lavet (se ovenfor); mangler afprøvning mod det rigtige Discogs,
    - Se afsnit 6a.
-   - **Ikke testet mod det rigtige discogs.com:** login og betaling i appens WKWebView, og `sell/list?master_id&format`-URL'en.
+   - **Ikke testet mod det rigtige discogs.com:** login og betaling i appens WKWebView (kræver brugerens konto).
+   - Afprøvet 25. okt: `sell/list?master_id=…&format=Vinyl` sendes af Discogs videre til `/shop/list?master=…&formatName=Vinyl`
+     og viser kun det album og det format. `sell/release/{id}` virker uændret.
 3. **Udviklercertifikat**, så nøgleringen ikke spørger efter hver build. Brugeren skal selv oprette det i Nøgleringsadgang.
 4. Oprydning:
    - `Sheets.swift` er stor (1054 linjer) og kan deles op.
@@ -737,7 +722,7 @@ Testværktøjer flettes **ikke** ind i appen.
 ## 8. Forslag til, hvordan du starter
 
 1. Læs denne fil. Kør `swift build` og `swift run VinylCoreChecks`.
-2. Spørg brugeren, hvad der skal ske nu. Anbefal en rækkefølge, fx at mobilsiden kommer først, fordi den er det største åbne løfte.
+2. Spørg brugeren, hvad der skal ske nu. Anbefal en rækkefølge.
    Spørg også, om "Find nye plader" føles god nok efter forslag B.
 3. Vis forslag visuelt, før du bygger. Byg, test med demo, `./build-app.sh --install`, og bed om ⌘Q og genstart.
 4. **Til sidst: opdatér denne fil** (status, beslutninger og antal checks), så den stadig er den eneste, der skal gives videre.

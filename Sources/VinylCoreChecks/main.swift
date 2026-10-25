@@ -623,43 +623,6 @@ do {
     check(ix.search("pink floyd wall").first.map { l.item($0)!.title } == "The Wall", "bedre match kommer stadig først")
 }
 
-// Mobilside: parsing, routing og escaping
-do {
-    func req(_ raw: String) -> MobileSite.Request? { MobileSite.Request.parse(Data(raw.utf8)) }
-    check(req("GET /?q=AC%2BDC+live HTTP/1.1\r\nHost: x\r\n\r\n")?.query["q"] == "AC+DC live", "query: + er mellemrum, %2B er plus")
-    check(req("GET /?q=%C3%A6%C3%B8%C3%A5 HTTP/1.1\r\n\r\n")?.query["q"] == "æøå", "query: procent-dekodet UTF-8")
-    check(req("GET /?q=%zz HTTP/1.1\r\n\r\n")?.query["q"] == "%zz", "query: ugyldig procent-kode crasher ikke")
-    check(req("") == nil && req("GARBAGE") == nil && req("\r\n\r\n") == nil, "ugyldig request = nil")
-    var bad = Data("GET /section/3 HTTP/1.1\r\nX: ".utf8); bad.append(contentsOf: [0xFF, 0xFE]); bad.append(Data("\r\n\r\n".utf8))
-    check(MobileSite.Request.parse(bad)?.path == "/section/3", "ugyldig UTF-8 i header afviser ikke requesten")
-    check(req("POST /record/5/play HTTP/1.1\n\n")?.method == "POST", "linjeskift uden \\r")
-
-    let (s, url) = try freshStore("mobile")
-    defer { try? FileManager.default.removeItem(at: url) }
-    _ = try s.applyCollection([item(1, 77, "<script>alert(1)</script>", "\"><img src=x onerror=alert(1)>"), item(2, 78, "Bob", "Plain")])
-    var l = try s.loadLibrary()
-    let ids = l.copies.keys.sorted()
-    try s.createLayout([(shelf: 1, section: "<b>X", copies: ids)])
-    l = try s.loadLibrary()
-    let loc = l.locations[0].id
-    func route(_ m: String, _ path: String, _ q: [String: String] = [:]) -> MobileSite.Reply {
-        MobileSite.route(MobileSite.Request(method: m, path: path, query: q), library: l, stats: .empty)
-    }
-    func html(_ r: MobileSite.Reply) -> String { if case .html(let h) = r { return h } else { return "" } }
-    let pages = [html(route("GET", "/")), html(route("GET", "/", ["q": "bob"])), html(route("GET", "/", ["q": "script"])),
-                 html(route("GET", "/section/\(loc)", ["mark": "\(ids[0])"])), html(route("GET", "/record/\(ids[0])")),
-                 html(route("GET", "/record/\(ids[1])"))]
-    check(pages.allSatisfy { !$0.isEmpty }, "mobilside: alle sider renderes")
-    check(pages.allSatisfy { !$0.contains("<script>alert") && !$0.contains("<img src=x") && !$0.contains("<b>X") }, "mobilside: titler, kunstnere og sektionsnavne escapes")
-    check(route("GET", "/section/999") == .notFound && route("GET", "/section/abc") == .notFound && route("GET", "/record/999") == .notFound, "mobilside: ukendte id'er = 404")
-    check(route("POST", "/record/\(ids[0])/play") == .logPlay(copyID: ids[0], then: "/record/\(ids[0])?played=1"), "mobilside: Spillet-knap")
-    check(route("GET", "/record/\(ids[0])/play") == .notFound && route("POST", "/") == .notFound, "mobilside: forkert metode = 404")
-    check(route("GET", "/cover/77", ["s": "l"]) == .cover(releaseID: 77, large: true) && route("GET", "/cover/1") == .notFound, "mobilside: cover-route")
-    check(html(route("GET", "/record/\(ids[0])", ["played": "1"])).contains("Registreret"), "mobilside: bekræftelse efter Spillet")
-    let resp = MobileSite.response(status: 200, contentType: "text/html; charset=utf-8", body: Data("æ".utf8))
-    check(String(decoding: resp, as: UTF8.self).contains("Content-Length: 2\r\n"), "Content-Length tæller bytes")
-}
-
 // MARK: Ude af reolen (fx På væggen): fysisk nummerering og "sæt tilbage"
 
 /// Kontrollerer reglerne for fysisk nummerering og `returnAdvice` for alle plader,
@@ -866,10 +829,6 @@ do {
     check(lbl.count == 0 && lbl.firstArtist == nil && lbl.lastArtist == nil, "skilt: sektion hvor alle er ude")
     check(l.neighbors(of: dylan)!.nextSection?.first == nil && l.returnAdvice(for: dylan)!.sectionEdgeHint == nil,
           "næste sektion uden plader i reolen nævnes ikke med en ude-plade")
-    do {
-        let home = { if case .html(let h) = MobileSite.route(MobileSite.Request(method: "GET", path: "/"), library: l, stats: .empty) { return h }; return "" }()
-        check(home.contains("(alle plader er ude)") && home.contains("ABBA → Bob Dylan"), "mobil forside: sektion hvor alle er ude")
-    }
     try set(foxtrot, .home)
     let rb2 = l.returnAdvice(for: selling)!
     check(pos(foxtrot) == "1/1" && l.referenceAdvice(for: foxtrot)?.placementHint == "Plade 1 af 1 fra venstre"
@@ -892,39 +851,6 @@ do {
     for st in CopyStatus.allCases + [.home] { try set(help, st); if placementRows(s) != original { moved.append(st.rawValue) } }
     check(moved.isEmpty && placementRows(s) == original, "statusskift (alle statusser) ændrer aldrig placements: \(moved)")
     check(l.unplaced.isEmpty && l.shelfNumbers(in: a).count == 6, "alt er tilbage")
-
-    // Mobilside: kun plader i reolen nummereres; ude-plader nedtonet uden nummer og med status.
-    try set(aurora, .wall)
-    func html(_ path: String, _ q: [String: String] = [:]) -> String {
-        if case .html(let h) = MobileSite.route(MobileSite.Request(method: "GET", path: path, query: q), library: l, stats: .empty) { return h }
-        return ""
-    }
-    func rowNumbers(_ h: String) -> [Int64: String] {
-        let re = try! NSRegularExpression(pattern: #"<li id="c(\d+)" class="[^"]*"><a class="row" href="/record/\d+"><span class="num">([^<]*)</span>"#)
-        var out: [Int64: String] = [:]
-        for m in re.matches(in: h, range: NSRange(h.startIndex..., in: h)) {
-            out[Int64(h[Range(m.range(at: 1), in: h)!])!] = String(h[Range(m.range(at: 2), in: h)!])
-        }
-        return out
-    }
-    let sec = html("/section/\(a)")
-    check(rowNumbers(sec) == [abba: "1", aurora: "", abbey: "2", help: "3", revolver: "4", dylan: "5"], "mobil sektion: fysiske numre, intet nummer på væggen: \(rowNumbers(sec))")
-    check(sec.contains("<li id=\"c\(aurora)\" class=\"away\">") && sec.contains("<span class=\"sub\">På væggen</span>") && sec.contains("5 plader (+1 ude)"),
-          "mobil sektion: pladen på væggen er nedtonet med status, og antallet tæller kun plader i reolen")
-    check(rowNumbers(html("/section/\(a)", ["mark": "\(aurora)"]))[aurora] == "" && html("/section/\(a)", ["mark": "\(aurora)"]).contains("class=\"away mark\""),
-          "mobil sektion: markeret ude-plade")
-    let recRev = html("/record/\(revolver)")
-    check(recRev.contains("Plade 4 af 5 fra venstre") && recRev.contains("Gå til") && !recRev.contains("Aurora"), "mobil plade: fysiske tal for plade i reolen")
-    let recAur = html("/record/\(aurora)")
-    check(recAur.contains("Plads 2 af 6 fra venstre") && recAur.contains("Hører til") && recAur.contains("Sæt tilbage")
-          && recAur.contains("Sæt den lige til højre for ABBA – Arrival.") && recAur.contains("“På væggen”"),
-          "mobil plade: ude-plade viser, hvor den skal sættes tilbage")
-    let home = html("/")
-    check(home.contains("ABBA → Bob Dylan") && home.contains("5 plader") && !home.contains("6 plader"), "mobil forside: antal tæller kun plader i reolen")
-    check(html("/", ["q": "revolver"]).contains("1A · plads 4") && html("/", ["q": "aurora"]).contains("1A · på væggen")
-          && !html("/", ["q": "aurora"]).contains("plads 2"), "mobil søgning: fysisk plads, intet nummer for ude-plade")
-    try set(aurora, .home)
-    check(rowNumbers(html("/section/\(a)"))[aurora] == "2" && rowNumbers(html("/section/\(a)"))[revolver] == "5", "mobil sektion: numrene rykker igen efter tilbagesætning")
 
     // Uplaceret plade har intet "sæt tilbage"-råd.
     _ = try s.applyCollection(records.enumerated().map { item($0.offset + 1, 500 + $0.offset, $0.element.0, $0.element.1) } + [item(99, 999, "Ny", "Plade")])
