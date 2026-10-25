@@ -46,17 +46,13 @@ enum AppAccent {
     /// Den valgte stil. Læses, når farverne tegnes.
     nonisolated(unsafe) static var style = LookStyle(rawValue: UserDefaults.standard.string(forKey: "look_style") ?? "") ?? .standard
 
-    /// Skifter stil: farverne og overskrifterne i navigationslinjen (med fødder i de varme stile).
+    /// Skifter stil: farverne og overskrifterne i navigationslinjen (smalle som skillekortet i stilene).
     @MainActor static func apply(_ s: LookStyle) {
         style = s
         let bar = UINavigationBar.appearance()
-        if s.serifTitles {
-            func serif(_ size: CGFloat, _ weight: UIFont.Weight) -> UIFont {
-                let base = UIFont.systemFont(ofSize: size, weight: weight)
-                return base.fontDescriptor.withDesign(.serif).map { UIFont(descriptor: $0, size: size) } ?? base
-            }
-            bar.largeTitleTextAttributes = [.font: serif(34, .bold)]
-            bar.titleTextAttributes = [.font: serif(17, .semibold)]
+        if s.condensedTitles {
+            bar.largeTitleTextAttributes = [.font: UIFont.systemFont(ofSize: 34, weight: .bold, width: .condensed)]
+            bar.titleTextAttributes = [.font: UIFont.systemFont(ofSize: 17, weight: .semibold, width: .condensed)]
         } else {
             bar.largeTitleTextAttributes = nil
             bar.titleTextAttributes = nil

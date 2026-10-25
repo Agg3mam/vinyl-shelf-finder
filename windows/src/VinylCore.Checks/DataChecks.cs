@@ -1671,7 +1671,7 @@ static class DataChecks
         Check.That(string.Join(",", Enum.GetValues<LookStyle>().Select(x => x.Id())) == ",kasse,cover,fokus" && Look.StyleFrom("fokus") == LookStyle.Fokus
                    && Look.StyleFrom("ukendt") == LookStyle.Standard && Look.ThemeFrom("dark") == LookTheme.Dark && Look.ThemeFrom(null) == LookTheme.Auto,
                    "udseende: samme stile og temaer som webappen");
-        Check.That(LookStyle.Standard.Palette() is null && LookStyle.Kasse.Palette()?.Light.Background == 0xEAE2D3 && LookStyle.Fokus.Palette()?.Dark.Accent == 0x2E9D8F
+        Check.That(LookStyle.Standard.Palette() is null && LookStyle.Kasse.Palette()?.Light.Background == 0xD9DBDC && LookStyle.Kasse.Name() == "Hi-fi" && LookStyle.Kasse.CondensedTitles() && !LookStyle.Standard.CondensedTitles() && LookStyle.Fokus.Palette()?.Dark.Accent == 0x2E9D8F
                    && LookStyle.Fokus.BigCovers() && !LookStyle.Cover.BigCovers(), "udseende: farverne er de samme som på Mac");
         var g6 = CoverFlowGeometry.Glide(3, 1, 0);
         Check.That(g6.Center == 0 && g6.Shift == 0, "glid: tom sektion");

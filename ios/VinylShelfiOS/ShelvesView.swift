@@ -69,13 +69,24 @@ private struct SectionRow: View {
 
     var body: some View {
         let onShelf = library.items(in: location.id).filter { $0.copy.status.isOnShelf }
-        VStack(alignment: .leading, spacing: 2) {
-            Text("Sektion \(location.section)").font(.headline)
-            if let first = onShelf.first?.artist, let last = onShelf.last?.artist {
-                Text(first == last ? first : "\(first) – \(last)").font(.subheadline).foregroundStyle(.secondary).lineLimit(1)
+        HStack(spacing: 12) {
+            // Sektionens bogstav på en lille fane i kategoriens farve (som webappen og sidepanelet på Mac).
+            Text(location.section)
+                .font(.system(size: 19, weight: .bold).width(.condensed))
+                .foregroundStyle(.white)
+                .lineLimit(1).minimumScaleFactor(0.6)
+                .frame(width: 30, height: 28)
+                .background(location.category?.color ?? AppAccent.color,
+                            in: UnevenRoundedRectangle(topLeadingRadius: 6, topTrailingRadius: 6, style: .continuous))
+                .accessibilityHidden(true)
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Sektion \(location.section)").font(.headline)
+                if let first = onShelf.first?.artist, let last = onShelf.last?.artist {
+                    Text(first == last ? first : "\(first) – \(last)").font(.subheadline).foregroundStyle(.secondary).lineLimit(1)
+                }
+                Text("\(library.onShelfCount(in: location.id)) \(location.medium.plural)")
+                    .font(.caption.monospacedDigit()).foregroundStyle(.secondary)
             }
-            Text("\(library.onShelfCount(in: location.id)) \(location.medium.plural)")
-                .font(.caption.monospacedDigit()).foregroundStyle(.secondary)
         }
     }
 }

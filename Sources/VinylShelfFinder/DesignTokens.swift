@@ -36,8 +36,8 @@ enum Typo {
     static let dividerLetterCompact = Font.system(size: 34, weight: .bold).width(.condensed)
     /// Antal og plads ("Nr. 7 af 15 fra venstre") i samme smalle skrift.
     static let count = Font.system(size: 20, weight: .medium).width(.condensed).monospacedDigit()
-    /// Pladens titel. Med fødder i de varme stile (Indstillinger › Udseende).
-    static var display: Font { .system(size: 34, weight: .heavy, design: AppAccent.style.serifTitles ? .serif : .default) }
+    /// Pladens titel. Smal som skillekortet i stilene (Indstillinger › Udseende).
+    static var display: Font { .system(size: 34, weight: .heavy).width(AppAccent.style.condensedTitles ? .condensed : .standard) }
     static let location = Font.system(size: 26, weight: .semibold).width(.condensed)
     /// Placeringslinjen i en smal kolonne (plade-detaljen).
     static let locationCompact = Font.system(size: 21, weight: .semibold).width(.condensed)

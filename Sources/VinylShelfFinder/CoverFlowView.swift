@@ -367,7 +367,7 @@ private struct CoverFlowCaption: View {
             if let item {
                 Text(item.title)
                     .font(.title2.weight(.semibold))
-                    .fontDesign(model.lookStyle.serifTitles ? .serif : nil)
+                    .fontWidth(model.lookStyle.condensedTitles ? .condensed : nil)
                     .foregroundStyle(Ink.primary)
                 Text(item.artist)
                     .font(.title3)

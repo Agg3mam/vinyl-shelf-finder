@@ -98,7 +98,7 @@ struct RecordView: View {
             }
             VStack(alignment: .leading, spacing: 4) {
                 Text(item.artist).font(.title3.weight(.semibold))
-                Text(item.title).font(.title2.weight(.bold)).fontDesign(lookStyle.serifTitles ? .serif : nil)
+                Text(item.title).font(.title2.weight(.bold)).fontWidth(lookStyle.condensedTitles ? .condensed : nil)
                 if !item.pressingLine.isEmpty { Text(item.pressingLine).font(.footnote).foregroundStyle(.secondary).lineLimit(1) }
                 if let f = item.release.format, !f.isEmpty { Text(f).font(.footnote).foregroundStyle(.tertiary).lineLimit(1) }
             }

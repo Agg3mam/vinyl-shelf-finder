@@ -578,6 +578,16 @@ projektet med egen konto (RLS adskiller data), men hver skal have sit eget Disco
   en mørk udgave (sidst i `app.css`). `appearance.js` sætter valget, før siden tegnes. Gemmes i `localStorage`
   (`theme`, `style`), kun på enheden. `sw.js`-cachen er `v6`.
 - Inspiration: Crateful (pladekasse), Apple Music iOS 26.4 (farve fra coveret), Albums-appen (covers i fokus).
+- **25. okt: Pladekasse blev til Hi-fi.** Den cremede benhvide, overskrifterne med fødder og rustaccenten var præcis det
+  typiske AI-udseende, som brugerens frontend-design-skill advarer imod. Hi-fi er børstet aluminium (`#D9DBDC`/`#F3F4F4`)
+  med signalrøde knapper (`#B8321C`; mørk: `#131415`, `#D4442B`). Id'et er stadig `kasse`, så valget bevares. Farve fra
+  coveret og Covers i fokus har fået samme aluminium, men beholder den grønne accent. Alle tre stile har smalle, fede
+  overskrifter som skillekortet (`condensedTitles`: `.width(.condensed)` / `.fontWidth`, Bahnschrift på Windows,
+  `font-stretch: condensed` i webappen) i stedet for fødder. `sw.js`-cachen er `v9`. Forslagene blev sammenlignet i den
+  lokale `web/_kasse.html`.
+- **25. okt: iPhones reolliste** har nu fanen med sektionsbogstavet i kategoriens farve ved hver sektion (`SectionRow` i
+  `ShelvesView.swift`, samme mål som `.section-tab` i webappen). Windows' sidepanel beholder det farvede bogstav som ikon,
+  fordi et sammenklappet `NavigationView` kun viser ikonet.
 - **Mac, Windows og iPhone (20. okt, senere):** samme indstilling. Fælles `LookStyle`/`LookTheme` i `VinylCore` (`Look.swift`,
   `Look.cs`); Swift-checken sammenligner farverne med `web/app.css`. Mac: `AppAccent.style` (læses af de dynamiske farver),
   `LookBackground`, `AppModel.lookTheme/lookStyle` (UserDefaults `look_theme`/`look_style`), fanen Udseende, snapshots

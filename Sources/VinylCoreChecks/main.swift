@@ -1658,7 +1658,7 @@ do {
     // Udseende: samme stile og farver som webappen (web/app.css).
     check(LookStyle.allCases.map(\.rawValue) == ["", "kasse", "cover", "fokus"] && LookTheme.allCases.map(\.rawValue) == ["", "light", "dark"],
           "udseende: samme stile og temaer som webappen")
-    check(LookStyle.standard.palette == nil && !LookStyle.standard.serifTitles && LookStyle.fokus.bigCovers && !LookStyle.cover.bigCovers,
+    check(LookStyle.standard.palette == nil && !LookStyle.standard.condensedTitles && LookStyle.kasse.condensedTitles && LookStyle.kasse.name == "Hi-fi" && LookStyle.fokus.bigCovers && !LookStyle.cover.bigCovers,
           "udseende: Standard bruger systemets farver; kun Covers i fokus har store covers")
     if let css = try? String(contentsOfFile: "web/app.css", encoding: .utf8) {
         for style in LookStyle.allCases {

@@ -337,53 +337,53 @@ body:has(.cf-page) { background: var(--cf-bg); }
 /* MARK: Stile (Konto › Indstillinger › Udseende). Hver stil har en lys og en mørk udgave; tema og stil vælges i
    appearance.js. Standard er stilen ovenfor. Alle stile sætter de samme farver i lys og mørk, så de ikke blandes. */
 
-/* Pladekasse: varm benhvid som pap og papir, næsten sort i mørk tilstand, rustfarvet accent. */
+/* Hi-fi (id "kasse"): børstet aluminium og signalrød som en forstærkers knapper; anodiseret sort i mørk tilstand. */
 :root[data-style="kasse"] {
-  --bg: #EAE2D3; --cell: #F8F4EC; --label: #221C15; --secondary: rgba(34, 28, 21, 0.62); --tertiary: rgba(34, 28, 21, 0.32);
-  --fill: rgba(34, 28, 21, 0.08); --separator: rgba(34, 28, 21, 0.14); --material: rgba(248, 244, 236, 0.8); --material-thin: rgba(248, 244, 236, 0.6);
-  --bar: rgba(240, 234, 224, 0.85); --segment: #F8F4EC; --accent: #A9572A; --accent-ink: #94491F; --accent-soft: rgba(169, 87, 42, 0.14);
+  --bg: #D9DBDC; --cell: #F3F4F4; --label: #1C1F22; --secondary: rgba(28, 31, 34, 0.62); --tertiary: rgba(28, 31, 34, 0.32);
+  --fill: rgba(28, 31, 34, 0.08); --separator: rgba(28, 31, 34, 0.14); --material: rgba(243, 244, 244, 0.8); --material-thin: rgba(243, 244, 244, 0.6);
+  --bar: rgba(217, 219, 220, 0.85); --segment: #F3F4F4; --accent: #B8321C; --accent-ink: #A02A16; --accent-soft: rgba(184, 50, 28, 0.14);
 }
 @media (prefers-color-scheme: dark) {
   :root[data-style="kasse"]:not([data-theme="light"]) {
-    --bg: #16130F; --cell: #24201A; --label: #EEE6D8; --secondary: rgba(238, 230, 216, 0.62); --tertiary: rgba(238, 230, 216, 0.32);
-    --fill: rgba(238, 230, 216, 0.1); --separator: rgba(238, 230, 216, 0.14); --material: rgba(36, 32, 26, 0.8); --material-thin: rgba(36, 32, 26, 0.6);
-    --bar: rgba(28, 25, 20, 0.85); --segment: #3A342B; --accent: #C2703D; --accent-ink: #E9A273; --accent-soft: rgba(217, 138, 85, 0.2);
+    --bg: #131415; --cell: #202224; --label: #E9EBEC; --secondary: rgba(233, 235, 236, 0.62); --tertiary: rgba(233, 235, 236, 0.32);
+    --fill: rgba(233, 235, 236, 0.08); --separator: rgba(233, 235, 236, 0.14); --material: rgba(32, 34, 36, 0.8); --material-thin: rgba(32, 34, 36, 0.6);
+    --bar: rgba(19, 20, 21, 0.85); --segment: #3A3D40; --accent: #D4442B; --accent-ink: #FF8A73; --accent-soft: rgba(212, 68, 43, 0.2);
   }
 }
 :root[data-style="kasse"][data-theme="dark"] {
-  --bg: #16130F; --cell: #24201A; --label: #EEE6D8; --secondary: rgba(238, 230, 216, 0.62); --tertiary: rgba(238, 230, 216, 0.32);
-  --fill: rgba(238, 230, 216, 0.1); --separator: rgba(238, 230, 216, 0.14); --material: rgba(36, 32, 26, 0.8); --material-thin: rgba(36, 32, 26, 0.6);
-  --bar: rgba(28, 25, 20, 0.85); --segment: #3A342B; --accent: #C2703D; --accent-ink: #E9A273; --accent-soft: rgba(217, 138, 85, 0.2);
+  --bg: #131415; --cell: #202224; --label: #E9EBEC; --secondary: rgba(233, 235, 236, 0.62); --tertiary: rgba(233, 235, 236, 0.32);
+  --fill: rgba(233, 235, 236, 0.08); --separator: rgba(233, 235, 236, 0.14); --material: rgba(32, 34, 36, 0.8); --material-thin: rgba(32, 34, 36, 0.6);
+  --bar: rgba(19, 20, 21, 0.85); --segment: #3A3D40; --accent: #D4442B; --accent-ink: #FF8A73; --accent-soft: rgba(212, 68, 43, 0.2);
 }
 
-/* Farve fra coveret og Covers i fokus: varm papirfarve (varm mørkebrun i mørk tilstand), appens grønne accent. */
+/* Farve fra coveret og Covers i fokus: samme lyse aluminium (anodiseret sort i mørk tilstand), appens grønne accent. */
 :root[data-style="cover"], :root[data-style="fokus"] {
-  --bg: #F3EFE8; --cell: #FFFDF9; --label: #000000; --secondary: rgba(70, 58, 48, 0.62); --tertiary: rgba(70, 58, 48, 0.3);
-  --fill: rgba(120, 100, 80, 0.1); --separator: rgba(90, 70, 50, 0.16); --material: rgba(255, 253, 249, 0.75); --material-thin: rgba(255, 253, 249, 0.55);
-  --bar: rgba(246, 242, 235, 0.82); --segment: #FFFDF9; --accent: #1C6E66; --accent-ink: #1C6E66; --accent-soft: rgba(28, 110, 102, 0.15);
+  --bg: #D9DBDC; --cell: #F3F4F4; --label: #1C1F22; --secondary: rgba(28, 31, 34, 0.62); --tertiary: rgba(28, 31, 34, 0.32);
+  --fill: rgba(28, 31, 34, 0.08); --separator: rgba(28, 31, 34, 0.14); --material: rgba(243, 244, 244, 0.8); --material-thin: rgba(243, 244, 244, 0.6);
+  --bar: rgba(217, 219, 220, 0.85); --segment: #F3F4F4; --accent: #1C6E66; --accent-ink: #1C6E66; --accent-soft: rgba(28, 110, 102, 0.15);
 }
 @media (prefers-color-scheme: dark) {
   :root[data-style="cover"]:not([data-theme="light"]), :root[data-style="fokus"]:not([data-theme="light"]) {
-    --bg: #181512; --cell: #24201C; --label: #FFFFFF; --secondary: rgba(240, 232, 222, 0.62); --tertiary: rgba(240, 232, 222, 0.3);
-    --fill: rgba(200, 180, 160, 0.14); --separator: rgba(200, 180, 160, 0.18); --material: rgba(40, 35, 30, 0.72); --material-thin: rgba(40, 35, 30, 0.55);
-    --bar: rgba(28, 25, 22, 0.82); --segment: #4A433B; --accent: #2E9D8F; --accent-ink: #5EC4B6; --accent-soft: rgba(46, 157, 143, 0.2);
+    --bg: #131415; --cell: #202224; --label: #E9EBEC; --secondary: rgba(233, 235, 236, 0.62); --tertiary: rgba(233, 235, 236, 0.32);
+    --fill: rgba(233, 235, 236, 0.08); --separator: rgba(233, 235, 236, 0.14); --material: rgba(32, 34, 36, 0.8); --material-thin: rgba(32, 34, 36, 0.6);
+    --bar: rgba(19, 20, 21, 0.85); --segment: #3A3D40; --accent: #2E9D8F; --accent-ink: #5EC4B6; --accent-soft: rgba(46, 157, 143, 0.2);
   }
 }
 :root[data-style="cover"][data-theme="dark"], :root[data-style="fokus"][data-theme="dark"] {
-  --bg: #181512; --cell: #24201C; --label: #FFFFFF; --secondary: rgba(240, 232, 222, 0.62); --tertiary: rgba(240, 232, 222, 0.3);
-  --fill: rgba(200, 180, 160, 0.14); --separator: rgba(200, 180, 160, 0.18); --material: rgba(40, 35, 30, 0.72); --material-thin: rgba(40, 35, 30, 0.55);
-  --bar: rgba(28, 25, 22, 0.82); --segment: #4A433B; --accent: #2E9D8F; --accent-ink: #5EC4B6; --accent-soft: rgba(46, 157, 143, 0.2);
+  --bg: #131415; --cell: #202224; --label: #E9EBEC; --secondary: rgba(233, 235, 236, 0.62); --tertiary: rgba(233, 235, 236, 0.32);
+  --fill: rgba(233, 235, 236, 0.08); --separator: rgba(233, 235, 236, 0.14); --material: rgba(32, 34, 36, 0.8); --material-thin: rgba(32, 34, 36, 0.6);
+  --bar: rgba(19, 20, 21, 0.85); --segment: #3A3D40; --accent: #2E9D8F; --accent-ink: #5EC4B6; --accent-soft: rgba(46, 157, 143, 0.2);
 }
 
-/* Fælles for de tre stile: overskrifter med fødder (Apples New York), lidt rundere grupper. */
+/* Fælles for de tre stile: smalle, fede overskrifter som skillekortet (systemets smalle skrift, Bahnschrift på Windows). */
 :root[data-style] .large-title, :root[data-style] .welcome h2, :root[data-style] .record-head .title, :root[data-style] .group-title.big {
-  font-family: ui-serif, "New York", Georgia, serif; font-weight: 600; letter-spacing: 0;
+  font-family: Bahnschrift, system-ui, -apple-system, sans-serif; font-stretch: condensed; font-weight: 700; letter-spacing: -0.01em;
 }
-:root[data-style] { --radius: 14px; }
+:root[data-style] { --radius: 10px; }
 
 /* Farve fra coveret: hele pladeskærmen farves af coveret (sløret), som i Apple Music. */
 :root[data-style="cover"] .backdrop img { filter: blur(60px) saturate(1.5); opacity: 1; }
-:root[data-style="cover"] .backdrop::after { background: rgba(255, 253, 249, 0.5); opacity: 1; }
+:root[data-style="cover"] .backdrop::after { background: rgba(243, 244, 244, 0.5); opacity: 1; }
 @media (prefers-color-scheme: dark) { :root[data-style="cover"]:not([data-theme="light"]) .backdrop::after { background: rgba(0, 0, 0, 0.5); } }
 :root[data-style="cover"][data-theme="dark"] .backdrop::after { background: rgba(0, 0, 0, 0.5); }
 

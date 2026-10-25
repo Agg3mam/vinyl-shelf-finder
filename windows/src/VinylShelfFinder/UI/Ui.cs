@@ -138,7 +138,6 @@ public static class Ui
 
     /// <summary>Den valgte stil (Indstillinger › Udseende). Sættes af MainWindow.ApplyLook.</summary>
     public static LookStyle Style { get; set; } = LookStyle.Standard;
-    private static readonly FontFamily SerifFont = new("Georgia");
 
     public static TextBlock Text(string text, string style = "BodyTextBlockStyle", Brush? color = null, bool wrap = true,
                                  int maxLines = 0, Windows.UI.Text.FontWeight? weight = null, double? size = null)
@@ -153,8 +152,12 @@ public static class Ui
             MaxLines = maxLines,
             IsTextSelectionEnabled = false,
         };
-        // Overskrifter med fødder i de varme stile (som Mac, telefonen og webappen).
-        if (Style.SerifTitles() && style is "TitleTextBlockStyle" or "TitleLargeTextBlockStyle" or "DisplayTextBlockStyle") t.FontFamily = SerifFont;
+        // Smalle overskrifter som skillekortet i stilene (som Mac, telefonen og webappen).
+        if (Style.CondensedTitles() && style is "TitleTextBlockStyle" or "TitleLargeTextBlockStyle" or "DisplayTextBlockStyle")
+        {
+            t.FontFamily = Condensed;
+            t.FontStretch = Windows.UI.Text.FontStretch.Condensed;
+        }
         if (color is not null) t.Foreground = color;
         if (weight is Windows.UI.Text.FontWeight w) t.FontWeight = w;
         if (size is double s) t.FontSize = s;

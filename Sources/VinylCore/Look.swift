@@ -30,7 +30,7 @@ public enum LookStyle: String, CaseIterable, Sendable, Identifiable {
     public var name: String {
         switch self {
         case .standard: "Standard"
-        case .kasse: "Pladekasse"
+        case .kasse: "Hi-fi"
         case .cover: "Farve fra coveret"
         case .fokus: "Covers i fokus"
         }
@@ -39,9 +39,9 @@ public enum LookStyle: String, CaseIterable, Sendable, Identifiable {
     public var note: String {
         switch self {
         case .standard: "Rent og enkelt, som Apples egne apps"
-        case .kasse: "Varm benhvid som pap og papir, rustfarvede knapper"
-        case .cover: "Varm papirfarve. Pladeskærmen farves af coveret"
-        case .fokus: "Varm papirfarve. Store covers på pladeskærmen og i listerne"
+        case .kasse: "Børstet aluminium og signalrøde knapper, som en forstærker"
+        case .cover: "Lys aluminium. Pladeskærmen farves af coveret"
+        case .fokus: "Lys aluminium. Store covers på pladeskærmen og i listerne"
         }
     }
 
@@ -49,15 +49,15 @@ public enum LookStyle: String, CaseIterable, Sendable, Identifiable {
     public var palette: (light: LookColors, dark: LookColors)? {
         switch self {
         case .standard: nil
-        case .kasse: (LookColors(background: 0xEAE2D3, cell: 0xF8F4EC, label: 0x221C15, accent: 0xA9572A, accentInk: 0x94491F),
-                      LookColors(background: 0x16130F, cell: 0x24201A, label: 0xEEE6D8, accent: 0xC2703D, accentInk: 0xE9A273))
-        case .cover, .fokus: (LookColors(background: 0xF3EFE8, cell: 0xFFFDF9, label: 0x000000, accent: 0x1C6E66, accentInk: 0x1C6E66),
-                              LookColors(background: 0x181512, cell: 0x24201C, label: 0xFFFFFF, accent: 0x2E9D8F, accentInk: 0x5EC4B6))
+        case .kasse: (LookColors(background: 0xD9DBDC, cell: 0xF3F4F4, label: 0x1C1F22, accent: 0xB8321C, accentInk: 0xA02A16),
+                      LookColors(background: 0x131415, cell: 0x202224, label: 0xE9EBEC, accent: 0xD4442B, accentInk: 0xFF8A73))
+        case .cover, .fokus: (LookColors(background: 0xD9DBDC, cell: 0xF3F4F4, label: 0x1C1F22, accent: 0x1C6E66, accentInk: 0x1C6E66),
+                              LookColors(background: 0x131415, cell: 0x202224, label: 0xE9EBEC, accent: 0x2E9D8F, accentInk: 0x5EC4B6))
         }
     }
 
-    /// Overskrifter med fødder (Apples New York / Georgia).
-    public var serifTitles: Bool { self != .standard }
+    /// Smalle, fede overskrifter som på skillekortet (systemets smalle skrift, Bahnschrift på Windows).
+    public var condensedTitles: Bool { self != .standard }
     /// Større covers på pladeskærmen og i listerne.
     public var bigCovers: Bool { self == .fokus }
     /// Pladeskærmen farves kraftigere af coveret.
@@ -67,9 +67,9 @@ public enum LookStyle: String, CaseIterable, Sendable, Identifiable {
     public var swatch: [UInt32] {
         switch self {
         case .standard: [0xF2F2F7, 0xFFFFFF, 0x1C6E66]
-        case .kasse: [0xEAE2D3, 0x16130F, 0xA9572A]
-        case .cover: [0xF3EFE8, 0x6E2F45, 0xE58C6A]
-        case .fokus: [0xF3EFE8, 0xFFFDF9, 0x8A7560]
+        case .kasse: [0xD9DBDC, 0x131415, 0xB8321C]
+        case .cover: [0xD9DBDC, 0x6E2F45, 0xE58C6A]
+        case .fokus: [0xD9DBDC, 0xF3F4F4, 0x8A7560]
         }
     }
 }

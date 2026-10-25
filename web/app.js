@@ -1167,9 +1167,9 @@ const LOOK_THEMES = [
 ];
 const LOOK_STYLES = [
   { id: "", name: "Standard", note: "Rent og enkelt, som iPhones egne apps", swatch: ["#F2F2F7", "#FFFFFF", "#1C6E66"] },
-  { id: "kasse", name: "Pladekasse", note: "Varm benhvid som pap og papir, rustfarvede knapper", swatch: ["#EAE2D3", "#16130F", "#A9572A"] },
-  { id: "cover", name: "Farve fra coveret", note: "Varm papirfarve. Pladeskærmen farves af coveret", swatch: ["#F3EFE8", "#6E2F45", "#E58C6A"] },
-  { id: "fokus", name: "Covers i fokus", note: "Varm papirfarve. Store covers på pladeskærmen og i listerne", swatch: ["#F3EFE8", "#FFFDF9", "#8A7560"] },
+  { id: "kasse", name: "Hi-fi", note: "Børstet aluminium og signalrøde knapper, som en forstærker", swatch: ["#D9DBDC", "#131415", "#B8321C"] },
+  { id: "cover", name: "Farve fra coveret", note: "Lys aluminium. Pladeskærmen farves af coveret", swatch: ["#D9DBDC", "#6E2F45", "#E58C6A"] },
+  { id: "fokus", name: "Covers i fokus", note: "Lys aluminium. Store covers på pladeskærmen og i listerne", swatch: ["#D9DBDC", "#F3F4F4", "#8A7560"] },
 ];
 const look = { theme: safeLocal.get("theme") ?? "", style: safeLocal.get("style") ?? "" };
 if (!LOOK_THEMES.some((x) => x.id === look.theme)) look.theme = "";
