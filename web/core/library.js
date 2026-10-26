@@ -63,6 +63,7 @@ export function shelfOf(override, format) {
 
 export const STATUS = {
   home: { label: "På plads", icon: "house" },
+  playing: { label: "På pladespilleren", icon: "note" },
   wall: { label: "På væggen", icon: "frame" },
   lent: { label: "Udlånt", icon: "person" },
   stored: { label: "Opbevaret andet sted", icon: "box" },
@@ -75,6 +76,7 @@ export const isOnShelf = (item) => item.copy.status === "home";
 export function awayMessage(item) {
   const note = (item.copy.statusNote ?? "").trim();
   switch (item.copy.status) {
+    case "playing": return "På pladespilleren – står ikke i reolen";
     case "wall": return "Hænger på væggen – står ikke i reolen";
     case "lent": return note ? `Udlånt til ${note} – står ikke i reolen` : "Udlånt – står ikke i reolen";
     case "stored": return note ? `Opbevaret andet sted (${note}) – står ikke i reolen` : "Opbevaret andet sted – står ikke i reolen";

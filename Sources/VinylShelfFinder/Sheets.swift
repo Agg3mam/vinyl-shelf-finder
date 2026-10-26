@@ -48,7 +48,9 @@ struct FindModeView: View {
                         found: { choice in
                             dismiss()
                             switch choice {
-                            case .listening: model.logPlay(copyID)
+                            case .listening:
+                                model.logPlay(copyID)
+                                model.setStatus(copyID, .playing)
                             case .wall: model.setStatus(copyID, .wall)
                             case .lent, .stored:
                                 // Navn eller sted spørges der om i hovedvinduet, når arket er lukket.
@@ -396,7 +398,7 @@ private struct FindActions: View {
                         Button("Den bliver i reolen") { found(.stays) }
                         Button("Annullér", role: .cancel) {}
                     } message: {
-                        Text("\"Jeg lytter til den\" registrerer pladen som spillet.")
+                        Text("\"Jeg lytter til den\" registrerer pladen som spillet og lægger den under Ude af reolen, til du sætter den på plads.")
                     }
                 switch mode {
                 case .found: foundButtons

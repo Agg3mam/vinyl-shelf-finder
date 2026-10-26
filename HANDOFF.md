@@ -602,6 +602,9 @@ projektet med egen konto (RLS adskiller data), men hver skal have sit eget Disco
   (`percentHint` i kernen, checks på alle tre sprog). "Fundet" i Find spørger: Jeg lytter til den (`logPlay`), Den kommer på
   væggen, Jeg låner den ud …, Den skal et andet sted hen … (navn/sted som i dag) eller Den bliver i reolen. Mac: dialog;
   Windows: menu på knappen.
+- **26. okt: status "På pladespilleren"** (`CopyStatus.playing`/`Playing`, `"playing"` i databasen og synk). "Jeg lytter til
+  den" registrerer spillet og sætter statussen, så pladen står under Ude af reolen og sættes tilbage med guiden. Ældre
+  versioner kender den ikke og læser den som "home" (Swift `?? .home`, C# `FromRaw` → null, web `statusOf`).
 - **Mac, Windows og iPhone (20. okt, senere):** samme indstilling. Fælles `LookStyle`/`LookTheme` i `VinylCore` (`Look.swift`,
   `Look.cs`); Swift-checken sammenligner farverne med `web/app.css`. Mac: `AppAccent.style` (læses af de dynamiske farver),
   `LookBackground`, `AppModel.lookTheme/lookStyle` (UserDefaults `look_theme`/`look_style`), fanen Udseende, snapshots

@@ -355,6 +355,7 @@ extension CopyStatus {
     var symbol: String {
         switch self {
         case .home: return "house.fill"
+        case .playing: return "music.note"
         case .wall: return "photo.artframe"
         case .stored: return "shippingbox.fill"
         case .lent: return "person.fill"
@@ -371,6 +372,7 @@ extension RecordItem {
         let hasNote = !(note ?? "").isEmpty
         switch copy.status {
         case .home: return nil
+        case .playing: return "På pladespilleren – står ikke i reolen"
         case .wall: return "Hænger på væggen – står ikke i reolen"
         case .lent: return hasNote ? "Udlånt til \(note!) – står ikke i reolen" : "Udlånt – står ikke i reolen"
         case .stored: return hasNote ? "Opbevaret andet sted (\(note!)) – står ikke i reolen" : "Opbevaret andet sted – står ikke i reolen"

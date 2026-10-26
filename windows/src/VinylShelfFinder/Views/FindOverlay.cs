@@ -252,7 +252,7 @@ public sealed class FindOverlay
                 item.Click += (_, _) => { Close(); act(); };
                 menu.Items.Add(item);
             }
-            Choice("Jeg lytter til den", () => _model.LogPlay(id));
+            Choice("Jeg lytter til den", () => { _model.LogPlay(id); _model.SetStatus(id, CopyStatus.Playing); });
             Choice("Den kommer på væggen", () => _model.SetStatus(id, CopyStatus.Wall));
             Choice("Jeg låner den ud …", () => _model.ChooseStatus(id, CopyStatus.Lent));
             Choice("Den skal et andet sted hen …", () => _model.ChooseStatus(id, CopyStatus.Stored));

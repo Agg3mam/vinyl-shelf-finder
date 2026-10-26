@@ -199,6 +199,7 @@ public struct ShelfKind: Hashable, Identifiable {
 /// men tæller ikke med i reolens fysiske nummerering, før den er sat tilbage.
 public enum CopyStatus: String, CaseIterable, Identifiable {
     case home       // På plads
+    case playing    // På pladespilleren ("Jeg lytter til den" efter Find). Ældre versioner læser den som "home".
     case wall       // På væggen (fx hængt op som udstilling)
     case lent       // Udlånt
     case stored     // Opbevaret andet sted
@@ -209,6 +210,7 @@ public enum CopyStatus: String, CaseIterable, Identifiable {
     public var label: String {
         switch self {
         case .home: return "På plads"
+        case .playing: return "På pladespilleren"
         case .wall: return "På væggen"
         case .stored: return "Opbevaret andet sted"
         case .lent: return "Udlånt"
@@ -219,6 +221,7 @@ public enum CopyStatus: String, CaseIterable, Identifiable {
     public var emoji: String {
         switch self {
         case .home: return "🏠"
+        case .playing: return "🎶"
         case .wall: return "🖼"
         case .stored: return "📦"
         case .lent: return "👤"

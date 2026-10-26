@@ -1237,8 +1237,11 @@ static class DataChecks
     {
         Check.That(CopyStatus.Wall.RawValue() == "wall" && CopyStatus.Wall.Label() == "På væggen" && !CopyStatus.Wall.IsOnShelf(),
                    "På væggen: rawValue, label og står ikke i reolen");
-        Check.That(CopyStatusExtensions.All.SequenceEqual(new[] { CopyStatus.Home, CopyStatus.Wall, CopyStatus.Lent, CopyStatus.Stored, CopyStatus.Missing }),
+        Check.That(CopyStatusExtensions.All.SequenceEqual(new[] { CopyStatus.Home, CopyStatus.Playing, CopyStatus.Wall, CopyStatus.Lent, CopyStatus.Stored, CopyStatus.Missing }),
                    "rækkefølge af statusser");
+        Check.That(CopyStatus.Playing.RawValue() == "playing" && CopyStatusExtensions.FromRaw("playing") == CopyStatus.Playing
+                   && CopyStatus.Playing.Label() == "På pladespilleren" && !CopyStatus.Playing.IsOnShelf(),
+                   "På pladespilleren: rawValue, label og står ikke i reolen");
         Check.That(CopyStatusExtensions.All.Where(x => x.IsOnShelf()).SequenceEqual(new[] { CopyStatus.Home }), "kun På plads tæller som i reolen");
 
         using var s = new ShelfStore(TempDb("wall"));

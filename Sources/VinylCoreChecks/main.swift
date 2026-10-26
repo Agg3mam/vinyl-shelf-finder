@@ -712,7 +712,9 @@ func physicalSweep(_ base: Library, out: [Int64]) -> [String] {
 do {
     check(CopyStatus.wall.rawValue == "wall" && CopyStatus.wall.label == "På væggen" && !CopyStatus.wall.isOnShelf && CopyStatus.wall.emoji == "🖼",
           "På væggen: rawValue, label, emoji og står ikke i reolen")
-    check(CopyStatus.allCases == [.home, .wall, .lent, .stored, .missing], "rækkefølge af statusser: \(CopyStatus.allCases.map(\.rawValue))")
+    check(CopyStatus.allCases == [.home, .playing, .wall, .lent, .stored, .missing], "rækkefølge af statusser: \(CopyStatus.allCases.map(\.rawValue))")
+    check(CopyStatus(rawValue: "playing") == .playing && CopyStatus.playing.label == "På pladespilleren" && !CopyStatus.playing.isOnShelf,
+          "På pladespilleren: rawValue, label og står ikke i reolen")
     check(CopyStatus.allCases.filter(\.isOnShelf) == [.home], "kun På plads tæller som i reolen")
 
     let (s, url) = try freshStore("wall")

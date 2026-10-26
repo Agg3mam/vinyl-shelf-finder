@@ -265,6 +265,7 @@ extension RecordItem {
         let note = copy.statusNote?.trimmingCharacters(in: .whitespaces) ?? ""
         switch copy.status {
         case .home: return nil
+        case .playing: return "På pladespilleren – står ikke i reolen"
         case .wall: return "Hænger på væggen – står ikke i reolen"
         case .lent: return note.isEmpty ? "Udlånt – står ikke i reolen" : "Udlånt til \(note) – står ikke i reolen"
         case .stored: return note.isEmpty ? "Opbevaret andet sted – står ikke i reolen" : "Opbevaret andet sted (\(note)) – står ikke i reolen"

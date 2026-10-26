@@ -193,16 +193,18 @@ public readonly record struct ShelfKind(Medium Medium, Category? Category = null
 /// Pladens fysiske status. Gemmes som tekst (RawValue) i copies.status, som på Mac.
 /// Alle andre end Home er "ude af reolen": pladen beholder sin plads i placements,
 /// men tæller ikke med i reolens fysiske nummerering, før den er sat tilbage.
-public enum CopyStatus { Home, Wall, Lent, Stored, Missing }
+public enum CopyStatus { Home, Playing, Wall, Lent, Stored, Missing }
 
 public static class CopyStatusExtensions
 {
-    public static readonly CopyStatus[] All = { CopyStatus.Home, CopyStatus.Wall, CopyStatus.Lent, CopyStatus.Stored, CopyStatus.Missing };
+    public static readonly CopyStatus[] All = { CopyStatus.Home, CopyStatus.Playing, CopyStatus.Wall, CopyStatus.Lent, CopyStatus.Stored, CopyStatus.Missing };
 
-    /// Teksten i databasen: "home", "wall", "lent", "stored", "missing".
+    /// Teksten i databasen: "home", "playing", "wall", "lent", "stored", "missing".
+    /// "playing" (på pladespilleren) læses som "home" af ældre versioner.
     public static string RawValue(this CopyStatus s) => s switch
     {
         CopyStatus.Home => "home",
+        CopyStatus.Playing => "playing",
         CopyStatus.Wall => "wall",
         CopyStatus.Lent => "lent",
         CopyStatus.Stored => "stored",
@@ -212,6 +214,7 @@ public static class CopyStatusExtensions
     public static CopyStatus? FromRaw(string? raw) => raw switch
     {
         "home" => CopyStatus.Home,
+        "playing" => CopyStatus.Playing,
         "wall" => CopyStatus.Wall,
         "lent" => CopyStatus.Lent,
         "stored" => CopyStatus.Stored,
@@ -222,6 +225,7 @@ public static class CopyStatusExtensions
     public static string Label(this CopyStatus s) => s switch
     {
         CopyStatus.Home => "På plads",
+        CopyStatus.Playing => "På pladespilleren",
         CopyStatus.Wall => "På væggen",
         CopyStatus.Stored => "Opbevaret andet sted",
         CopyStatus.Lent => "Udlånt",

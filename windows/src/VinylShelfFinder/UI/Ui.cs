@@ -66,6 +66,7 @@ public static class Ui
     public static string StatusGlyph(this CopyStatus s) => s switch
     {
         CopyStatus.Home => Glyph.Home,
+        CopyStatus.Playing => Glyph.Music,
         CopyStatus.Wall => Glyph.Photo,
         CopyStatus.Stored => Glyph.Package,
         CopyStatus.Lent => Glyph.Person,
@@ -96,6 +97,7 @@ public static class Ui
         return it.Copy.Status switch
         {
             CopyStatus.Home => null,
+            CopyStatus.Playing => "På pladespilleren – står ikke i reolen",
             CopyStatus.Wall => "Hænger på væggen – står ikke i reolen",
             CopyStatus.Lent => has ? $"Udlånt til {note} – står ikke i reolen" : "Udlånt – står ikke i reolen",
             CopyStatus.Stored => has ? $"Opbevaret andet sted ({note}) – står ikke i reolen" : "Opbevaret andet sted – står ikke i reolen",

@@ -85,7 +85,7 @@ const ICONS = {
   share: '<path d="M12 3v12M8 7l4-4 4 4M5 12v7a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-7"/>',
 };
 const icon = (name, extra = "") => `<svg class="i ${extra}" viewBox="0 0 24 24" aria-hidden="true">${ICONS[name]}</svg>`;
-const STATUS_ICON = { home: "house", wall: "frame", lent: "person", stored: "box", missing: "dashed" };
+const STATUS_ICON = { home: "house", playing: "note", wall: "frame", lent: "person", stored: "box", missing: "dashed" };
 
 /** Cover. Uden billede: et blankt omslag i kunstnerens faste farve med forbogstaverne (som på Mac). */
 function cover(url, cls = "", release = null) {

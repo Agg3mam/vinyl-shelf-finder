@@ -14,6 +14,7 @@ Hvad hver app kan. Målet er ✅ i begge kolonner. Opdatér tabellen i samme com
 | Historik med Fortryd | ✅ | ✅ | |
 | "ca. 45 % inde" ved "Nr. 7 af 15 fra venstre" | ✅ | ✅ | `Library.percentFromLeft`/`PercentFromLeft`/`percentFromLeft` (midten af pladen, rundet til 5, mellem 5 og 95), fælles checks. Også på iPhone og i webappen |
 | "Fundet" spørger, hvad der sker med pladen (lytter, på væggen, udlånt, andet sted, bliver i reolen) | ✅ | ✅ | Mac: dialog (`confirmationDialog`). Windows: menu på knappen. iPhone og webappen har ingen "Fundet" (de har "Spillet") |
+| Status "På pladespilleren" (`playing`): "Jeg lytter til den" registrerer spillet og lægger pladen under Ude af reolen | ✅ | ✅ | Sættes tilbage med den almindelige guide. Ældre versioner læser `playing` som "home". iPhone og webappen viser statussen |
 | Hvad skal jeg høre? / Lyttelog | ✅ | ✅ | |
 | Værdi (estimat og markedsdata) | ✅ | ✅ | |
 | Find nye plader, Discogs-vindue, ønskeliste | ✅ | ✅ | |

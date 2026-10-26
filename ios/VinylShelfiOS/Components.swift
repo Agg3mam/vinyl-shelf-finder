@@ -189,6 +189,7 @@ extension CopyStatus {
     var symbol: String {
         switch self {
         case .home: "house.fill"
+        case .playing: "music.note"
         case .wall: "photo.artframe"
         case .stored: "shippingbox.fill"
         case .lent: "person.fill"
