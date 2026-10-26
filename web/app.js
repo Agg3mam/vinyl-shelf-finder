@@ -3,7 +3,7 @@
 // så appen virker uden net. Webappen ændrer aldrig reolerne; den skriver kun "Spillet".
 
 import { buildLibraries, MEDIA, MEDIUM, STATUS, isOnShelf, locationName, shortName, fullName, pressingLine, awayMessage,
-  FRESHNESS, genres, decades, candidates, pick, noMatchMessage, sortList } from "./core/library.js";
+  FRESHNESS, genres, decades, candidates, pick, noMatchMessage, sortList, percentHint } from "./core/library.js";
 import { mountCoverFlow } from "./coverflow.js";
 import { haptic } from "./haptics.js";
 import * as cloud from "./core/cloud.js";
@@ -950,7 +950,7 @@ function recordPage(uid, trackParam) {
         <div class="eyebrow">${away ? "Her plejer den at stå" : "Gå til"}</div>
         <div class="divider"><span class="tab">${esc(loc.section)}</span><span class="names"><span class="shelf">${esc(MEDIUM[loc.medium].shelfWord)} ${loc.shelf}</span><span class="sec">Sektion ${esc(loc.section)}</span></span></div>
         <svg class="spines" data-position="${position}" data-count="${n.sectionCount}" role="img" aria-label="Plade ${position} af ${n.sectionCount} i sektionen"></svg>
-        <div class="hint">${esc(hint)}</div>
+        <div class="hint">${esc(hint)}<span class="pct">${esc(percentHint(position, n.sectionCount))}</span></div>
       </section>
       ${away ? `<div class="away-line">${icon(STATUS_ICON[item.copy.status])}<span>${esc(STATUS[item.copy.status].label)}${item.copy.statusNote ? `: ${esc(item.copy.statusNote)}` : ""}</span></div>` : ""}
       ${refCard("Start ved", adv.primary)}

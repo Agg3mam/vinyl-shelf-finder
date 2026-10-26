@@ -1591,6 +1591,10 @@ static class DataChecks
                    "lykkehjul: mindst 1,3 s og højst 2,7 s");
         Check.That(CoverFlowGeometry.EaseOut(0) == 0 && CoverFlowGeometry.EaseOut(1) == 1 && Math.Abs(CoverFlowGeometry.EaseOut(0.5) - 0.9375) < 0.0001 && CoverFlowGeometry.EaseOut(2) == 1,
                    "lykkehjul: kurven starter hurtigt og bremser op");
+        // Procent inde i sektionen (samme tal som Mac og webappen).
+        Check.That(string.Join(",", new[] { (1, 1), (1, 15), (7, 15), (15, 15), (2, 4), (1, 200), (0, 3), (5, 0) }.Select(x => Library.PercentFromLeft(x.Item1, x.Item2)))
+                   == "50,5,45,95,40,5,15,50" && Library.PercentHint(7, 15) == "ca. 45 % inde",
+                   "procent inde: midten af pladen, rundet til 5, mellem 5 og 95");
         // Udseende: samme stile og farver som Mac og webappen (Look.swift, web/app.css).
         Check.That(string.Join(",", Enum.GetValues<LookStyle>().Select(x => x.Id())) == ",kasse,cover,fokus" && Look.StyleFrom("fokus") == LookStyle.Fokus
                    && Look.StyleFrom("ukendt") == LookStyle.Standard && Look.ThemeFrom("dark") == LookTheme.Dark && Look.ThemeFrom(null) == LookTheme.Auto,

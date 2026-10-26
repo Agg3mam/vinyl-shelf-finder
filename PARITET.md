@@ -12,6 +12,8 @@ Hvad hver app kan. Målet er ✅ i begge kolonner. Opdatér tabellen i samme com
 | Cover Flow | ✅ | ✅ | Hvid baggrund i lys tilstand og sort i mørk (ikke tonet efter coveret). Træk med musen eller fingeren; et kraftigt stryg fortsætter med farten og bremser op (`CoverFlowGeometry.fling`, fælles checks). Mac: også trackpad. Windows: touchpad flytter én plade ad gangen (Windows giver ingen besked, når fingrene løftes). Også på iPhone og i webappen |
 | Lykkehjul i "Hvad skal jeg høre?" | ✅ | ✅ | Højre kolonne er hele reolen som Cover Flow, der snurrer hen til forslaget og popper (`spinDuration`, `easeOut`). Forslaget i midterkolonnen vises først, når hjulet er landet |
 | Historik med Fortryd | ✅ | ✅ | |
+| "ca. 45 % inde" ved "Nr. 7 af 15 fra venstre" | ✅ | ✅ | `Library.percentFromLeft`/`PercentFromLeft`/`percentFromLeft` (midten af pladen, rundet til 5, mellem 5 og 95), fælles checks. Også på iPhone og i webappen |
+| "Fundet" spørger, hvad der sker med pladen (lytter, på væggen, udlånt, andet sted, bliver i reolen) | ✅ | ✅ | Mac: dialog (`confirmationDialog`). Windows: menu på knappen. iPhone og webappen har ingen "Fundet" (de har "Spillet") |
 | Hvad skal jeg høre? / Lyttelog | ✅ | ✅ | |
 | Værdi (estimat og markedsdata) | ✅ | ✅ | |
 | Find nye plader, Discogs-vindue, ønskeliste | ✅ | ✅ | |

@@ -242,7 +242,23 @@ public sealed class FindOverlay
         }
         else
         {
-            primary = Ui.Btn("Fundet", (_, _) => Close(), Ui.Glyph.Check, accent: true);
+            // "Fundet" spørger, hvad der sker med pladen nu (samme valg som på Mac, FindActions i Sheets.swift).
+            primary = Ui.Btn("Fundet", (_, _) => { }, Ui.Glyph.Check, accent: true, tooltip: "Fortæl, hvad der sker med pladen nu (Enter)");
+            var id = it.Id;
+            var menu = new MenuFlyout { Placement = Microsoft.UI.Xaml.Controls.Primitives.FlyoutPlacementMode.TopEdgeAlignedRight };
+            void Choice(string text, Action act)
+            {
+                var item = new MenuFlyoutItem { Text = text };
+                item.Click += (_, _) => { Close(); act(); };
+                menu.Items.Add(item);
+            }
+            Choice("Jeg lytter til den", () => _model.LogPlay(id));
+            Choice("Den kommer på væggen", () => _model.SetStatus(id, CopyStatus.Wall));
+            Choice("Jeg låner den ud …", () => _model.ChooseStatus(id, CopyStatus.Lent));
+            Choice("Den skal et andet sted hen …", () => _model.ChooseStatus(id, CopyStatus.Stored));
+            menu.Items.Add(new MenuFlyoutSeparator());
+            Choice("Den bliver i reolen", () => { });
+            primary.Flyout = menu;
         }
         primary.KeyboardAccelerators.Add(new KeyboardAccelerator { Key = VirtualKey.Enter });
         p.Children.Add(primary);

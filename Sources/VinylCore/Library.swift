@@ -198,6 +198,20 @@ public struct Library {
         public let reason: String
     }
 
+    /// Hvor langt inde i sektionen pladen står, set fra venstre: midten af pladen i procent, rundet til nærmeste 5
+    /// og holdt mellem 5 og 95 (en plade alene står midt i: 50). Samme formel på Windows og i webappen.
+    public static func percentFromLeft(position: Int, count: Int) -> Int {
+        guard count > 0 else { return 50 }
+        let p = min(max(position, 1), count)
+        let raw = Double(2 * p - 1) / Double(2 * count) * 100
+        return min(max(Int((raw / 5).rounded()) * 5, 5), 95)
+    }
+
+    /// "ca. 45 % inde" (vises ved "Nr. 7 af 15 fra venstre").
+    public static func percentHint(position: Int, count: Int) -> String {
+        "ca. \(percentFromLeft(position: position, count: count)) % inde"
+    }
+
     public struct ReferenceAdvice {
         public let primary: Reference
         public let secondary: Reference?

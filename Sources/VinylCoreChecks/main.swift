@@ -1581,6 +1581,10 @@ do {
           "lykkehjul: mindst 1,3 s og højst 2,7 s")
     check(G.easeOut(0) == 0 && G.easeOut(1) == 1 && abs(G.easeOut(0.5) - 0.9375) < 0.0001 && G.easeOut(2) == 1,
           "lykkehjul: kurven starter hurtigt og bremser op")
+    // Procent inde i sektionen (samme tal på Windows og i webappen).
+    check([(1, 1), (1, 15), (7, 15), (15, 15), (2, 4), (1, 200), (0, 3), (5, 0)].map { Library.percentFromLeft(position: $0.0, count: $0.1) }
+          == [50, 5, 45, 95, 40, 5, 15, 50] && Library.percentHint(position: 7, count: 15) == "ca. 45 % inde",
+          "procent inde: midten af pladen, rundet til 5, mellem 5 og 95")
     // Udseende: samme stile og farver som webappen (web/app.css).
     check(LookStyle.allCases.map(\.rawValue) == ["", "kasse", "cover", "fokus"] && LookTheme.allCases.map(\.rawValue) == ["", "light", "dark"],
           "udseende: samme stile og temaer som webappen")

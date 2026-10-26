@@ -2,7 +2,7 @@
 // Køres med JavaScriptCore (samme motor som Safari på iPhone) af web/checks/run.sh:
 //   jsc -m web/checks/checks.mjs -- <facit.json fra dump/main.swift>
 
-import { buildLibraries, mediumOf, shelfOf, MEDIA, MEDIUM, parseRules, sortList } from "../core/library.js";
+import { buildLibraries, mediumOf, shelfOf, MEDIA, MEDIUM, parseRules, sortList, percentFromLeft, percentHint } from "../core/library.js";
 import { normalize } from "../core/search.js";
 import { sessionFromHash } from "../core/cloud.js";
 
@@ -25,6 +25,10 @@ const norm = (x) => JSON.stringify(x, (k, v) => (v && typeof v === "object" && !
   ? Object.fromEntries(Object.keys(v).sort().map((q) => [q, v[q]])) : v));
 
 const { libraries } = buildLibraries(want.records);
+
+// Procent inde i sektionen (samme tal som Library.swift).
+check(JSON.stringify([[1, 1], [1, 15], [7, 15], [15, 15], [2, 4], [1, 200], [0, 3], [5, 0]].map(([p, c]) => percentFromLeft(p, c)))
+  === "[50,5,45,95,40,5,15,50]" && percentHint(7, 15) === "ca. 45 % inde", "procent inde: midten af pladen, rundet til 5, mellem 5 og 95");
 
 // Søgning: samme top-20 som Swift for hver søgning (plader først, så cd'er).
 let same = 0;

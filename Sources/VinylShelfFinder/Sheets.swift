@@ -45,6 +45,20 @@ struct FindModeView: View {
             }
             Spacer(minLength: 0)
             FindActions(mode: actionMode(item), dismiss: { dismiss() },
+                        found: { choice in
+                            dismiss()
+                            switch choice {
+                            case .listening: model.logPlay(copyID)
+                            case .wall: model.setStatus(copyID, .wall)
+                            case .lent, .stored:
+                                // Navn eller sted spørges der om i hovedvinduet, når arket er lukket.
+                                Task { @MainActor in
+                                    try? await Task.sleep(for: .milliseconds(400))
+                                    model.chooseStatus(copyID, choice == .lent ? .lent : .stored)
+                                }
+                            case .stays: break
+                            }
+                        },
                         startPutBack: { withAnimation(Motion.state(reduceMotion)) { switchedToPutBack = true } },
                         confirmPutBack: {
                             model.finishReturn(copyID)
@@ -283,7 +297,7 @@ private struct LocationPanel: View {
                 .contentTransition(.opacity)
             PlacementLine(location: location, tone: tone)
             ShelfSpines(position: position, count: count, accent: DividerColors(location: location, tone: tone).fill)
-            PlacementCount(text: hint)
+            PlacementCount(text: hint, percent: Library.percentHint(position: position, count: count))
         }
         .padding(Spacing.panelInset)
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -361,8 +375,12 @@ private struct FindActions: View {
         /// "Sæt tilbage"-guiden: "Sat på plads" registrerer pladen som hjemme.
         case putBack
     }
+    /// Efter "Fundet": hvad der sker med pladen nu (samme valg på Windows, FindOverlay.cs).
+    enum FoundChoice { case listening, wall, lent, stored, stays }
+
     let mode: Mode
     let dismiss: () -> Void
+    let found: (FoundChoice) -> Void
     let startPutBack: () -> Void
     let confirmPutBack: () -> Void
 
@@ -370,6 +388,16 @@ private struct FindActions: View {
         GlassEffectContainer(spacing: Spacing.s) {
             HStack(spacing: Spacing.s) {
                 Spacer()
+                    .confirmationDialog("Hvad sker der med pladen nu?", isPresented: $askFound, titleVisibility: .visible) {
+                        Button("Jeg lytter til den") { found(.listening) }
+                        Button("Den kommer på væggen") { found(.wall) }
+                        Button("Jeg låner den ud …") { found(.lent) }
+                        Button("Den skal et andet sted hen …") { found(.stored) }
+                        Button("Den bliver i reolen") { found(.stays) }
+                        Button("Annullér", role: .cancel) {}
+                    } message: {
+                        Text("\"Jeg lytter til den\" registrerer pladen som spillet.")
+                    }
                 switch mode {
                 case .found: foundButtons
                 case .away(let canPutBack): awayButtons(canPutBack)
@@ -389,9 +417,11 @@ private struct FindActions: View {
             .accessibilityHidden(true)
     }
 
+    @State private var askFound = false
+
     @ViewBuilder private var foundButtons: some View {
         hiddenClose
-        Button(action: dismiss) {
+        Button { askFound = true } label: {
             Label("Fundet", systemImage: "checkmark").padding(.horizontal, Spacing.xs)
         }
         .keyboardShortcut(.defaultAction)

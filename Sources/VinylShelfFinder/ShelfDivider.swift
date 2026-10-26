@@ -66,11 +66,21 @@ struct PlacementLine: View {
     }
 }
 
-/// "Nr. 7 af 15 fra venstre" i den smalle skrift.
+/// "Nr. 7 af 15 fra venstre" i den smalle skrift, med "ca. 45 % inde" svagere ved siden af (under, hvis der ikke er plads).
 struct PlacementCount: View {
     let text: String
+    var percent: String? = nil
     var body: some View {
+        ViewThatFits(in: .horizontal) {
+            HStack(alignment: .firstTextBaseline, spacing: 12) { line; extra }
+            VStack(alignment: .leading, spacing: 2) { line; extra }
+        }
+    }
+    private var line: some View {
         Text(text).font(Typo.count).foregroundStyle(Ink.secondary).contentTransition(.opacity)
+    }
+    @ViewBuilder private var extra: some View {
+        if let percent { Text(percent).font(Typo.count).foregroundStyle(Ink.tertiary).contentTransition(.opacity) }
     }
 }
 

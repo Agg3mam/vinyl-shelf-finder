@@ -182,6 +182,8 @@ svg.i { width: 1em; height: 1em; flex: none; stroke: currentColor; fill: none; s
 .placement .sep { color: var(--tertiary); font-size: 16px; }
 .spines { display: block; width: 100%; height: 24px; margin-bottom: 10px; }
 .hint { font-size: 19px; font-weight: 500; color: var(--secondary); font-variant-numeric: tabular-nums; }
+/* "ca. 45 % inde" svagere ved siden af "Nr. 7 af 15 fra venstre" (rykker ned, hvis der ikke er plads). */
+.hint .pct { color: var(--tertiary); margin-left: 0.8em; white-space: nowrap; display: inline-block; }
 .away-line { display: flex; gap: 8px; align-items: center; color: var(--orange); font-weight: 600; font-size: 16px; margin: -2px 4px 14px; }
 .ref { display: flex; gap: 12px; align-items: flex-start; }
 .ref .cover { width: 56px; height: 56px; }

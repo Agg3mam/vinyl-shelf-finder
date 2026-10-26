@@ -95,6 +95,18 @@ export function pressingLine(r) {
   return name ? `${name} (${r.year})` : String(r.year);
 }
 
+/** Hvor langt inde i sektionen pladen står, set fra venstre: midten af pladen i procent, rundet til nærmeste 5 og
+ *  holdt mellem 5 og 95 (en plade alene står midt i: 50). Samme formel som Library.swift. */
+export function percentFromLeft(position, count) {
+  if (!(count > 0)) return 50;
+  const p = Math.min(Math.max(position, 1), count);
+  const raw = (2 * p - 1) / (2 * count) * 100;
+  return Math.min(Math.max(Math.round(raw / 5) * 5, 5), 95);
+}
+
+/** "ca. 45 % inde" (vises ved "Nr. 7 af 15 fra venstre"). */
+export const percentHint = (position, count) => `ca. ${percentFromLeft(position, count)} % inde`;
+
 /** "Harvest SHVL 804 (1973). Vinyl, LP" */
 export function detailLine(r) {
   return [pressingLine(r) || null, r.format || null].filter(Boolean).join(". ");

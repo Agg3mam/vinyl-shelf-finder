@@ -99,7 +99,11 @@ public static class RecordParts
         p.Children.Add(Ui.Eyebrow(eyebrow));
         p.Children.Add(PlacementLine(loc, lineSize));
         p.Children.Add(ShelfSpines(position, count, DividerColors(loc).Fill));
-        p.Children.Add(Ui.CondensedText(hint, 20, bold: false, color: Ui.Secondary));
+        // "Nr. 7 af 15 fra venstre" og, svagere, "ca. 45 % inde" (brydes til næste linje, hvis der ikke er plads).
+        var count_ = Ui.CondensedText(hint, 20, bold: false, color: Ui.Secondary);
+        count_.TextWrapping = TextWrapping.WrapWholeWords;
+        count_.Inlines.Add(new Microsoft.UI.Xaml.Documents.Run { Text = "\u2003" + Library.PercentHint(position, count), Foreground = Ui.Tertiary });
+        p.Children.Add(count_);
         var card = Ui.Card(p, 20);
         card.BorderBrush = Ui.AccentTint(0.55);
         card.Background = Ui.AccentTint(0.07);

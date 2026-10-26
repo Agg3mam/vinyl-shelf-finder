@@ -237,6 +237,19 @@ public sealed class Library
     /// aldrig "før"/"efter", så det er entydigt, hvilken vej man skal gå.
     public ReferenceAdvice? ReferenceAdviceFor(long copyId) => Advice(copyId, putBack: false);
 
+    /// <summary>Hvor langt inde i sektionen pladen står, set fra venstre: midten af pladen i procent, rundet til
+    /// nærmeste 5 og holdt mellem 5 og 95 (en plade alene står midt i: 50). Samme formel som Library.swift.</summary>
+    public static int PercentFromLeft(int position, int count)
+    {
+        if (count <= 0) return 50;
+        int p = Math.Clamp(position, 1, count);
+        double raw = (2.0 * p - 1) / (2.0 * count) * 100;
+        return Math.Clamp((int)Math.Round(raw / 5, MidpointRounding.AwayFromZero) * 5, 5, 95);
+    }
+
+    /// <summary>"ca. 45 % inde" (vises ved "Nr. 7 af 15 fra venstre").</summary>
+    public static string PercentHint(int position, int count) => $"ca. {PercentFromLeft(position, count)} % inde";
+
     /// Som ReferenceAdviceFor, men til at SÆTTE pladen tilbage i reolen, fx
     /// "Sæt den lige til højre for Aurora – All My Demons Greeting Me as a Friend." Samme valg
     /// af referencer; kun plader, der står i reolen, nævnes. PlacementHint er fx

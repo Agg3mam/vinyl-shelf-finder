@@ -161,11 +161,23 @@ private struct LocationCard: View {
             Text(title).font(.callout.weight(.semibold)).foregroundStyle(.secondary)
             PlacementLine(location: location)
             ShelfSpines(position: position, count: count, accent: location.category?.color ?? AppAccent.color)
-            Text(hint).font(.system(size: 19, weight: .medium).width(.condensed).monospacedDigit()).foregroundStyle(.secondary)
+            // "Nr. 7 af 15 fra venstre" og, svagere, "ca. 45 % inde" (under, hvis der ikke er plads).
+            ViewThatFits(in: .horizontal) {
+                HStack(alignment: .firstTextBaseline, spacing: 10) { hintText; percentText }
+                VStack(alignment: .leading, spacing: 2) { hintText; percentText }
+            }
         }
         .padding(18)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(.regularMaterial, in: .rect(cornerRadius: 22))
+    }
+
+    private var hintText: some View {
+        Text(hint).font(.system(size: 19, weight: .medium).width(.condensed).monospacedDigit()).foregroundStyle(.secondary)
+    }
+    private var percentText: some View {
+        Text(Library.percentHint(position: position, count: count))
+            .font(.system(size: 19, weight: .medium).width(.condensed).monospacedDigit()).foregroundStyle(.tertiary)
     }
 }
 

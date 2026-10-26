@@ -159,7 +159,8 @@ private struct DetailLocationPanel: View {
                 PlacementLine(location: location, tone: tone, compact: true)
             }
             ShelfSpines(position: position, count: count, accent: DividerColors(location: location, tone: tone).fill)
-            PlacementCount(text: "\(away ? "Plads" : "Nr.") \(position) af \(count) fra venstre")
+            PlacementCount(text: "\(away ? "Plads" : "Nr.") \(position) af \(count) fra venstre",
+                           percent: Library.percentHint(position: position, count: count))
         }
         .padding(Spacing.panelInset)
         .frame(maxWidth: .infinity, alignment: .leading)

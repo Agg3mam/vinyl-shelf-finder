@@ -598,6 +598,10 @@ projektet med egen konto (RLS adskiller data), men hver skal have sit eget Disco
   "Skriv koden …". Ny `mfa.sql` slår op via `public.har_totrinslogin()` (security definer, kun den spørgende bruger).
   Brugeren har kørt den, og synkroniseringen virker igen. 42501 med "permission denied" giver nu
   `databaseDenied`/`DatabaseDenied` i stedet for "Skriv koden" (Swift, C#, `web/core/cloud.js`, checks på begge).
+- **26. okt: procent og "Fundet".** Ved "Nr. 7 af 15 fra venstre" står nu svagere "ca. 45 % inde" på alle fire
+  (`percentHint` i kernen, checks på alle tre sprog). "Fundet" i Find spørger: Jeg lytter til den (`logPlay`), Den kommer på
+  væggen, Jeg låner den ud …, Den skal et andet sted hen … (navn/sted som i dag) eller Den bliver i reolen. Mac: dialog;
+  Windows: menu på knappen.
 - **Mac, Windows og iPhone (20. okt, senere):** samme indstilling. Fælles `LookStyle`/`LookTheme` i `VinylCore` (`Look.swift`,
   `Look.cs`); Swift-checken sammenligner farverne med `web/app.css`. Mac: `AppAccent.style` (læses af de dynamiske farver),
   `LookBackground`, `AppModel.lookTheme/lookStyle` (UserDefaults `look_theme`/`look_style`), fanen Udseende, snapshots
